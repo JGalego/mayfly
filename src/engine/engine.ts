@@ -2,7 +2,8 @@ import { randomBytes } from "node:crypto";
 import { appUrl } from "../core/app-url.ts";
 import { appObjects } from "./app-objects.ts";
 import { generateApp, listenFor, type Ask, type Attempt, type Generation } from "./generate.ts";
-import { ASK_PROMPT, questionFor } from "./prompt.ts";
+import { ASK_PROMPT, fixFor, questionFor } from "./prompt.ts";
+import { errorsIn } from "./log-errors.ts";
 import { mayflyName } from "../core/names.ts";
 import type { ContainerHealth, ModelProvider, Ports } from "./ports.ts";
 import { newPassword, newSecret } from "./secrets.ts";
@@ -56,6 +57,12 @@ export interface Engine {
   create(description: string, options?: { readonly model?: string | null; readonly watch?: Watcher }): Promise<AppView>;
   /** Has the app's model change it as asked. An attempt that passes replaces the running one at the same URL. Every attempt is kept. */
   change(name: string, request: string, watch?: Watcher): Promise<AppView>;
+  /** Has the app's model fix what makes the app log errors, as a change. Refuses when it logged none. */
+  fix(name: string, watch?: Watcher): Promise<AppView>;
+  /** Sends the last request the app's model was given to it again, as a change. */
+  retry(name: string, watch?: Watcher): Promise<AppView>;
+  /** Runs the version that ran before the one running now again. Undoing twice puts back the one undone. */
+  undo(name: string, watch?: Watcher): Promise<AppView>;
   /** Has the app's model answer a question about it from its code, changing nothing. The exchange joins the conversation. */
   ask(name: string, question: string, watch?: Watcher): Promise<AppView>;
   /** Marks an app as a favourite, or no longer. */
@@ -116,6 +123,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     const reply: Turn = { from: "mayfly", text: replyFor(app, versions, made.runs), versions: versions.map((version) => version.id), took: Date.now() - made.started, at: Date.now() };
     const next: App = {
       ...app,
+      ...(running === undefined || app.head === null ? {} : { previous: app.head }),
       versions: [...app.versions, ...versions],
       head: running?.id ?? app.head,
       conversation: [...app.conversation, { from: "person", text: request, at: made.started }, reply],
@@ -139,7 +147,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     return next.owner;
   }
 
-  return {
+  const engine: Engine = {
     async create(description, { model: chosen = null, watch = UNWATCHED } = {}) {
       const started = Date.now();
       const taken = (await store.load()).apps.map((app) => app.name);
@@ -155,6 +163,25 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       const model = models(app.model);
       const generation = await generate({ change: request, app: { name, routes: base?.routes ?? "" } }, model, watch);
       return record(request, generation, { base: base?.id ?? null, by: { kind: "model", name: model.name }, model: app.model, started, runs: true }, watch);
+    },
+
+    async fix(name, watch = UNWATCHED) {
+      existingApp(await store.load(), name);
+      const errors = errorsIn(await observer.logs(mayflyName(name), "app", LOG_LINES));
+      if (errors.length === 0) throw new Error(`${name} logged no errors to fix.`);
+      return engine.change(name, fixFor(errors), watch);
+    },
+
+    async retry(name, watch = UNWATCHED) {
+      const last = existingApp(await store.load(), name).versions.findLast((version) => version.by.kind === "model");
+      if (last === undefined) throw new Error(`${name} has no request to send again.`);
+      return engine.change(name, last.request, watch);
+    },
+
+    async undo(name, watch = UNWATCHED) {
+      const { previous } = existingApp(await store.load(), name);
+      if (previous === undefined) throw new Error(`For ${name}, no version ran before this one.`);
+      return engine.deploy(name, previous, watch);
     },
 
     async ask(name, question, watch = UNWATCHED) {
@@ -224,7 +251,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
         { from: "person", text: `Deploy version ${id}`, at: started },
         { from: "mayfly", text: note, versions: [], took: Date.now() - started, at: Date.now() },
       ];
-      const next: App = { ...app, head: id, conversation: [...app.conversation, ...conversation] };
+      const next: App = { ...app, ...(app.head === null || app.head === id ? {} : { previous: app.head }), head: id, conversation: [...app.conversation, ...conversation] };
       const nextState = withApp(state, next);
       watch({ kind: "deploying" });
       await identity.sync(nextState);
@@ -295,6 +322,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       return observer.logs(pod, container, LOG_LINES);
     },
   };
+  return engine;
 }
 
 /** A generation, and the calls to the model it took. */

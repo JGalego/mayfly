@@ -59,6 +59,8 @@ export interface App {
   readonly versions: readonly Version[];
   /** The version running now, or null while no attempt has passed. */
   readonly head: string | null;
+  /** The version that ran before the one running now, for putting it back. */
+  readonly previous?: string;
   readonly conversation: readonly Turn[];
   readonly spent: Usage;
 }

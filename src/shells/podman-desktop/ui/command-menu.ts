@@ -3,7 +3,7 @@ import { h } from "./dom.ts";
 
 /**
  * Shows suggestions over the composer as the person types. Arrows move through them, Enter or Tab puts the chosen one in the
- * field, and Escape closes them. While they show, Enter picks rather than sends.
+ * field, and Escape closes them. While they show, Enter picks rather than sends, unless what is typed already is the chosen one, complete.
  */
 export function commandMenu(field: HTMLTextAreaElement, menu: HTMLElement, suggest: (text: string) => Suggestion[]): void {
   let shown: Suggestion[] = [];
@@ -40,6 +40,8 @@ export function commandMenu(field: HTMLTextAreaElement, menu: HTMLElement, sugge
     "keydown",
     (event) => {
       if (menu.hidden) return;
+      const picked = shown[chosen];
+      if (event.key === "Enter" && picked?.final === true && picked.fill.trim() === field.value.trim()) return close();
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         chosen = (chosen + (event.key === "ArrowDown" ? 1 : -1) + shown.length) % shown.length;
         draw();

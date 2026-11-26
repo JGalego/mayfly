@@ -54,6 +54,7 @@ export type FromUi =
   | { readonly type: "logs"; readonly pod: string; readonly container: string }
   | { readonly type: "code"; readonly app: string; readonly version: string }
   | { readonly type: "ask"; readonly app: string; readonly question: string }
+  | { readonly type: "fix" | "retry" | "undo"; readonly app: string }
   | { readonly type: "deploy"; readonly app: string; readonly version: string }
   | { readonly type: "save"; readonly app: string; readonly from: string; readonly routes: string; readonly message: string };
 

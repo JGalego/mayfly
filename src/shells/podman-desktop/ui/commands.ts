@@ -1,4 +1,4 @@
-export type CommandName = "ask" | "model" | "remove";
+export type CommandName = "ask" | "fix" | "retry" | "undo" | "model" | "remove";
 
 /** A command the conversation takes after a slash: what it does, what it takes, and whether it needs an app to act on. */
 export interface Command {
@@ -11,6 +11,9 @@ export interface Command {
 
 export const COMMANDS: readonly Command[] = [
   { name: "ask", says: "Ask about the app without changing it", takes: "a question", needsApp: true },
+  { name: "fix", says: "Fix the errors in the app's logs", needsApp: true },
+  { name: "retry", says: "Send your last request again", needsApp: true },
+  { name: "undo", says: "Put back the version that ran before", needsApp: true },
   { name: "model", says: "Switch the model that writes the app", takes: "provider · model", needsApp: false },
   { name: "remove", says: "Remove the app for good", needsApp: true },
 ];
@@ -21,11 +24,12 @@ export type Typed =
   | { readonly kind: "command"; readonly command: Command; readonly argument: string }
   | { readonly kind: "unknown"; readonly name: string };
 
-/** One line of the menu: what it shows, and what picking it puts in the composer. */
+/** One line of the menu: what it shows, what picking it puts in the composer, and whether that leaves nothing more to type. */
 export interface Suggestion {
   readonly label: string;
   readonly detail: string;
   readonly fill: string;
+  readonly final: boolean;
 }
 
 const COMMAND = /^\/(\S*)\s*([\s\S]*)$/;
@@ -45,7 +49,7 @@ export function suggestions(text: string, context: { readonly app: boolean; read
   if (model !== null) {
     const wanted = (model[1] ?? "").trim().toLowerCase();
     const found = context.models.filter((label) => label.toLowerCase().includes(wanted));
-    return found.length === 1 && found[0]?.toLowerCase() === wanted ? [] : found.map((label) => ({ label, detail: "", fill: `/model ${label}` }));
+    return found.length === 1 && found[0]?.toLowerCase() === wanted ? [] : found.map((label) => ({ label, detail: "", fill: `/model ${label}`, final: true }));
   }
   const typing = /^\/(\S*)$/.exec(text);
   if (typing === null) return [];
@@ -54,5 +58,6 @@ export function suggestions(text: string, context: { readonly app: boolean; read
     label: `/${command.name}`,
     detail: command.takes === undefined ? command.says : `${command.says} · ${command.takes}`,
     fill: `/${command.name} `,
+    final: command.takes === undefined,
   }));
 }

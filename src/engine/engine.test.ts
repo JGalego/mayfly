@@ -162,6 +162,42 @@ describe("the engine", () => {
     assert.deepEqual(after.spent, { input: 200, output: 40, thinking: 0 });
   });
 
+  it("has the app's model fix the errors the app logged, and says when it logged none", async () => {
+    const { engine, asked, logged } = setUp([reply("lunch"), reply("lunch")]);
+    await engine.create("split lunch bills");
+
+    await assert.rejects(engine.fix("lunch"), /lunch logged no errors to fix/);
+    logged.push('2026-11-26T15:04:05Z {"time":"x","level":"info","msg":"GET / 200"}', '2026-11-26T15:04:06Z {"time":"x","level":"error","msg":"bills is not defined"}');
+    const fixed = await engine.fix("lunch");
+
+    assert.match(asked.at(-1) ?? "", /bills is not defined/);
+    assert.doesNotMatch(asked.at(-1) ?? "", /GET \/ 200/);
+    assert.equal(fixed.versions.length, 2);
+  });
+
+  it("sends the last request to the app's model again", async () => {
+    const { engine, asked } = setUp([reply("lunch"), reply("lunch"), reply("lunch")]);
+    await engine.create("split lunch bills");
+    await engine.change("lunch", "add totals");
+
+    const again = await engine.retry("lunch");
+
+    assert.match(asked.at(-1) ?? "", /add totals/);
+    assert.equal(again.versions.at(-1)?.request, "add totals");
+  });
+
+  it("puts back the version that ran before, and undoing again puts back the one undone", async () => {
+    const { engine, deployed } = setUp([reply("lunch"), reply("lunch")]);
+    const first = await engine.create("split lunch bills");
+
+    await assert.rejects(engine.undo("lunch"), /no version ran before/);
+    const changed = await engine.change("lunch", "add totals");
+    const undone = await engine.undo("lunch");
+    const redone = await engine.undo("lunch");
+
+    assert.deepEqual([undone.head, redone.head, deployed.length], [first.head, changed.head, 4]);
+  });
+
   it("refuses to save from a version it does not have, or to deploy one that failed", async () => {
     const { engine } = setUp([reply("lunch"), reply("lunch")], [crashed, { ok: true }]);
     const app = await engine.create("split lunch bills");
@@ -325,6 +361,8 @@ function reply(name: string, summary = "", code = "export default 1;"): string {
 function setUp(replies: string[], trials: Trial[] = [], named: (id: string | null) => string = () => "the test model") {
   const log: string[] = [];
   const asked: string[] = [];
+  /** What the app's logs say, when a test needs them to say something. */
+  const logged: string[] = [];
   const deployed: (readonly KubeObject[])[] = [];
   const removed: (readonly KubeObject[])[] = [];
   const synced: State[] = [];
@@ -356,11 +394,11 @@ function setUp(replies: string[], trials: Trial[] = [], named: (id: string | nul
     trial: async () => trials.shift() ?? { ok: true },
   };
   const observer: Observer = {
-    logs: async (pod, container) => [`2026-11-26T15:04:05Z ${pod} ${container}`],
+    logs: async (pod, container) => (logged.length > 0 ? logged : [`2026-11-26T15:04:05Z ${pod} ${container}`]),
     health: async (pods) => pods.filter((pod) => pod !== "mayfly-gone").map((pod) => ({ pod, containers: [{ name: "app", state: "running", status: "Up", restarts: 0 }] })),
   };
   const engine = createEngine({ store, deployer, observer, identity, models, builder });
-  return { engine, deployed, removed, synced, log, asked };
+  return { engine, deployed, removed, synced, log, asked, logged };
 }
 
 function names(objects: readonly KubeObject[] | undefined): string[] {

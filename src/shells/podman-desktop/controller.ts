@@ -101,6 +101,12 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       return session.post({ type: "logs", pod: request.pod, container: request.container, lines: await session.engine.logs(request.pod, request.container) });
     case "ask":
       return ask(request.app, request.question.trim(), session);
+    case "fix":
+      return runAlone({ app: request.app, request: "Fix the errors in the app's logs", kind: "change" }, session, (watch) => session.engine.fix(request.app, watch));
+    case "retry":
+      return runAlone({ app: request.app, request: "Send the last request again", kind: "change" }, session, (watch) => session.engine.retry(request.app, watch));
+    case "undo":
+      return runAlone({ app: request.app, request: "Put back the version that ran before", kind: "deploy" }, session, (watch) => session.engine.undo(request.app, watch));
     case "deploy":
       return deploy(request.app, request.version, session);
     case "save":
@@ -144,8 +150,13 @@ async function ask(app: string, question: string, session: Session): Promise<voi
 }
 
 async function deploy(app: string, version: string, session: Session): Promise<void> {
+  await runAlone({ app, request: `Deploy version ${version}`, kind: "deploy" }, session, (watch) => session.engine.deploy(app, version, watch));
+}
+
+/** Does work that needs nothing checked first, once no other work is under way. */
+async function runAlone(work: Parameters<typeof run>[0], session: Session, job: Parameters<typeof run>[2]): Promise<void> {
   if (session.working !== null) return void (await session.post({ type: "error", text: BUSY }));
-  await run({ app, request: `Deploy version ${version}`, kind: "deploy" }, session, (watch) => session.engine.deploy(app, version, watch));
+  await run(work, session, job);
 }
 
 async function saveByHand(app: string, from: string, routes: string, message: string, session: Session): Promise<void> {
@@ -301,6 +312,10 @@ function readRequest(message: unknown): FromUi | undefined {
       return typeof app === "string" && typeof from === "string" && typeof routes === "string" && typeof words === "string" ? { type, app, from, routes, message: words } : undefined;
     case "ask":
       return typeof app === "string" && typeof question === "string" ? { type, app, question } : undefined;
+    case "fix":
+    case "retry":
+    case "undo":
+      return typeof app === "string" ? { type, app } : undefined;
     case "code":
     case "deploy":
       return typeof app === "string" && typeof version === "string" ? { type, app, version } : undefined;

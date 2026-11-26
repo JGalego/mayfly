@@ -16,13 +16,19 @@ describe("commands", () => {
   it("offers the commands that start with what is typed, only those that need no app when there is none", () => {
     assert.deepEqual(
       suggestions("/", { app: true, models }).map((s) => s.fill),
-      ["/ask ", "/model ", "/remove "],
+      ["/ask ", "/fix ", "/retry ", "/undo ", "/model ", "/remove "],
+    );
+    assert.deepEqual(
+      suggestions("/R", { app: true, models }).map((s) => s.fill),
+      ["/retry ", "/remove "],
     );
     assert.deepEqual(
       suggestions("/", { app: false, models }).map((s) => s.label),
       ["/model"],
     );
     assert.deepEqual(suggestions("split", { app: true, models }), []);
+    assert.deepEqual(suggestions("/undo", { app: true, models }).map((s) => s.final), [true], "nothing more to type");
+    assert.deepEqual(suggestions("/as", { app: true, models }).map((s) => s.final), [false], "a question to come");
     assert.deepEqual(suggestions("/remove now", { app: true, models }), []);
   });
 

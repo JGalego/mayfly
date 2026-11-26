@@ -124,6 +124,18 @@ describe("the Mayfly panel's controller", () => {
     assert.equal(posted.at(-1)?.type, "error");
   });
 
+  it("fixes, retries and undoes, showing each as work while it runs", async () => {
+    const { handle, posted, calls } = setUp({ apps: [lunch] });
+
+    for (const type of ["fix", "retry", "undo"] as const) await handle({ type, app: "lunch-split" });
+
+    assert.deepEqual(calls, ["fix lunch-split", "retry lunch-split", "undo lunch-split"]);
+    assert.deepEqual(
+      posted.flatMap((m) => stateOf(m)?.working?.kind ?? []),
+      ["change", "change", "deploy"],
+    );
+  });
+
   it("deploys a version, showing the work while it runs", async () => {
     const { handle, posted, calls } = setUp({ apps: [lunch] });
 
@@ -427,6 +439,18 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
     },
     change: async (name, request) => {
       calls.push(`change ${name} ${request}`);
+      return lunch;
+    },
+    fix: async (name) => {
+      calls.push(`fix ${name}`);
+      return lunch;
+    },
+    retry: async (name) => {
+      calls.push(`retry ${name}`);
+      return lunch;
+    },
+    undo: async (name) => {
+      calls.push(`undo ${name}`);
       return lunch;
     },
     ask: async (name, question, watch = () => {}) => {

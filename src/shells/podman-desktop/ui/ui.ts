@@ -430,16 +430,19 @@ function runCommand(command: Command, argument: string): void {
     request.value = "";
     return removeApp();
   }
-  askAbout(argument);
+  // Every command left acts on the app on screen.
+  if (view.kind !== "app") return;
+  const app = view.name;
+  if (command.name === "ask") return startWork({ type: "ask", app, question: argument }, true);
+  startWork({ type: command.name, app }, command.name !== "undo");
 }
 
-/** Asks the app's model a question; like a request, it needs the model's key, and waits while other work runs. */
-function askAbout(question: string): void {
-  const app = shownApp();
-  if (app === undefined || state?.working !== null || !canWrite(state, app)) return;
+/** Starts the work a command asks for, unless other work is under way. Work that calls the model needs its key, like a request. */
+function startWork(message: FromUi, callsModel: boolean): void {
+  if (state?.working !== null || (callsModel && !canWrite(state, shownApp()))) return;
   request.value = "";
   hideBanner();
-  post({ type: "ask", app: app.name, question });
+  post(message);
 }
 
 function useModelNamed(label: string): void {

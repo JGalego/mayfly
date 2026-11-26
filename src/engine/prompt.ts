@@ -64,6 +64,11 @@ export function questionFor(app: { readonly name: string; readonly routes: strin
   return `The app is called ${app.name}. ${code}\n\nThe question:\n\n${question}`;
 }
 
+/** Asks for the errors an app logged to be fixed. */
+export function fixFor(errors: readonly string[]): string {
+  return `Fix what makes the app log these errors:\n\n${errors.join("\n")}`;
+}
+
 export function requestFor(description: string): string {
   return `Write the app for this request:\n\n${description}`;
 }
