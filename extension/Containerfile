@@ -1,0 +1,16 @@
+# Podman Desktop installs an extension from an OCI image: the files under /extension, and no runtime.
+# Build it with `npm run build:extension` first.
+FROM scratch
+
+ARG REVISION
+LABEL org.opencontainers.image.title="Mayfly" \
+      org.opencontainers.image.description="Describe a small app. Mayfly builds it and runs it on your machine, behind sign-in." \
+      org.opencontainers.image.vendor="JGalego" \
+      org.opencontainers.image.source="https://github.com/JGalego/mayfly" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.licenses="MIT" \
+      io.podman-desktop.api.version=">= 1.26.0"
+
+COPY package.json icon.png /extension/
+COPY dist /extension/dist
+COPY media /extension/media

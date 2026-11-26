@@ -1,0 +1,36 @@
+{
+  "name": "mayfly",
+  "displayName": "Mayfly",
+  "description": "Describe a small app. Mayfly builds it and runs it on your machine, behind sign-in.",
+  "version": "0.1.0",
+  "icon": "icon.png",
+  "publisher": "jgalego",
+  "license": "MIT",
+  "engines": {
+    "podman-desktop": ">=1.26.0"
+  },
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "mayfly.open",
+        "title": "Mayfly: Make an app"
+      }
+    ],
+    "configuration": {
+      "title": "Mayfly",
+      "properties": {
+        "mayfly.model.baseUrl": {
+          "type": "string",
+          "default": "https://api.openai.com/v1",
+          "description": "The OpenAI-compatible endpoint that writes the apps"
+        },
+        "mayfly.model.name": {
+          "type": "string",
+          "default": "gpt-6.2-sol",
+          "description": "The model that writes the apps"
+        }
+      }
+    }
+  }
+}

@@ -26,6 +26,16 @@
 
 Describe a small app for a short or routine task. Mayfly builds it and runs it on your machine, behind sign-in, with health checks and JSON logs. The model writes none of those parts.
 
+## Use it
+
+You need [Podman Desktop](https://podman-desktop.io/) with a Podman 5 machine running, and an [OpenAI API key](https://platform.openai.com/api-keys).
+
+1. In Podman Desktop, open **Extensions**, choose **Install custom…**, and enter `ghcr.io/jgalego/mayfly-extension:main`.
+2. Open **Mayfly** in the navigation bar and paste your API key. Podman Desktop keeps it in its secret storage.
+3. Describe what you need and choose **Make it**. About a minute later the app opens in your browser. Sign in as the owner shown on the page; **Copy password** puts the password on your clipboard.
+
+The model and endpoint are in Podman Desktop's settings under Mayfly. The default is OpenAI with `gpt-6.2-sol`.
+
 ## Why not Dyad?
 
 Applications like [Dyad](https://www.dyad.sh/) and [Lovable](https://lovable.dev/) generate the whole app, login and logging included, so those parts are only as good as the model was that day. In Mayfly the model writes the business logic and nothing else. Sign-in, health checks, logging and the container setup come from a fixed contract the model can't change, so every app runs the same way and you can hand it to someone else to run.
@@ -136,6 +146,7 @@ pre-commit install                       # hygiene, Conventional Commits, lint, 
 npm test                                 # unit tests
 npm run typecheck
 npm run build:runtime                    # the runtime image every app starts from
+npm run build:extension                  # the Podman Desktop extension, into extension/
 pixi run check-image                     # proves the image meets policy/
 npm run test:integration                 # signs in through Dex to a real app on Podman
 MAYFLY_LIVE=1 npm run test:integration   # also calls the real model from .env, which costs money

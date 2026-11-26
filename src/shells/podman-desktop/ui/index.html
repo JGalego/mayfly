@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src {{cspSource}}; style-src {{cspSource}}">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="ui.css">
+    <title>Mayfly</title>
+  </head>
+  <body>
+    <main>
+      <h1>Mayfly</h1>
+
+      <section id="key" hidden>
+        <h2>First, your OpenAI API key</h2>
+        <p>Mayfly uses it to write your apps. Podman Desktop keeps it in its secret storage.</p>
+        <form id="key-form">
+          <input id="key-input" type="password" autocomplete="off" placeholder="sk-..." aria-label="OpenAI API key" required>
+          <button type="submit">Save</button>
+        </form>
+      </section>
+
+      <form id="create-form">
+        <label for="description">What do you need?</label>
+        <textarea id="description" rows="3" maxlength="2000" placeholder="For example: split our team's lunch bills and show who owes whom"></textarea>
+        <button id="create" type="submit">Make it</button>
+      </form>
+      <p id="status" role="status"></p>
+
+      <section>
+        <h2>Your apps</h2>
+        <p id="no-apps">None yet.</p>
+        <ul id="apps"></ul>
+      </section>
+
+      <p id="sign-in" hidden>
+        Your apps ask you to sign in as <strong id="owner"></strong>.
+        <button id="copy-password" type="button">Copy password</button>
+      </p>
+      <p id="model" class="quiet"></p>
+    </main>
+    <script src="ui.js"></script>
+  </body>
+</html>

@@ -12,10 +12,13 @@
     "test": "node --test \"src/**/*.test.ts\" \"runtime/src/**/*.test.ts\"",
     "test:integration": "node --env-file-if-exists=.env --test --test-concurrency=1 \"test/integration/*.test.ts\"",
     "typecheck": "tsc --noEmit",
-    "build:runtime": "runtime/build.sh"
+    "build:runtime": "runtime/build.sh",
+    "build:extension": "node src/shells/podman-desktop/build.ts"
   },
   "devDependencies": {
+    "@podman-desktop/api": "1.31.0",
     "@types/node": "24.19.4",
+    "esbuild": "0.28.2",
     "typescript": "7.0.2"
   },
   "dependencies": {
