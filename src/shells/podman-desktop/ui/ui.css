@@ -473,6 +473,20 @@ main {
   overflow-wrap: anywhere;
 }
 
+/* Comparing the version shown with any other: a picker, then what changed. */
+.compare {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.75rem;
+}
+
+.compare select {
+  min-width: 0;
+  max-width: 100%;
+}
+
 .panel-actions {
   display: flex;
   flex-wrap: wrap;

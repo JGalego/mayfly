@@ -4,6 +4,7 @@ import { icon } from "./icons.ts";
 import { tokens, when } from "./format.ts";
 import { connection, graph, type GraphRow, type Lane } from "./graph.ts";
 import { versionDetails, type Showing } from "./progress.ts";
+import { changes } from "./code.ts";
 
 type Status = "running" | "passed" | "failed";
 
@@ -23,6 +24,8 @@ export interface VersionActions {
   close(): void;
   deploy?: (version: string) => void;
   edit?: (version: string) => void;
+  /** The version picked to compare with, if any, and how to pick another. */
+  readonly compare: { readonly with: string | undefined; choose(version: string | undefined): void };
 }
 
 /** One version in full: what was asked, how it went, who made it and when, what it cost and changed, and what can be done with it. */
@@ -43,7 +46,26 @@ export function versionPanel(app: AppView, version: VersionView, showing: Showin
     ...problem,
     ...versionButtons(version, status, actions),
     ...versionDetails(app.name, version, showing, { changesOpen: true }),
+    ...comparison(app, version, showing, actions.compare),
   ];
+}
+
+/** How this version differs from any other the person picks, on another branch or the one running, not only from its parent. */
+function comparison(app: AppView, version: VersionView, showing: Showing, compare: VersionActions["compare"]): Node[] {
+  const others = app.versions.filter((other) => other.id !== version.id && other.lines > 0).toReversed();
+  if (others.length === 0) return [];
+  const label = (other: VersionView): string => `${other.id}${other.id === app.head ? " · running" : ""} · ${other.request}`;
+  const pick = h("select", "", new Option("Compare with another version…", ""), ...others.map((other) => new Option(label(other), other.id)));
+  pick.value = compare.with ?? "";
+  pick.setAttribute("aria-label", "Compare this version with another");
+  pick.addEventListener("change", () => compare.choose(pick.value === "" ? undefined : pick.value));
+  const base = others.find((other) => other.id === compare.with);
+  if (base === undefined) return [h("p", "compare", pick)];
+  const before = showing.code(app.name, base.id);
+  const after = showing.code(app.name, version.id);
+  const shown = before === undefined || after === undefined ? undefined : changes(before, after);
+  const counts = shown === undefined ? [] : [h("span", "diff-added", `+${shown.added}`), h("span", "diff-removed", `−${shown.removed}`), h("span", "quiet", "from it to this one")];
+  return [h("p", "compare", pick, ...counts), shown?.view ?? h("p", "quiet", "Loading code…")];
 }
 
 function historyRow(app: AppView, row: GraphRow, width: number, picked: boolean, pick: (version: string) => void): HTMLLIElement {

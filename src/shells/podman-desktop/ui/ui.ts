@@ -80,6 +80,8 @@ let deploying: { readonly app: string; readonly version: string; shown: string }
 let appLogsShown: string | undefined;
 /** Which version the Code tab shows, so a redraw leaves it alone. */
 let codeShown = "";
+/** The version the one shown beside the history is compared with, until another is shown. */
+let comparing: { readonly app: string; readonly version: string; readonly with: string } | undefined;
 /** The version shown in full beside the history, if any. */
 let picked: { readonly app: string; readonly version: string } | undefined;
 /** Folds the person opened or closed, so a redraw leaves them as they were. */
@@ -776,7 +778,14 @@ function renderHistory(app: AppView | undefined, showing: Showing, idle: boolean
   // Editing needs the version's code, which the panel fetches to show what changed.
   const editable = showing.code(app.name, version.id) !== undefined;
   const actions = idle ? { deploy: (id: string) => askToDeploy(app.name, id), ...(editable ? { edit: (id: string) => unlessUnsaved(() => startEditing(app, id)) } : {}) } : {};
-  panel.replaceChildren(...versionPanel(app, version, showing, { pick: (id) => pick({ app: app.name, version: id }), close: () => pick(undefined), ...actions }));
+  const compare = {
+    with: comparing?.app === app.name && comparing.version === version.id ? comparing.with : undefined,
+    choose: (other: string | undefined) => {
+      comparing = other === undefined ? undefined : { app: app.name, version: version.id, with: other };
+      render();
+    },
+  };
+  panel.replaceChildren(...versionPanel(app, version, showing, { pick: (id) => pick({ app: app.name, version: id }), close: () => pick(undefined), compare, ...actions }));
 }
 
 function turnItem(said: Turn, extras: readonly Node[] = []): HTMLLIElement {
