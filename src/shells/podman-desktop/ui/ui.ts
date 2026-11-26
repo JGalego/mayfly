@@ -392,9 +392,10 @@ function renderDeployDialog(): void {
   const key = `${app.head ?? ""}:${String(ready)}`;
   if (deploying.shown === key) return;
   deploying.shown = key;
-  element("deploy-title").textContent = `Deploy version ${deploying.version} of ${app.name}?`;
+  element("deploy-title").replaceChildren("Deploy version ", versionChip(deploying.version), " of ", nameChip(app.name), "?");
   element<HTMLButtonElement>("confirm-deploy").disabled = !ready;
-  element("deploy-note").textContent = app.head === null ? "Nothing is running yet. It passed its trial when it was made." : `It replaces version ${app.head}, running now, at the same address. It passed its trial when it was made.`;
+  const replaces = app.head === null ? ["Nothing is running yet."] : ["It replaces version ", versionChip(app.head), ", running now, at the same address."];
+  element("deploy-note").replaceChildren(...replaces, " It passed its trial when it was made.");
   if (!ready) return void element("deploy-changes").replaceChildren(h("p", "quiet", "Fetching the code…"));
   const { view, added, removed } = changes(before, after);
   element("deploy-changes").replaceChildren(h("p", "diff-file", icon("file"), "routes.ts", h("span", "diff-added", `+${added}`), h("span", "diff-removed", `−${removed}`)), view);
@@ -443,7 +444,7 @@ function runCommand(command: Command, argument: string): void {
 /** Renames the app only once the person agrees to the redeploy it takes. Until then, the command stays in the composer. */
 function askToRename(app: string, to: string): void {
   const dialog = element<HTMLDialogElement>("rename-dialog");
-  element("rename-title").textContent = `Rename ${app} to ${to}?`;
+  element("rename-title").replaceChildren("Rename ", nameChip(app), " to ", nameChip(to), "?");
   dialog.returnValue = "";
   dialog.addEventListener("close", () => dialog.returnValue === "rename" && startWork({ type: "rename", app, name: to }, false), { once: true });
   dialog.showModal();
@@ -480,11 +481,11 @@ function removeApp(): void {
   const name = view.name;
   const dialog = element<HTMLDialogElement>("remove-dialog");
   const confirm = element<HTMLButtonElement>("confirm-remove");
-  element("remove-title").textContent = `Remove ${name}?`;
+  element("remove-title").replaceChildren("Remove ", nameChip(name), "?");
   let left = REMOVE_WAIT_S;
   const count = (): void => {
     confirm.disabled = left > 0;
-    confirm.textContent = left > 0 ? `Remove ${name} (${left})` : `Remove ${name}`;
+    confirm.replaceChildren("Remove ", nameChip(name), left > 0 ? ` (${left})` : "");
   };
   count();
   const tick = window.setInterval(() => {
@@ -741,6 +742,15 @@ function turn(from: Turn["from"], body: HTMLElement): HTMLLIElement {
   if (from === "mayfly") item.append(avatar());
   item.append(body);
   return item;
+}
+
+/** An app's name, set apart from the words around it wherever a dialog names it. */
+function nameChip(name: string): HTMLElement {
+  return h("code", "name-chip", name);
+}
+
+function versionChip(id: string): HTMLElement {
+  return h("code", "version-id", id);
 }
 
 /** The work under way, as Mayfly's next turn in the conversation: an answer as it is written, or the stages of the work. */
