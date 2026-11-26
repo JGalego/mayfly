@@ -178,8 +178,8 @@ async function run(work: Omit<Progress, "since" | "steps"> & { kind: keyof typeo
 function showProgress(step: Step, session: Session): void {
   if (session.working === null) return;
   session.working = { ...session.working, steps: withStep(session.working.steps, step) };
-  if (step.kind !== "draft") return postProgress(session);
-  // Only a developer sees the draft, and a few times a second rather than on every word.
+  if (step.kind !== "draft" && step.kind !== "thinking") return postProgress(session);
+  // Only a developer sees the draft and the thinking, and a few times a second rather than on every word.
   if (session.draftDue || !session.settings.developer()) return;
   session.draftDue = true;
   setTimeout(() => {
@@ -188,9 +188,11 @@ function showProgress(step: Step, session: Session): void {
   }, DRAFT_MS);
 }
 
-/** A draft replaces the draft before it, and whatever comes next replaces the last draft. */
+/** Whatever comes after a draft replaces it, and the thinking so far replaces the thinking before it. Both hold all there is so far. */
 function withStep(steps: readonly Step[], step: Step): readonly Step[] {
-  return steps.at(-1)?.kind === "draft" ? [...steps.slice(0, -1), step] : [...steps, step];
+  const last = steps.at(-1)?.kind;
+  const replaces = last === "draft" || (last === "thinking" && step.kind === "thinking");
+  return replaces ? [...steps.slice(0, -1), step] : [...steps, step];
 }
 
 function postProgress(session: Session): void {
@@ -230,7 +232,7 @@ async function copySignIn(what: "email" | "password", session: Session): Promise
 }
 
 async function sendCode(app: string, version: string, session: Session): Promise<void> {
-  await session.post({ type: "code", app, version, routes: await session.engine.code(app, version) });
+  await session.post({ type: "code", app, version, ...(await session.engine.written(app, version)) });
 }
 
 async function saveDeveloper(on: boolean, session: Session): Promise<void> {

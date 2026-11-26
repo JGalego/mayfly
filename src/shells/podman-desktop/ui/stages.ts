@@ -7,12 +7,15 @@ export type StageKind = "writing" | "edited" | "building" | "trying" | "deployin
 export interface Stage {
   readonly kind: StageKind;
   readonly attempt: number;
+  /** What the model has thought so far, when its provider shares that. */
+  readonly thinking?: string;
   /** The code the model wrote, or has written so far while `live`. */
   readonly code?: string;
   readonly live?: boolean;
-  /** The kept version whose code this is, for a finished request, and its length. The code itself is fetched when wanted. */
+  /** The kept version whose code this is, for a finished request, and its length and its thinking's. Both are fetched when wanted. */
   readonly version?: string;
   readonly lines?: number;
+  readonly thinkingWords?: number;
   /** The version it started from, to show what it changed. */
   readonly parent?: string;
   readonly problem?: string;
@@ -31,6 +34,9 @@ export function stagesOf(steps: readonly Step[]): Stage[] {
       case "writing":
         attempt = step.attempt;
         stages.push({ kind: "writing", attempt });
+        break;
+      case "thinking":
+        amendLast({ thinking: step.text });
         break;
       case "draft":
         amendLast({ code: codeIn(step.text), live: true });
@@ -62,6 +68,10 @@ export function lineCount(code: string): number {
   return code.split("\n").length - (code.endsWith("\n") ? 1 : 0);
 }
 
+export function wordCount(text: string): number {
+  return text.split(/\s+/).filter(Boolean).length;
+}
+
 /** Minutes and seconds since a moment, like 1:05. */
 export function elapsed(since: number, now: number): string {
   const seconds = Math.max(0, Math.floor((now - since) / 1000));
@@ -71,13 +81,14 @@ export function elapsed(since: number, now: number): string {
 /** The stages of a finished request, rebuilt from the versions it made. */
 export function stagesOfVersions(versions: readonly VersionView[]): Stage[] {
   const stages: Stage[] = [];
-  for (const { id, parent, attempt, lines, problem, by } of versions) {
+  for (const { id, parent, attempt, lines, thinkingWords, problem, by } of versions) {
+    const written = { attempt, version: id, lines, ...(thinkingWords === 0 ? {} : { thinkingWords }) };
     if (lines === 0) {
-      stages.push({ kind: "writing", attempt, problem: problem ?? "" });
+      stages.push({ kind: "writing", ...written, problem: problem ?? "" });
       continue;
     }
     const kind = by.kind === "person" ? "edited" : "writing";
-    stages.push({ kind, attempt, version: id, lines, ...(parent === null ? {} : { parent }) }, { kind: "building", attempt });
+    stages.push({ kind, ...written, ...(parent === null ? {} : { parent }) }, { kind: "building", attempt });
     stages.push(problem === null ? { kind: "trying", attempt } : { kind: "trying", attempt, problem });
   }
   const last = versions.at(-1);

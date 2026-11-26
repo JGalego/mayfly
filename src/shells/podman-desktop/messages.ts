@@ -75,6 +75,6 @@ export type ToUi =
   | { readonly type: "doctor"; readonly checks: readonly Check[] }
   | { readonly type: "activity"; readonly entries: readonly Activity[] }
   | { readonly type: "logs"; readonly pod: string; readonly container: string; readonly lines: readonly string[] }
-  | { readonly type: "code"; readonly app: string; readonly version: string; readonly routes: string }
+  | { readonly type: "code"; readonly app: string; readonly version: string; readonly routes: string; readonly thinking: string }
   | { readonly type: "notice"; readonly text: string }
   | { readonly type: "error"; readonly text: string };

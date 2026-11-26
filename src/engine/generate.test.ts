@@ -117,20 +117,27 @@ describe("generateApp", () => {
     ]);
   });
 
-  it("shows a watcher the model's reply as it arrives", async () => {
+  it("shows a watcher the model's thinking and reply as they arrive, and keeps the thinking with the attempt", async () => {
     const model: ModelProvider = {
       name: "the test model",
-      complete: async (_system, _messages, onText) => {
-        for (const piece of ["name: notes\n", "```ts\nexport default 1;\n```"]) onText?.(piece);
-        return { text: good, usage: { input: 1, output: 1 } };
+      complete: async (_system, _messages, listener) => {
+        for (const piece of ["Notes need ", "one route."]) listener?.thinking?.(piece);
+        for (const piece of ["name: notes\n", "```ts\nexport default 1;\n```"]) listener?.text?.(piece);
+        return { text: good, thinking: "Notes need one route.", usage: { input: 1, output: 1 } };
       },
     };
     const { builder } = fakes([], [{ ok: true }]);
-    const drafts: string[] = [];
+    const seen: string[] = [];
 
-    await generateApp(newNotes, { model, builder, watch: (step) => step.kind === "draft" && drafts.push(step.text) });
+    const { attempts } = await generateApp(newNotes, { model, builder, watch: (step) => "text" in step && seen.push(`${step.kind}: ${step.text}`) });
 
-    assert.deepEqual(drafts, ["name: notes\n", "name: notes\n```ts\nexport default 1;\n```"]);
+    assert.deepEqual(seen, [
+      "thinking: Notes need ",
+      "thinking: Notes need one route.",
+      "draft: name: notes\n",
+      "draft: name: notes\n```ts\nexport default 1;\n```",
+    ]);
+    assert.equal(attempts[0]?.thinking, "Notes need one route.");
   });
 
   it("stops after three attempts, keeping each one and why it failed", async () => {
@@ -165,7 +172,7 @@ function fakes(replies: string[], trials: Trial[]) {
     name: "the test model",
     complete: async (system, messages) => {
       conversations.push({ system, messages: [...messages] });
-      return { text: replies.shift() ?? "", usage: { input: 10, output: 5 } };
+      return { text: replies.shift() ?? "", thinking: "", usage: { input: 10, output: 5 } };
     },
   };
   const builder: Builder = {

@@ -1,6 +1,7 @@
 import OpenAI from "openai";
-import type { ModelProvider } from "../../engine/ports.ts";
+import type { Completion, Listener, ModelProvider } from "../../engine/ports.ts";
 import { NO_USAGE, type Usage } from "../../engine/usage.ts";
+import { thinkTags, type Parts } from "./think-tags.ts";
 
 // Room for a whole routes.ts. No sampling settings: current Claude models reject them.
 const MAX_REPLY_TOKENS = 16_000;
@@ -16,8 +17,8 @@ export function openAiCompatibleModel({ baseUrl, apiKey, model }: ModelSettings)
   const client = new OpenAI({ baseURL: baseUrl, apiKey });
   return {
     name: model,
-    // Streamed, so people can watch the code being written.
-    async complete(system, messages, onText) {
+    // Streamed, so people can watch the code being written, and the thinking where the provider shares it.
+    async complete(system, messages, listener = {}) {
       const stream = await client.chat.completions.create({
         model,
         max_completion_tokens: MAX_REPLY_TOKENS,
@@ -25,23 +26,47 @@ export function openAiCompatibleModel({ baseUrl, apiKey, model }: ModelSettings)
         stream: true,
         stream_options: { include_usage: true },
       });
-      let text = "";
-      let finish: string | null = null;
-      // Some compatible servers leave usage out. Their replies count as free rather than failing.
-      let usage: Usage = NO_USAGE;
-      for await (const chunk of stream) {
-        const choice = chunk.choices[0];
-        const piece = choice?.delta.content ?? "";
-        if (piece !== "") onText?.(piece);
-        text += piece;
-        finish = choice?.finish_reason ?? finish;
-        if (chunk.usage) usage = { input: chunk.usage.prompt_tokens, output: chunk.usage.completion_tokens };
-      }
+      const { finish, ...completion } = await gather(stream, listener);
       if (finish === "length") throw new Error(`The model's reply was cut off at ${MAX_REPLY_TOKENS} tokens.`);
-      if (text === "") throw new Error("The model sent an empty reply.");
-      return { text, usage };
+      if (completion.text === "") throw new Error("The model sent an empty reply.");
+      return completion;
     },
   };
+}
+
+/** A streamed reply put together, passing each piece of text and thinking on as it arrives, and why it ended. */
+async function gather(stream: AsyncIterable<OpenAI.ChatCompletionChunk>, listener: Listener): Promise<Completion & { readonly finish: string | null }> {
+  const reply = { text: "", thinking: "" };
+  const take = ({ text, thinking }: Parts): void => {
+    if (thinking !== "") listener.thinking?.(thinking);
+    if (text !== "") listener.text?.(text);
+    reply.text += text;
+    reply.thinking += thinking;
+  };
+  const tags = thinkTags();
+  let finish: string | null = null;
+  // Some compatible servers leave usage out. Their replies count as free rather than failing.
+  let usage: Usage = NO_USAGE;
+  for await (const chunk of stream) {
+    const choice = chunk.choices[0];
+    if (choice !== undefined) {
+      take({ text: "", thinking: thinkingIn(choice.delta) });
+      take(tags.read(choice.delta.content ?? ""));
+      finish = choice.finish_reason ?? finish;
+    }
+    if (chunk.usage) usage = { input: chunk.usage.prompt_tokens, output: chunk.usage.completion_tokens };
+  }
+  take(tags.end());
+  return { ...reply, usage, finish };
+}
+
+/**
+ * The thinking in a piece of the stream, which OpenAI's API leaves out. Compatible servers that share it do so in a field of their own:
+ * DeepSeek and vLLM in reasoning_content, OpenRouter in reasoning. Others put it in the text between <think> tags.
+ */
+function thinkingIn(delta: object): string {
+  const { reasoning_content: content, reasoning } = delta as { readonly reasoning_content?: unknown; readonly reasoning?: unknown };
+  return [content, reasoning].find((value): value is string => typeof value === "string" && value !== "") ?? "";
 }
 
 /**

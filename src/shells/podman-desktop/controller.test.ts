@@ -22,6 +22,7 @@ const local: ModelSetting = { id: "", provider: "openai-compatible", baseUrl: "h
 const OPENAI_ENDPOINT = "https://api.openai.com/v1";
 const writing: Step = { kind: "writing", attempt: 1 };
 const draft = (text: string): Step => ({ kind: "draft", text });
+const thinking = (text: string): Step => ({ kind: "thinking", text });
 
 describe("the Mayfly panel's controller", () => {
   it("shows the apps, who signs in, the models and whether their keys are saved, and the tokens spent", async () => {
@@ -74,6 +75,21 @@ describe("the Mayfly panel's controller", () => {
 
     const progress = posted.flatMap((m) => (m.type === "progress" ? [m.working.steps] : []));
     assert.deepEqual(progress, [[writing], [writing, draft("abc")]]);
+  });
+
+  it("passes on the model's latest thinking with its draft, keeping the thinking once the draft starts", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const steps = [writing, thinking("a"), thinking("a list"), draft("n"), draft("name")];
+    const { handle, posted, finish } = setUp({ apps: [], steps, developer: true, waitForCreate: true });
+
+    const sending = handle({ type: "send", app: null, request: "split lunch bills" });
+    await new Promise((resolve) => setImmediate(resolve));
+    t.mock.timers.tick(150);
+    finish();
+    await sending;
+
+    const progress = posted.flatMap((m) => (m.type === "progress" ? [m.working.steps] : []));
+    assert.deepEqual(progress, [[writing], [writing, thinking("a list"), draft("name")]]);
   });
 
   it("keeps the draft to itself when developer mode is off", async (t) => {
@@ -164,12 +180,12 @@ describe("the Mayfly panel's controller", () => {
     assert.equal(posted.at(-1)?.type, "state");
   });
 
-  it("sends the code of a version the page asks for", async () => {
+  it("sends the code of a version the page asks for, and the model's thinking", async () => {
     const { handle, posted } = setUp({ apps: [lunch] });
 
     await handle({ type: "code", app: "lunch-split", version: "v1" });
 
-    assert.deepEqual(posted, [{ type: "code", app: "lunch-split", version: "v1", routes: "export default 1;\n" }]);
+    assert.deepEqual(posted, [{ type: "code", app: "lunch-split", version: "v1", routes: "export default 1;\n", thinking: "One route will do." }]);
   });
 
   it("remembers whether developer mode is on", async () => {
@@ -363,7 +379,7 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
       apps.push(made);
       return made;
     },
-    code: async () => "export default 1;\n",
+    written: async () => ({ routes: "export default 1;\n", thinking: "One route will do." }),
     edit: async (name, routes, message) => {
       calls.push(`edit ${name} ${routes.trim()} ${message}`);
       return lunch;

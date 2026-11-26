@@ -53,14 +53,22 @@ export interface Message {
 
 export interface Completion {
   readonly text: string;
+  /** What the model thought before it replied, when its provider shares that, or empty. */
+  readonly thinking: string;
   readonly usage: Usage;
+}
+
+/** Where a reply goes, piece by piece, as it arrives. */
+export interface Listener {
+  readonly text?: (piece: string) => void;
+  readonly thinking?: (piece: string) => void;
 }
 
 export interface ModelProvider {
   /** The model as people know it, such as "OpenAI · gpt-6.2-sol". Every version it writes keeps it. */
   readonly name: string;
-  /** The model's reply to a conversation, under a system prompt, and what it cost. Each piece of text goes to `onText` as it arrives. */
-  complete(system: string, messages: readonly Message[], onText?: (text: string) => void): Promise<Completion>;
+  /** The model's reply to a conversation, under a system prompt, and what it cost. */
+  complete(system: string, messages: readonly Message[], listener?: Listener): Promise<Completion>;
 }
 
 export type Trial = { readonly ok: true } | { readonly ok: false; readonly problem: string };

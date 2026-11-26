@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { codeIn, elapsed, lineCount, stagesOf, stagesOfVersions } from "./stages.ts";
+import { codeIn, elapsed, lineCount, stagesOf, stagesOfVersions, wordCount } from "./stages.ts";
 
 describe("the stages a person sees", () => {
   it("puts the code on the writing stage, then adds building, trying and starting", () => {
@@ -27,6 +27,16 @@ describe("the stages a person sees", () => {
     assert.deepEqual(stages[2], { kind: "writing", attempt: 2 });
   });
 
+  it("puts the model's thinking on the writing stage, beside the code that follows it", () => {
+    const [stage] = stagesOf([
+      { kind: "writing", attempt: 1 },
+      { kind: "thinking", text: "Notes need a list." },
+      { kind: "draft", text: "name: notes\n```ts\nconst a" },
+    ]);
+
+    assert.deepEqual(stage, { kind: "writing", attempt: 1, thinking: "Notes need a list.", code: "const a", live: true });
+  });
+
   it("shows only the code of a reply the model is still writing", () => {
     const [stage] = stagesOf([{ kind: "writing", attempt: 1 }, { kind: "draft", text: "name: notes\n```ts\nconst a = 1;\ncon" }]);
 
@@ -35,7 +45,7 @@ describe("the stages a person sees", () => {
 });
 
 describe("the stages of a finished request", () => {
-  const version = { parent: null, request: "r", by: { kind: "model" as const, name: "the test model" }, summary: "", spent: { input: 0, output: 0 }, at: 0, lines: 9 };
+  const version = { parent: null, request: "r", by: { kind: "model" as const, name: "the test model" }, summary: "", spent: { input: 0, output: 0 }, at: 0, lines: 9, thinkingWords: 0 };
 
   it("show each attempt's writing, building and trying, and the start of the one that passed", () => {
     const stages = stagesOfVersions([
@@ -57,8 +67,10 @@ describe("the stages of a finished request", () => {
     );
   });
 
-  it("show an attempt with no usable code as a failed writing stage", () => {
-    assert.deepEqual(stagesOfVersions([{ ...version, id: "a", attempt: 1, lines: 0, problem: "no code" }]), [{ kind: "writing", attempt: 1, problem: "no code" }]);
+  it("show an attempt with no usable code as a failed writing stage, with what the model thought", () => {
+    assert.deepEqual(stagesOfVersions([{ ...version, id: "a", attempt: 1, lines: 0, thinkingWords: 40, problem: "no code" }]), [
+      { kind: "writing", attempt: 1, version: "a", lines: 0, thinkingWords: 40, problem: "no code" },
+    ]);
   });
 });
 
@@ -73,10 +85,11 @@ describe("codeIn", () => {
   });
 });
 
-describe("lineCount and elapsed", () => {
-  it("count lines whether or not the last one has ended, and read like a clock", () => {
+describe("lineCount, wordCount and elapsed", () => {
+  it("count lines whether or not the last one has ended, words however they are spaced, and read like a clock", () => {
     assert.equal(lineCount("a\nb\n"), 2);
     assert.equal(lineCount("a\nb"), 2);
+    assert.equal(wordCount(" Notes  need\na list. "), 4);
     assert.equal(elapsed(0, 65_400), "1:05");
   });
 });

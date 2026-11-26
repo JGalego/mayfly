@@ -18,8 +18,14 @@ const EMAIL = /^[^\s@]+@[^\s@]+$/;
 const MADE = "Your app is ready.";
 const CHANGED = "Done. Your app has the change.";
 
-/** A version as a shell shows it: how long its code is, but not the code, which the shell asks for when it needs it. */
-export type VersionView = Omit<Version, "routes" | "image"> & { readonly lines: number };
+/** A version as a shell shows it: how long its code and the model's thinking are, but not them, which the shell asks for when it needs them. */
+export type VersionView = Omit<Version, "routes" | "image" | "thinking"> & { readonly lines: number; readonly thinkingWords: number };
+
+/** What one version's author wrote: its code, and the model's thinking, empty when its provider kept that to itself. */
+export interface Written {
+  readonly routes: string;
+  readonly thinking: string;
+}
 
 /** How an app's pod, or the sign-in service's, is doing. No containers means it is not running. */
 export interface ServiceHealth {
@@ -56,8 +62,8 @@ export interface Engine {
   edit(name: string, routes: string, message: string, watch?: Watcher): Promise<AppView>;
   /** Runs an earlier version that passed again, at the same URL. The next change starts from it, so history branches rather than being lost. */
   restore(name: string, version: string, watch?: Watcher): Promise<AppView>;
-  /** The code of one version of an app. */
-  code(name: string, version: string): Promise<string>;
+  /** The code of one version of an app, and what the model thought writing it. */
+  written(name: string, version: string): Promise<Written>;
   list(): Promise<AppView[]>;
   remove(name: string): Promise<void>;
   /** Who signs in to the apps. Created on first use. */
@@ -195,10 +201,10 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       return appView(next);
     },
 
-    async code(name, id) {
+    async written(name, id) {
       const version = findVersion(existingApp(await store.load(), name), id);
       if (version === undefined) throw new Error(`${name} has no version ${id}`);
-      return version.routes;
+      return { routes: version.routes, thinking: version.thinking ?? "" };
     },
 
     async list() {
@@ -317,6 +323,10 @@ function spend(state: State, spent: Usage, name?: string): State {
 }
 
 function appView(app: App): AppView {
-  const versions = app.versions.map(({ routes, image: _image, ...view }) => ({ ...view, lines: routes.split("\n").length - 1 }));
+  const versions = app.versions.map(({ routes, image: _image, thinking = "", ...view }) => ({
+    ...view,
+    lines: routes.split("\n").length - 1,
+    thinkingWords: thinking.split(/\s+/).filter(Boolean).length,
+  }));
   return { name: app.name, url: appUrl(app.hostPort), model: app.model, starred: app.starred, head: app.head, versions, conversation: app.conversation, spent: app.spent };
 }

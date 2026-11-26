@@ -1,4 +1,4 @@
-import type { AppView, ServiceHealth } from "../../../engine/engine.ts";
+import type { AppView, ServiceHealth, Written } from "../../../engine/engine.ts";
 import type { Turn } from "../../../engine/state.ts";
 import type { FromUi, Progress, ToUi, Work } from "../messages.ts";
 import type { Check } from "../doctor.ts";
@@ -58,8 +58,8 @@ let appLogsShown: string | undefined;
 let codeShown = "";
 /** Folds the person opened or closed, so a redraw leaves them as they were. */
 const folds = new Map<string, boolean>();
-/** Versions' code fetched from the extension, and the ones already asked for. */
-const codes = new Map<string, string>();
+/** Versions' code and thinking fetched from the extension, and the ones already asked for. */
+const written = new Map<string, Written>();
 const asked = new Set<string>();
 let bannerTimer: number | undefined;
 /** What the doctor found when last asked. */
@@ -137,7 +137,7 @@ function receive(message: ToUi): void {
       if (state !== undefined) state = { ...state, working: message.working };
       return render();
     case "code":
-      codes.set(`${message.app}:${message.version}`, message.routes);
+      written.set(`${message.app}:${message.version}`, { routes: message.routes, thinking: message.thinking });
       return render();
     case "health":
       health = message.services;
@@ -257,7 +257,7 @@ function startingPoint(app: AppView): AppView["versions"][number] | undefined {
 
 function startingCode(app: AppView): string | undefined {
   const base = startingPoint(app);
-  return base === undefined ? undefined : codes.get(`${app.name}:${base.id}`);
+  return base === undefined ? undefined : written.get(`${app.name}:${base.id}`)?.routes;
 }
 
 function startEditing(): void {
@@ -491,15 +491,19 @@ function showingFor({ developer }: State): Showing {
       folds.set(key, open);
       render();
     },
-    code: (app, version) => {
-      const key = `${app}:${version}`;
-      if (!asked.has(key)) {
-        asked.add(key);
-        post({ type: "code", app, version });
-      }
-      return codes.get(key);
-    },
+    code: (app, version) => fetchWritten(app, version)?.routes,
+    thinking: (app, version) => fetchWritten(app, version)?.thinking,
   };
+}
+
+/** A version's code and thinking, asked for the first time they are wanted. */
+function fetchWritten(app: string, version: string): Written | undefined {
+  const key = `${app}:${version}`;
+  if (!asked.has(key)) {
+    asked.add(key);
+    post({ type: "code", app, version });
+  }
+  return written.get(key);
 }
 
 function turnItem({ from, text, at }: Turn, extras: readonly Node[] = []): HTMLLIElement {

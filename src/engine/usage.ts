@@ -18,8 +18,8 @@ export function metered(model: ModelProvider): { readonly model: ModelProvider; 
   return {
     model: {
       name: model.name,
-      async complete(system, messages, onText) {
-        const completion = await model.complete(system, messages, onText);
+      async complete(system, messages, listener) {
+        const completion = await model.complete(system, messages, listener);
         spent = addUsage(spent, completion.usage);
         return completion;
       },

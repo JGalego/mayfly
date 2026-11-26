@@ -1,4 +1,4 @@
-import type { Builder, Message, ModelProvider } from "./ports.ts";
+import type { Builder, Listener, Message, ModelProvider } from "./ports.ts";
 import { changeFor, repairFor, requestFor, SYSTEM_PROMPT } from "./prompt.ts";
 import { applyEdits, type Applied } from "./edits.ts";
 import { parseReply, type Code } from "./reply.ts";
@@ -18,8 +18,8 @@ export type Ask =
 
 type Outcome = { readonly problem: null; readonly image: string } | { readonly problem: string; readonly image: null };
 
-/** One go at the code: what the model wrote, and whether it passed its trial. */
-export type Attempt = Tried & { readonly spent: Usage; readonly at: number };
+/** One go at the code: what the model wrote, and thought when its provider shares that, and whether it passed its trial. */
+export type Attempt = Tried & { readonly thinking?: string; readonly spent: Usage; readonly at: number };
 
 /** The code an attempt ended up with, empty when the reply had none that could be used. */
 type Tried = { readonly routes: string; readonly summary: string } & Outcome;
@@ -44,10 +44,9 @@ export async function generateApp(
   const attempts: Attempt[] = [];
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
     watch({ kind: "writing", attempt });
-    let draft = "";
-    const { text: reply, usage } = await model.complete(SYSTEM_PROMPT, messages, (text) => watch({ kind: "draft", text: (draft += text) }));
+    const { text: reply, thinking, usage } = await model.complete(SYSTEM_PROMPT, messages, listenFor(watch));
     const tried = await tryReply(reply, current, nameFor, builder, watch);
-    attempts.push({ ...tried, spent: usage, at: Date.now() });
+    attempts.push({ ...tried, ...(thinking === "" ? {} : { thinking }), spent: usage, at: Date.now() });
     if (tried.problem === null) break;
     current = tried.routes || current;
     watch({ kind: "failed", problem: tried.problem });
@@ -55,6 +54,16 @@ export async function generateApp(
     messages.push({ role: "assistant", content: reply }, { role: "user", content: repairFor(tried.problem, edited ? current : undefined) });
   }
   return { name: name ?? unusedName(UNNAMED, taken), attempts };
+}
+
+/** Shows the watcher the reply, and the thinking, each so far as it grows. */
+function listenFor(watch: Watcher): Listener {
+  let draft = "";
+  let thought = "";
+  return {
+    text: (piece) => watch({ kind: "draft", text: (draft += piece) }),
+    thinking: (piece) => watch({ kind: "thinking", text: (thought += piece) }),
+  };
 }
 
 async function tryReply(reply: string, current: string, nameFor: (proposed: string) => string, builder: Builder, watch: Watcher): Promise<Tried> {

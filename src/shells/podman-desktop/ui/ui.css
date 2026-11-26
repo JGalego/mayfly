@@ -573,6 +573,13 @@ pre {
   white-space: pre;
 }
 
+/* The model's thinking is prose, not code. */
+pre.thinking {
+  font: italic 13px/1.5 system-ui, sans-serif;
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+
 pre.live::after {
   content: "▍";
   color: var(--accent);

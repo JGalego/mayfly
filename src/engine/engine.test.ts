@@ -77,7 +77,7 @@ describe("the engine", () => {
     assert.equal(after.url, before.url);
     assert.deepEqual(secretOf(deployed[1]), secretOf(deployed[0]));
     assert.equal(after.versions[1]?.parent, before.head);
-    assert.equal(await engine.code("lunch", after.head ?? ""), "v2\n");
+    assert.deepEqual(await engine.written("lunch", after.head ?? ""), { routes: "v2\n", thinking: "" });
     assert.equal(after.versions[1]?.lines, 1);
   });
 
@@ -310,7 +310,7 @@ function setUp(replies: string[], trials: Trial[] = [], named: (id: string | nul
     name: named(id),
     complete: async (_system, messages: readonly Message[]) => {
       asked.push(messages[0]?.content ?? "");
-      return { text: replies.shift() ?? "", usage: COST };
+      return { text: replies.shift() ?? "", thinking: "", usage: COST };
     },
   });
   let builds = 0;

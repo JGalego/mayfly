@@ -25,6 +25,8 @@ interface VersionDetails {
   readonly attempt: number;
   /** Empty when the model's reply held no usable code. */
   readonly routes: string;
+  /** What the model thought before it wrote this, when its provider shares that. */
+  readonly thinking?: string;
   /** What the model told the person about it. */
   readonly summary: string;
   readonly spent: Usage;
