@@ -13,6 +13,7 @@ const FIRST_PORT = 18100;
 // Enough to look back a while, which the page's filters then narrow.
 const LOG_LINES = 1000;
 const CONTAINER = /^[a-z0-9-]+$/;
+const EMAIL = /^[^\s@]+@[^\s@]+$/;
 // What Mayfly says when the model said nothing after the code.
 const MADE = "Your app is ready.";
 const CHANGED = "Done. Your app has the change.";
@@ -61,6 +62,10 @@ export interface Engine {
   remove(name: string): Promise<void>;
   /** Who signs in to the apps. Created on first use. */
   owner(): Promise<Owner>;
+  /** Signs the owner in with another email from now on. */
+  changeEmail(email: string): Promise<Owner>;
+  /** Gives the owner a new random password, and returns them with it. */
+  newPassword(): Promise<Owner>;
   /** What the model has spent on every app, including removed ones and attempts that failed. */
   spent(): Promise<Usage>;
   /** How each app that should be running, and the sign-in service, is doing. */
@@ -105,6 +110,15 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     }
     await store.save(nextState);
     return appView(next);
+  }
+
+  /** Changes the owner, and tells the sign-in service when it is running for some app. */
+  async function updateOwner(change: (owner: Owner) => Owner): Promise<Owner> {
+    const state = withOwner(await store.load());
+    const next = { ...state, owner: change(state.owner) };
+    if (next.apps.some((app) => app.head !== null)) await identity.sync(next);
+    await store.save(next);
+    return next.owner;
   }
 
   return {
@@ -211,6 +225,16 @@ export function createEngine({ store, deployer, observer, identity, models, buil
 
     async spent() {
       return (await store.load()).spent;
+    },
+
+    async changeEmail(email) {
+      const address = email.trim();
+      if (!EMAIL.test(address)) throw new Error("That does not look like an email address.");
+      return updateOwner((owner) => ({ ...owner, email: address, username: address.split("@")[0] ?? address }));
+    },
+
+    async newPassword() {
+      return updateOwner((owner) => ({ ...owner, password: newPassword() }));
     },
 
     async health() {

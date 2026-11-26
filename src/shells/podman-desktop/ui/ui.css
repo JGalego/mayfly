@@ -1035,6 +1035,22 @@ pre.problem {
   font-size: 0.95rem;
 }
 
+.sign-in-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+#owner-email {
+  flex: 1;
+  min-width: 0;
+}
+
+.sign-in-row .chip {
+  padding: 0.25rem 0.8rem;
+}
+
 .section-head {
   display: flex;
   align-items: center;

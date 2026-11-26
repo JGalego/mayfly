@@ -257,6 +257,21 @@ describe("the engine", () => {
     await assert.rejects(engine.remove("ghost"), /no app named ghost/);
   });
 
+  it("changes the owner's email and password, and tells the sign-in service once an app runs", async () => {
+    const { engine, synced } = setUp([reply("lunch")]);
+    const before = await engine.owner();
+    await engine.changeEmail("me@home.test");
+    assert.equal(synced.length, 0);
+    await engine.create("split lunch bills");
+
+    const after = await engine.newPassword();
+
+    assert.deepEqual([after.email, after.username], ["me@home.test", "me"]);
+    assert.notEqual(after.password, before.password);
+    assert.equal(synced.at(-1)?.owner?.password, after.password);
+    await assert.rejects(engine.changeEmail("not an email"), /does not look like an email/);
+  });
+
   it("creates the owner once, with a long random password", async () => {
     const { engine } = setUp([]);
 

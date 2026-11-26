@@ -144,6 +144,17 @@ describe("the Mayfly panel's controller", () => {
     assert.deepEqual(posted, [{ type: "doctor", checks: [{ name: "Podman", status: "pass", detail: "Podman 5.8.9 is running." }] }]);
   });
 
+  it("changes the owner's email, and copies a new password without sending it to the page", async () => {
+    const { handle, calls, copied, posted } = setUp({ apps: [] });
+
+    await handle({ type: "owner-email", email: "me@home.test" });
+    await handle({ type: "new-password" });
+
+    assert.deepEqual(calls, ["email me@home.test"]);
+    assert.deepEqual(copied, ["brand-new-pass"]);
+    assert.ok(!JSON.stringify(posted).includes("brand-new-pass"));
+  });
+
   it("marks an app as a favourite", async () => {
     const { handle, calls, posted } = setUp({ apps: [lunch] });
 
@@ -371,6 +382,8 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
     list: async () => [...apps],
     remove: async (name) => void calls.push(`remove ${name}`),
     owner: async () => owner,
+    changeEmail: async (email) => (calls.push(`email ${email}`), { ...owner, email }),
+    newPassword: async () => ({ ...owner, password: "brand-new-pass" }),
     spent: async () => ({ input: 500, output: 80 }),
     logs: async (pod, container) => [`2026-11-26T15:04:05Z ${pod} ${container}`],
     health: async () => [{ name: "lunch-split", kind: "app", pod: "mayfly-lunch-split", containers: [] }],

@@ -77,6 +77,14 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
     case "star":
       await session.engine.star(request.app, request.starred);
       return showState(session);
+    case "owner-email":
+      await session.engine.changeEmail(request.email);
+      await session.post({ type: "notice", text: "Your apps now sign you in with this email." });
+      return showState(session);
+    case "new-password":
+      // Straight to the clipboard: like the old one, the new password never goes to the page.
+      await session.copy((await session.engine.newPassword()).password);
+      return session.post({ type: "notice", text: "New password made and copied. Paste it when your app asks you to sign in." });
     case "developer":
       return saveDeveloper(request.on, session);
     case "code":
@@ -238,9 +246,10 @@ async function showState(session: Session): Promise<void> {
 // Messages come from the page, so each is checked for its shape before anything acts on it.
 function readRequest(message: unknown): FromUi | undefined {
   if (typeof message !== "object" || message === null) return undefined;
-  const { type, app, request, name, apiKey, on, version, what, routes, message: words, model, id, pod, container, starred } = message as Record<string, unknown>;
+  const { type, app, request, name, apiKey, on, version, what, routes, message: words, model, id, pod, container, starred, email } = message as Record<string, unknown>;
   switch (type) {
     case "ready":
+    case "new-password":
     case "health":
     case "doctor":
     case "activity":
@@ -257,6 +266,8 @@ function readRequest(message: unknown): FromUi | undefined {
       return typeof app === "string" && typeof model === "string" ? { type, app, model } : undefined;
     case "star":
       return typeof app === "string" && typeof starred === "boolean" ? { type, app, starred } : undefined;
+    case "owner-email":
+      return typeof email === "string" ? { type, email } : undefined;
     case "remove-model":
     case "default-model":
       return typeof id === "string" ? { type, id } : undefined;

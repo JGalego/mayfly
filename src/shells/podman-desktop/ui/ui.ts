@@ -111,6 +111,15 @@ request.addEventListener("keydown", (event) => {
 composerModel.addEventListener("change", pickModel);
 element("refresh-health").addEventListener("click", askHealth);
 element("run-doctor").addEventListener("click", askDoctor);
+element("owner-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  post({ type: "owner-email", email: element<HTMLInputElement>("owner-email").value });
+});
+element("settings-copy-password").addEventListener("click", (event) => {
+  post({ type: "copy", what: "password" });
+  flash(event.currentTarget as HTMLElement, "Copied ✓");
+});
+element("new-password").addEventListener("click", makeNewPassword);
 developer.addEventListener("change", () => post({ type: "developer", on: developer.checked }));
 
 window.setInterval(tickClocks, 1000);
@@ -172,6 +181,7 @@ function go(next: View): void {
   hideBanner();
   render();
   if (view.kind === "settings") {
+    element<HTMLInputElement>("owner-email").value = state?.owner ?? "";
     askDoctor();
     askHealth();
     return settingsLogs.ask();
@@ -302,6 +312,31 @@ function removeApp(): void {
     removeArmed = false;
     render();
   }, CONFIRM_MS);
+}
+
+// A new password stops the old one working, so it takes a second click.
+let newPasswordArmed = false;
+
+function makeNewPassword(): void {
+  const control = element("new-password");
+  if (newPasswordArmed) {
+    newPasswordArmed = false;
+    control.textContent = "Make a new password";
+    return post({ type: "new-password" });
+  }
+  newPasswordArmed = true;
+  control.textContent = "Sure? The old one stops working";
+  window.setTimeout(() => {
+    newPasswordArmed = false;
+    control.textContent = "Make a new password";
+  }, CONFIRM_MS);
+}
+
+/** Says something on a button for a moment, then puts its words back. */
+function flash(control: HTMLElement, words: string): void {
+  const before = control.textContent;
+  control.textContent = words;
+  window.setTimeout(() => (control.textContent = before), COPIED_MS);
 }
 
 function askDoctor(): void {

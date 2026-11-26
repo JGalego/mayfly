@@ -128,6 +128,19 @@
           <p class="quiet">Whether each app and the sign-in service are running, as Podman sees them.</p>
           <ul id="health" class="health-list"></ul>
         </section>
+        <section>
+          <h2>Signing in</h2>
+          <p class="quiet">Your apps ask you to sign in with this email and password.</p>
+          <form id="owner-form" class="sign-in-row">
+            <input id="owner-email" type="email" required autocomplete="off" aria-label="Email">
+            <button class="quiet-button" type="submit">Save</button>
+          </form>
+          <div class="sign-in-row">
+            <span class="chip"><span class="dots" aria-label="password">••••••••</span></span>
+            <button id="settings-copy-password" class="quiet-button" type="button">Copy</button>
+            <button id="new-password" class="quiet-button" type="button">Make a new password</button>
+          </div>
+        </section>
         <div id="settings-logs" class="developer-only"></div>
         <section>
           <h2>Advanced</h2>
