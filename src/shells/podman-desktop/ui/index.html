@@ -97,7 +97,8 @@
         <aside id="version-panel" aria-label="The version picked in the history" hidden></aside>
       </div>
       <form id="composer">
-        <textarea id="request" rows="2" maxlength="2000" aria-label="Your request"></textarea>
+        <ul id="command-menu" class="command-menu" role="listbox" aria-label="Commands" hidden></ul>
+        <textarea id="request" rows="2" maxlength="2000" aria-label="Your request" aria-autocomplete="list" aria-controls="command-menu" aria-expanded="false"></textarea>
         <div class="composer-actions">
           <select id="composer-model" aria-label="The model that writes this app" title="The model that writes this app"></select>
           <button id="send" class="primary" type="submit" data-icon="rocket">Send</button>

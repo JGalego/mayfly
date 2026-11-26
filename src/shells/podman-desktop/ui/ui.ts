@@ -6,6 +6,8 @@ import type { ModelView } from "../messages.ts";
 import { h, keepTime } from "./dom.ts";
 import { changes, codeView } from "./code.ts";
 import { codeEditor } from "./editor.ts";
+import { commandMenu } from "./command-menu.ts";
+import { parse, suggestions, type Command } from "./commands.ts";
 import { doctorView } from "./doctor-view.ts";
 import { healthView } from "./health.ts";
 import { lightFor, type Light } from "./lights.ts";
@@ -38,6 +40,8 @@ const TITLES: Record<Exclude<Progress["kind"], "remove">, string> = { create: "W
 const NOTICE_MS = 4000;
 const CONFIRM_MS = 4000;
 const COPIED_MS = 1500;
+// Long enough to read what removing does before the button lets you.
+const REMOVE_WAIT_S = 2;
 const HEALTH_MS = 10_000;
 // How close to the bottom of a conversation counts as following it.
 const FOLLOW_PX = 48;
@@ -92,6 +96,7 @@ let newAppModel: string | undefined;
 setUpModels(post, () => render());
 setUpStatusbar((tab) => go({ kind: "settings", tab }));
 popover(element("show-sign-in"), element("sign-in-popover"));
+commandMenu(request, element("command-menu"), (text) => suggestions(text, { app: view.kind === "app", models: state?.models.map((model) => model.label) ?? [] }));
 // One log reader in Settings for everything, Mayfly's activity included, and one for the app on screen.
 const settingsLogs = logViewer(post, { activity: true });
 const ledger = ledgerView();
@@ -241,7 +246,11 @@ function go(next: View): void {
 
 function send(): void {
   const text = request.value.trim();
-  if (text === "" || view.kind === "settings" || state?.working !== null || !canWrite(state, shownApp())) return;
+  if (text === "" || view.kind === "settings") return;
+  const typed = parse(text);
+  if (typed.kind === "unknown") return showError(`Mayfly has no /${typed.name} command. Type / to see the ones it has.`);
+  if (typed.kind === "command") return runCommand(typed.command, typed.argument);
+  if (state?.working !== null || !canWrite(state, shownApp())) return;
   lastSent = { app: view.kind === "app" ? view.name : null, request: text, ...(view.kind === "new" && newAppModel !== undefined ? { model: newAppModel } : {}) };
   request.value = "";
   hideBanner();
@@ -412,14 +421,50 @@ function openApp(): void {
 }
 
 // Removing an app loses its conversation and versions for good, so a dialog asks first, with keeping it the default.
+/** Does what a command says, or says what it is missing. What follows the command stays in the composer until it is done. */
+function runCommand(command: Command, argument: string): void {
+  if (command.needsApp && view.kind !== "app") return showError(`/${command.name} works in an app's conversation.`);
+  if (command.takes !== undefined && argument === "") return showError(`Type ${command.takes} after /${command.name}.`);
+  if (command.name === "model") return useModelNamed(argument);
+  request.value = "";
+  removeApp();
+}
+
+function useModelNamed(label: string): void {
+  const model = state?.models.find((known) => known.label.toLowerCase() === label.toLowerCase());
+  if (model === undefined) return showError(`There is no model called ${label}. Type /model and pick one.`);
+  request.value = "";
+  composerModel.value = model.id;
+  pickModel();
+}
+
+/** Asks before removing the app on screen, from its Remove button or /remove alike. The button to go ahead waits a moment first. */
 function removeApp(): void {
   if (view.kind !== "app") return;
   const name = view.name;
   const dialog = element<HTMLDialogElement>("remove-dialog");
+  const confirm = element<HTMLButtonElement>("confirm-remove");
   element("remove-title").textContent = `Remove ${name}?`;
-  element("confirm-remove").textContent = `Remove ${name}`;
+  let left = REMOVE_WAIT_S;
+  const count = (): void => {
+    confirm.disabled = left > 0;
+    confirm.textContent = left > 0 ? `Remove ${name} (${left})` : `Remove ${name}`;
+  };
+  count();
+  const tick = window.setInterval(() => {
+    left--;
+    count();
+    if (left === 0) window.clearInterval(tick);
+  }, 1000);
   dialog.returnValue = "";
-  dialog.addEventListener("close", () => dialog.returnValue === "remove" && post({ type: "remove", name }), { once: true });
+  dialog.addEventListener(
+    "close",
+    () => {
+      window.clearInterval(tick);
+      if (dialog.returnValue === "remove") post({ type: "remove", name });
+    },
+    { once: true },
+  );
   dialog.showModal();
 }
 
@@ -591,7 +636,7 @@ function renderChat(state: State, app: AppView | undefined): void {
   element("history-label").textContent = `History · ${app?.versions.length ?? 0}`;
   if (following && tab === "chat") scrollToEnd(thread);
   for (const live of document.querySelectorAll<HTMLElement>(".live")) scrollToEnd(live);
-  request.placeholder = app === undefined ? "Describe the app you need" : `Ask for a change to ${app.name}`;
+  request.placeholder = app === undefined ? "Describe the app you need" : `Ask for a change to ${app.name}, or type / for commands`;
   request.disabled = !writes || removing;
   element<HTMLButtonElement>("send").disabled = !writes || state.working !== null;
   composerModel.replaceChildren(...state.models.map((model) => new Option(model.label, model.id)));
