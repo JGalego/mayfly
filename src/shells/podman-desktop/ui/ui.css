@@ -965,6 +965,49 @@ pre.problem {
   justify-content: space-between;
 }
 
+.checks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.finding {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.finding-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--on-accent);
+}
+
+.finding.pass .finding-mark {
+  background: var(--success);
+}
+
+.finding.warn .finding-mark {
+  background: light-dark(#ca8a04, #eab308);
+}
+
+.finding.fail .finding-mark {
+  background: var(--error);
+}
+
+.finding-name {
+  font-weight: 600;
+}
+
 .health-list {
   display: flex;
   flex-direction: column;

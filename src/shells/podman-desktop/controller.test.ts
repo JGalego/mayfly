@@ -135,6 +135,14 @@ describe("the Mayfly panel's controller", () => {
     assert.deepEqual(posted.at(-1), { type: "logs", pod: "mayfly-lunch-split", container: "app", lines: ["2026-11-26T15:04:05Z mayfly-lunch-split app"] });
   });
 
+  it("passes on the doctor's checks", async () => {
+    const { handle, posted } = setUp({ apps: [] });
+
+    await handle({ type: "doctor" });
+
+    assert.deepEqual(posted, [{ type: "doctor", checks: [{ name: "Podman", status: "pass", detail: "Podman 5.8.9 is running." }] }]);
+  });
+
   it("sends the code of a version the page asks for", async () => {
     const { handle, posted } = setUp({ apps: [lunch] });
 
@@ -361,6 +369,7 @@ function setUp({ apps, created: made = lunch, steps = [], peek: peeking = false,
     post: async (message) => void posted.push(message),
     openExternal: async (url) => void opened.push(url),
     copy: async (text) => void copied.push(text),
+    doctor: async () => [{ name: "Podman", status: "pass", detail: "Podman 5.8.9 is running." }],
     settings: {
       models: () => models,
       saveModels: async (next) => void (models = next),

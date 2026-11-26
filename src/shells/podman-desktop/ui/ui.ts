@@ -1,10 +1,12 @@
 import type { AppView, ServiceHealth } from "../../../engine/engine.ts";
 import type { Turn } from "../../../engine/state.ts";
 import type { FromUi, Progress, ToUi, Work } from "../messages.ts";
+import type { Check } from "../doctor.ts";
 import type { ModelView } from "../messages.ts";
 import { h, keepTime } from "./dom.ts";
 import { tokens } from "./format.ts";
 import { codeView } from "./code.ts";
+import { doctorView } from "./doctor-view.ts";
 import { healthView } from "./health.ts";
 import { askLogs, offerSources, receiveActivity, receiveLogs, setUpLogs } from "./logs.ts";
 import { historyView } from "./history.ts";
@@ -57,6 +59,8 @@ const folds = new Map<string, boolean>();
 const codes = new Map<string, string>();
 const asked = new Set<string>();
 let bannerTimer: number | undefined;
+/** What the doctor found when last asked. */
+let checks: readonly Check[] | undefined;
 /** How the apps and the sign-in service were doing when Podman was last asked. */
 let health: readonly ServiceHealth[] | undefined;
 /** The model the person picked for the next new app, if not the default. */
@@ -97,6 +101,7 @@ request.addEventListener("keydown", (event) => {
 });
 composerModel.addEventListener("change", pickModel);
 element("refresh-health").addEventListener("click", askHealth);
+element("run-doctor").addEventListener("click", askDoctor);
 peek.addEventListener("change", () => post({ type: "peek", on: peek.checked }));
 
 window.setInterval(tickClocks, 1000);
@@ -116,6 +121,9 @@ function receive(message: ToUi): void {
     case "health":
       health = message.services;
       offerSources(message.services);
+      return render();
+    case "doctor":
+      checks = message.checks;
       return render();
     case "logs":
       return receiveLogs(message.lines);
@@ -151,6 +159,7 @@ function go(next: View): void {
   hideBanner();
   render();
   if (view.kind === "settings") {
+    askDoctor();
     askHealth();
     return askLogs(post);
   }
@@ -272,6 +281,12 @@ function removeApp(): void {
   }, CONFIRM_MS);
 }
 
+function askDoctor(): void {
+  checks = undefined;
+  render();
+  post({ type: "doctor" });
+}
+
 function askHealth(): void {
   health = undefined;
   render();
@@ -312,6 +327,9 @@ function render(): void {
   if (view.kind === "settings") {
     renderModels(state, post, () => render());
     element("health").replaceChildren(...healthView(health));
+    const { verdict, items } = doctorView(checks);
+    element("doctor-verdict").textContent = verdict;
+    element("doctor").replaceChildren(...items);
   }
   else renderChat(state, app);
   renderStatusbar(state, app);

@@ -4,12 +4,13 @@ import { join } from "node:path";
 import { dexIdentity } from "../../adapters/dex/dex-identity.ts";
 import { readJson, writeJson } from "../../adapters/json-file/json-file.ts";
 import { jsonFileStore } from "../../adapters/json-file/json-file-store.ts";
-import { openAiCompatibleModel } from "../../adapters/openai-compatible/openai-compatible-model.ts";
+import { listModels, openAiCompatibleModel } from "../../adapters/openai-compatible/openai-compatible-model.ts";
 import { podmanBuilder } from "../../adapters/podman/podman-builder.ts";
-import { podmanDeployer, podmanObserver } from "../../adapters/podman/podman.ts";
+import { imageExists, podmanDeployer, podmanObserver, versions } from "../../adapters/podman/podman.ts";
 import { createEngine, type Engine } from "../../engine/engine.ts";
 import type { ModelProvider } from "../../engine/ports.ts";
 import { createController, type ControllerPorts } from "./controller.ts";
+import { examine, type ModelProbe } from "./doctor.ts";
 import type { ModelPorts } from "./model-settings.ts";
 import { endpointOf, FIRST_MODELS, isProvider, labelOf, modelFor, type Models, type ModelSetting } from "./settings.ts";
 
@@ -52,6 +53,13 @@ async function openPanel(context: api.ExtensionContext, engine: Engine, keys: Ke
     post: (message) => panel.webview.postMessage(message),
     openExternal: (url) => api.env.openExternal(api.Uri.parse(url)),
     copy: (text) => api.env.clipboard.writeText(text),
+    doctor: () =>
+      examine({
+        podman: versions,
+        runtimeReady: () => imageExists(RUNTIME_IMAGE),
+        signIn: async () => (await engine.health()).find((service) => service.kind === "sign-in")?.containers.map((container) => container.state) ?? [],
+        models: () => Promise.all(models.models().models.map((setting) => probe(setting, keys))),
+      }),
     settings: {
       ...models,
       peek: () => api.configuration.getConfiguration("mayfly").get<boolean>("peek") ?? false,
@@ -100,6 +108,13 @@ function configuredModel(setting: ModelSetting, keys: KeyStore): ModelProvider {
 }
 
 type ModelStore = ModelPorts["settings"];
+
+/** A model the doctor can try: its key is checked by listing the provider's models, which costs nothing. */
+async function probe(setting: ModelSetting, keys: KeyStore): Promise<ModelProbe> {
+  const baseUrl = endpointOf(setting);
+  const apiKey = await keys.get(baseUrl);
+  return { label: labelOf(setting), model: setting.model, hasKey: Boolean(apiKey), list: () => listModels({ baseUrl, apiKey: apiKey ?? "" }) };
+}
 
 /** The models, kept in a file beside the state, and in memory so the page always has them at hand. */
 async function modelStore(path: string): Promise<ModelStore> {

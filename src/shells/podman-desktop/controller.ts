@@ -1,5 +1,6 @@
 import type { AppView, Engine } from "../../engine/engine.ts";
 import type { Step, Watcher } from "../../engine/step.ts";
+import type { Check } from "./doctor.ts";
 import type { Activity, FromUi, Progress, ToUi, Work } from "./messages.ts";
 import { makeDefault, modelViews, readModel, removeModel, saveModel } from "./model-settings.ts";
 import type { Models, ModelSetting } from "./settings.ts";
@@ -26,6 +27,8 @@ export interface ControllerPorts {
     peek(): boolean;
     savePeek(on: boolean): Promise<void>;
   };
+  /** Checks that Mayfly has everything it needs. */
+  readonly doctor: () => Promise<readonly Check[]>;
   /** API keys, each kept for the endpoint it was given for. */
   readonly keys: { has(endpoint: string): Promise<boolean>; save(endpoint: string, key: string): Promise<void> };
 }
@@ -78,6 +81,8 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       return session.post({ type: "health", services: await session.engine.health() });
     case "activity":
       return session.post({ type: "activity", entries: session.activity });
+    case "doctor":
+      return session.post({ type: "doctor", checks: await session.doctor() });
     case "logs":
       return session.post({ type: "logs", pod: request.pod, container: request.container, lines: await session.engine.logs(request.pod, request.container) });
     case "restore":
@@ -233,6 +238,7 @@ function readRequest(message: unknown): FromUi | undefined {
   switch (type) {
     case "ready":
     case "health":
+    case "doctor":
     case "activity":
       return { type };
     case "logs":

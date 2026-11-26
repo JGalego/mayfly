@@ -1,6 +1,7 @@
 import type { AppView, ServiceHealth } from "../../engine/engine.ts";
 import type { Step } from "../../engine/step.ts";
 import type { Usage } from "../../engine/usage.ts";
+import type { Check } from "./doctor.ts";
 import type { ModelSetting } from "./settings.ts";
 
 /** A model as the page shows it: its settings, its name, and whether its key is saved. Never the key. */
@@ -43,6 +44,7 @@ export type FromUi =
   | { readonly type: "use-model"; readonly app: string; readonly model: string }
   | { readonly type: "peek"; readonly on: boolean }
   | { readonly type: "health" }
+  | { readonly type: "doctor" }
   | { readonly type: "activity" }
   | { readonly type: "logs"; readonly pod: string; readonly container: string }
   | { readonly type: "code"; readonly app: string; readonly version: string }
@@ -66,6 +68,7 @@ export type ToUi =
   | { readonly type: "progress"; readonly working: Progress }
   | { readonly type: "created"; readonly name: string }
   | { readonly type: "health"; readonly services: readonly ServiceHealth[] }
+  | { readonly type: "doctor"; readonly checks: readonly Check[] }
   | { readonly type: "activity"; readonly entries: readonly Activity[] }
   | { readonly type: "logs"; readonly pod: string; readonly container: string; readonly lines: readonly string[] }
   | { readonly type: "code"; readonly app: string; readonly version: string; readonly routes: string }

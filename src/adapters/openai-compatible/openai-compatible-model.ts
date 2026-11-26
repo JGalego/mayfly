@@ -44,6 +44,24 @@ export function openAiCompatibleModel({ baseUrl, apiKey, model }: ModelSettings)
   };
 }
 
+/**
+ * The models an endpoint offers, which proves the key without spending tokens. Failures are said in plain
+ * words, never in the provider's own, which can quote part of the key.
+ */
+export async function listModels({ baseUrl, apiKey }: Omit<ModelSettings, "model">): Promise<string[]> {
+  const client = new OpenAI({ baseURL: baseUrl, apiKey, maxRetries: 0, timeout: 10_000 });
+  try {
+    const ids: string[] = [];
+    for await (const model of client.models.list()) ids.push(model.id);
+    return ids;
+  } catch (error) {
+    if (error instanceof OpenAI.AuthenticationError || error instanceof OpenAI.PermissionDeniedError) throw new Error("The provider refused the key.");
+    if (error instanceof OpenAI.APIConnectionError) throw new Error(`Mayfly cannot reach ${baseUrl}.`);
+    if (error instanceof OpenAI.APIError) throw new Error(`The provider answered with an error (${error.status ?? "no status"}).`);
+    throw error;
+  }
+}
+
 /** Reads MAYFLY_MODEL_BASE_URL, MAYFLY_MODEL_API_KEY and MAYFLY_MODEL. See .env.example. */
 export function modelSettingsFromEnv(env: NodeJS.ProcessEnv = process.env): ModelSettings {
   return { baseUrl: required(env, "MAYFLY_MODEL_BASE_URL"), apiKey: required(env, "MAYFLY_MODEL_API_KEY"), model: required(env, "MAYFLY_MODEL") };

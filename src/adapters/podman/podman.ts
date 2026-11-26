@@ -36,6 +36,18 @@ export async function logs(pod: string, container: string, lines: number): Promi
   return [...stdout.split("\n"), ...stderr.split("\n")].filter((line) => line !== "").sort();
 }
 
+/** Podman's own version and its machine's, the machine's null when it does not answer, or undefined with no Podman at all. */
+export async function versions(): Promise<{ client: string; server: string | null } | undefined> {
+  const client = await run(["version", "--format", "{{.Client.Version}}"]).catch(() => undefined);
+  if (client === undefined || client.code !== 0) return undefined;
+  const server = await run(["info", "--format", "{{.Version.Version}}"]);
+  return { client: client.stdout.trim(), server: server.code === 0 ? server.stdout.trim() : null };
+}
+
+export async function imageExists(image: string): Promise<boolean> {
+  return (await run(["image", "exists", image])).code === 0;
+}
+
 function containerHealth(pod: string, { Names, State, Status, Restarts }: Listed): ContainerHealth {
   const name = (Names[0] ?? "").replace(`${pod}-`, "");
   return { name, state: State, status: Status, restarts: Restarts };
