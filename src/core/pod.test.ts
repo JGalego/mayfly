@@ -30,6 +30,10 @@ describe("the pod Mayfly runs for an app", () => {
     assert.deepEqual(published, [{ containerPort: 4180, hostPort: 8137, hostIP: "127.0.0.1" }]);
   });
 
+  it("never pulls the app's image, which is built on this machine or loaded from a bundle", () => {
+    assert.equal(app.imagePullPolicy, "IfNotPresent");
+  });
+
   it("configures the app through $PORT and nothing else", () => {
     assert.deepEqual(app.env, [{ name: "PORT", value: "8080" }]);
   });

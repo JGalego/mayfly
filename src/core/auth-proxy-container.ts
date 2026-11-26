@@ -1,3 +1,4 @@
+import { callbackUrl } from "./app-url.ts";
 import { AUTH_SECRET_KEYS } from "./auth-secret.ts";
 import { APP_PORT, ROLES_CLAIM } from "./contract.ts";
 import { HARDENED, LOOPBACK } from "./hardening.ts";
@@ -32,7 +33,7 @@ export function buildAuthProxyContainer({ appName, hostPort }: AuthProxyInput): 
 function signInArgs(appName: string, hostPort: number): string[] {
   return [
     "--provider=oidc",
-    `--redirect-url=http://localhost:${hostPort}/oauth2/callback`,
+    `--redirect-url=${callbackUrl(hostPort)}`,
     "--skip-provider-button=true",
     // Ask for consent once, not at every sign-in.
     "--approval-prompt=auto",

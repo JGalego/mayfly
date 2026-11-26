@@ -1,33 +1,32 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { randomBytes } from "node:crypto";
 import { buildDex, dexSettings } from "../../src/adapters/dex/dex.ts";
 import { down, play } from "../../src/adapters/podman/podman.ts";
+import { appUrl, callbackUrl } from "../../src/core/app-url.ts";
 import { buildAuthConfigMap } from "../../src/core/auth-config-map.ts";
 import { buildAuthSecret } from "../../src/core/auth-secret.ts";
 import type { KubeObject } from "../../src/core/kube.ts";
 import { buildPod } from "../../src/core/pod.ts";
 import { Browser } from "./browser.ts";
+import { buildEchoImage, secret, waitUntilUp } from "./support.ts";
 
 const HOST_PORT = 18137;
-const APP = `http://localhost:${HOST_PORT}/`;
-const IMAGE = "localhost/mayfly-test-echo:latest";
+const APP = appUrl(HOST_PORT);
 
 const owner = { email: "owner@mayfly.test", username: "owner", password: secret(), groups: ["owner"] };
 const guest = { email: "guest@mayfly.test", username: "guest", password: secret(), groups: ["guest"] };
-const client = { id: "mayfly-echo", secret: secret(), redirectUri: `${APP}oauth2/callback` };
+const client = { id: "mayfly-echo", secret: secret(), redirectUri: callbackUrl(HOST_PORT) };
 
 let dex: KubeObject[] = [];
 let app: KubeObject[] = [];
 
 before(async () => {
-  execFileSync("podman", ["build", "--quiet", "--tag", IMAGE, "test/fixtures/echo-app"]);
+  const image = buildEchoImage();
   dex = await buildDex({ users: [owner, guest], clients: [client] });
   app = [
     buildAuthConfigMap({ appName: "echo", policy: { roles: ["owner"] }, idp: dexSettings(client.id) }),
     buildAuthSecret({ appName: "echo", clientSecret: client.secret, cookieSecret: secret() }),
-    buildPod({ manifest: { name: "echo", image: IMAGE }, hostPort: HOST_PORT }),
+    buildPod({ manifest: { name: "echo", image }, hostPort: HOST_PORT }),
   ];
   await play(dex);
   await play(app);
@@ -69,19 +68,5 @@ describe("an app behind Mayfly's sign-in, on Podman", () => {
 
 async function signIn(user: { email: string; password: string }) {
   const browser = new Browser();
-  const login = await browser.get(APP);
-  return browser.submit(login, { login: user.email, password: user.password });
-}
-
-async function waitUntilUp(url: string): Promise<void> {
-  for (let attempt = 0; attempt < 60; attempt++) {
-    const ok = await fetch(url).then((r) => r.ok, () => false);
-    if (ok) return;
-    await new Promise((resolve) => setTimeout(resolve, 500));
-  }
-  throw new Error(`${url} did not come up`);
-}
-
-function secret(): string {
-  return randomBytes(16).toString("hex");
+  return browser.submit(await browser.get(APP), { login: user.email, password: user.password });
 }

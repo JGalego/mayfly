@@ -1,9 +1,12 @@
 import { spawn } from "node:child_process";
 import { toKubeYaml } from "../../core/kube-yaml.ts";
 import type { KubeObject } from "../../core/kube.ts";
+import type { Deployer } from "../../engine/ports.ts";
 
 /** Every Mayfly pod joins this network, so auth proxies can reach Dex by name. */
 const NETWORK = "mayfly";
+
+export const podmanDeployer: Deployer = { deploy: play, remove: down };
 
 /** Creates the objects' pods and secrets, replacing any that already exist. */
 export async function play(objects: readonly KubeObject[]): Promise<void> {

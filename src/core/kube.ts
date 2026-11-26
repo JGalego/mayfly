@@ -27,6 +27,7 @@ export type KubeObject = Pod | ConfigMap | Secret;
 export interface Container {
   readonly name: string;
   readonly image: string;
+  readonly imagePullPolicy?: "IfNotPresent";
   readonly args?: readonly string[];
   readonly env?: readonly EnvVar[];
   readonly envFrom?: readonly { readonly configMapRef: { readonly name: string } }[];

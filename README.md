@@ -57,6 +57,8 @@ flowchart LR
     api --> ports["Ports<br/>state · identity · model · deployer"]
   end
   podman["Podman deployer"] -. implements .-> ports
+  dex["Dex identity, on Podman"] -. implements .-> ports
+  file["State in a private JSON file"] -. implements .-> ports
   model["OpenAI-compatible model provider<br/>your own key"] -. implements .-> ports
 ```
 

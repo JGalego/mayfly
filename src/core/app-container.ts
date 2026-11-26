@@ -8,6 +8,7 @@ export function buildAppContainer(manifest: Manifest): Container {
   return {
     name: "app",
     image: manifest.image,
+    imagePullPolicy: "IfNotPresent",
     env: [{ name: "PORT", value: String(APP_PORT) }],
     livenessProbe: { httpGet: { path: HEALTH_PATH, port: APP_PORT } },
     securityContext: HARDENED,
