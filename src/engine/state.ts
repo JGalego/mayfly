@@ -51,6 +51,8 @@ export interface App {
   readonly cookieSecret: string;
   /** The model that writes its changes, or null for the default one. */
   readonly model: string | null;
+  /** A favourite of the person's, which they want near the top. */
+  readonly starred: boolean;
   /** Every attempt at its code, oldest first, failed ones included. */
   readonly versions: readonly Version[];
   /** The version running now, or null while no attempt has passed. */

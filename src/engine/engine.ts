@@ -34,6 +34,7 @@ export interface AppView {
   readonly url: string;
   /** The model that writes its changes, or null for the default one. */
   readonly model: string | null;
+  readonly starred: boolean;
   /** The version running now, or null while no attempt has passed. */
   readonly head: string | null;
   readonly versions: readonly VersionView[];
@@ -46,6 +47,8 @@ export interface Engine {
   create(description: string, options?: { readonly model?: string | null; readonly watch?: Watcher }): Promise<AppView>;
   /** Has the app's model change it as asked. An attempt that passes replaces the running one at the same URL. Every attempt is kept. */
   change(name: string, request: string, watch?: Watcher): Promise<AppView>;
+  /** Marks an app as a favourite, or no longer. */
+  star(name: string, starred: boolean): Promise<void>;
   /** Has another model write the app's changes from now on, or the default one for null. */
   useModel(name: string, model: string | null): Promise<AppView>;
   /** Builds, tries and runs code the person wrote by hand, kept as a version of theirs. The message says what they changed. */
@@ -120,6 +123,11 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       const model = models(app.model);
       const generation = await generate({ change: request, app: { name, routes: base?.routes ?? "" } }, model, watch);
       return record(request, generation, { base: base?.id ?? null, by: { kind: "model", name: model.name }, model: app.model, started }, watch);
+    },
+
+    async star(name, starred) {
+      const state = await store.load();
+      await store.save(withApp(state, { ...existingApp(state, name), starred }));
     },
 
     async useModel(name, model) {
@@ -250,7 +258,7 @@ function withOwner(state: State): State & { readonly owner: Owner } {
 /** A new app gets its own port and secrets, which it keeps for good, so its URL and sessions survive changes. */
 function newApp(state: State, name: string, model: string | null): App {
   const port = { hostPort: freePort(state), clientSecret: newSecret(), cookieSecret: newSecret() };
-  return { name, ...port, model, versions: [], head: null, conversation: [], spent: NO_USAGE };
+  return { name, ...port, model, starred: false, versions: [], head: null, conversation: [], spent: NO_USAGE };
 }
 
 function freePort(state: State): number {
@@ -286,5 +294,5 @@ function spend(state: State, spent: Usage, name?: string): State {
 
 function appView(app: App): AppView {
   const versions = app.versions.map(({ routes, image: _image, ...view }) => ({ ...view, lines: routes.split("\n").length - 1 }));
-  return { name: app.name, url: appUrl(app.hostPort), model: app.model, head: app.head, versions, conversation: app.conversation, spent: app.spent };
+  return { name: app.name, url: appUrl(app.hostPort), model: app.model, starred: app.starred, head: app.head, versions, conversation: app.conversation, spent: app.spent };
 }

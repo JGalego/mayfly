@@ -42,5 +42,5 @@ function versioned(app: UnversionedApp): App {
   };
   const { name } = app.manifest;
   const kept = { hostPort: app.hostPort, clientSecret: app.clientSecret, cookieSecret: app.cookieSecret };
-  return { name, ...kept, model: null, versions: [version], head: id, conversation, spent: version.spent };
+  return { name, ...kept, model: null, starred: false, versions: [version], head: id, conversation, spent: version.spent };
 }

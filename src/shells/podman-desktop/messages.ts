@@ -42,6 +42,7 @@ export type FromUi =
   | { readonly type: "remove-model"; readonly id: string }
   | { readonly type: "default-model"; readonly id: string }
   | { readonly type: "use-model"; readonly app: string; readonly model: string }
+  | { readonly type: "star"; readonly app: string; readonly starred: boolean }
   | { readonly type: "developer"; readonly on: boolean }
   | { readonly type: "health" }
   | { readonly type: "doctor" }

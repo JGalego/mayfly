@@ -359,7 +359,9 @@ function render(): void {
 }
 
 function renderSidebar({ apps, working }: State): void {
-  element("apps").replaceChildren(...apps.map((app) => appItem(app, lightFor(app, health, working?.app))));
+  // Favourites first, each group in the order the apps were made.
+  const ordered = [...apps.filter((app) => app.starred), ...apps.filter((app) => !app.starred)];
+  element("apps").replaceChildren(...ordered.map((app) => appItem(app, lightFor(app, health, working?.app))));
   element("apps-heading").hidden = apps.length === 0;
   const newApp = element("new-app");
   markCurrent(newApp, view.kind === "new");
@@ -376,12 +378,15 @@ function appItem(app: AppView, { colour, meaning }: Light): HTMLLIElement {
   control.title = meaning;
   const light = h("span", `light ${colour}`);
   light.setAttribute("aria-label", meaning);
-  control.append(light, app.name);
+  control.append(light, h("span", "app-name", app.name));
   markCurrent(control, view.kind === "app" && view.name === app.name);
   control.addEventListener("click", () => go({ kind: "app", name: app.name, tab: "chat" }));
-  const item = document.createElement("li");
-  item.append(control);
-  return item;
+  const star = h("button", `star${app.starred ? " starred" : ""}`, app.starred ? "★" : "☆");
+  star.type = "button";
+  star.title = app.starred ? "Remove from favourites" : "Add to favourites";
+  star.setAttribute("aria-pressed", String(app.starred));
+  star.addEventListener("click", () => post({ type: "star", app: app.name, starred: !app.starred }));
+  return h("li", "app-item", control, star);
 }
 
 function renderChat(state: State, app: AppView | undefined): void {

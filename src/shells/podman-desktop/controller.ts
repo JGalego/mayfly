@@ -74,6 +74,9 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       return settle(makeDefault(request.id, session), session);
     case "use-model":
       return useModel(request.app, request.model, session);
+    case "star":
+      await session.engine.star(request.app, request.starred);
+      return showState(session);
     case "developer":
       return saveDeveloper(request.on, session);
     case "code":
@@ -235,7 +238,7 @@ async function showState(session: Session): Promise<void> {
 // Messages come from the page, so each is checked for its shape before anything acts on it.
 function readRequest(message: unknown): FromUi | undefined {
   if (typeof message !== "object" || message === null) return undefined;
-  const { type, app, request, name, apiKey, on, version, what, routes, message: words, model, id, pod, container } = message as Record<string, unknown>;
+  const { type, app, request, name, apiKey, on, version, what, routes, message: words, model, id, pod, container, starred } = message as Record<string, unknown>;
   switch (type) {
     case "ready":
     case "health":
@@ -252,6 +255,8 @@ function readRequest(message: unknown): FromUi | undefined {
     }
     case "use-model":
       return typeof app === "string" && typeof model === "string" ? { type, app, model } : undefined;
+    case "star":
+      return typeof app === "string" && typeof starred === "boolean" ? { type, app, starred } : undefined;
     case "remove-model":
     case "default-model":
       return typeof id === "string" ? { type, id } : undefined;

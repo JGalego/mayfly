@@ -11,6 +11,7 @@ const lunch: AppView = {
   url: "http://localhost:18100/",
   conversation: [{ from: "person", text: "split lunch bills", at: 0 }],
   model: "openai",
+  starred: false,
   head: "v1",
   versions: [],
   spent: { input: 100, output: 20 },
@@ -141,6 +142,15 @@ describe("the Mayfly panel's controller", () => {
     await handle({ type: "doctor" });
 
     assert.deepEqual(posted, [{ type: "doctor", checks: [{ name: "Podman", status: "pass", detail: "Podman 5.8.9 is running." }] }]);
+  });
+
+  it("marks an app as a favourite", async () => {
+    const { handle, calls, posted } = setUp({ apps: [lunch] });
+
+    await handle({ type: "star", app: "lunch-split", starred: true });
+
+    assert.deepEqual(calls, ["star lunch-split true"]);
+    assert.equal(posted.at(-1)?.type, "state");
   });
 
   it("sends the code of a version the page asks for", async () => {
@@ -349,6 +359,7 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
       calls.push(`restore ${name} ${version}`);
       return lunch;
     },
+    star: async (name, starred) => void calls.push(`star ${name} ${starred}`),
     useModel: async (name, model) => {
       calls.push(`use ${name} ${model}`);
       return lunch;

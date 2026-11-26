@@ -169,6 +169,42 @@ select {
   margin: 0 0 0 auto;
 }
 
+/* A favourite's star, shown on hover, and always once starred. */
+.app-item {
+  position: relative;
+}
+
+.app-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.star {
+  position: absolute;
+  top: 50%;
+  right: 0.3rem;
+  padding: 0.1rem 0.35rem;
+  transform: translateY(-50%);
+  color: var(--muted);
+  opacity: 0;
+}
+
+.app-item:hover .star,
+.star:focus-visible,
+.star.starred {
+  opacity: 1;
+}
+
+.star.starred {
+  color: #eab308;
+}
+
+.app-item .nav-item {
+  padding-right: 2rem;
+}
+
 /* An app's traffic light: running, restarted, being worked on, stopped, never run. */
 .light {
   flex: none;

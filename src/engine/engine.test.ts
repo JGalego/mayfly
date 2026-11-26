@@ -189,6 +189,15 @@ describe("the engine", () => {
     await assert.rejects(engine.logs("mayfly-lunch", "app; rm -rf"), /does not read the logs/);
   });
 
+  it("remembers which apps are the person's favourites", async () => {
+    const { engine } = setUp([reply("lunch")]);
+    await engine.create("split lunch bills");
+
+    await engine.star("lunch", true);
+
+    assert.equal((await engine.list())[0]?.starred, true);
+  });
+
   it("refuses to change an app it does not know", async () => {
     const { engine } = setUp([]);
 
