@@ -47,33 +47,33 @@ export async function examine(ports: DoctorPorts): Promise<Examination> {
 async function checkPodman({ podman }: DoctorPorts): Promise<Check> {
   const name = "Podman";
   const found = await podman();
-  if (found === undefined) return { name, status: "fail", detail: "Mayfly cannot find Podman. Set it up from Podman Desktop's Dashboard." };
-  if (found.server === null) return { name, status: "fail", detail: "Podman's machine does not answer. Start it from Podman Desktop's Dashboard." };
+  if (found === undefined) return { name, status: "fail", detail: "Podman not found. Set it up in Podman Desktop's Dashboard." };
+  if (found.server === null) return { name, status: "fail", detail: "Podman machine unavailable. Start it in Podman Desktop's Dashboard." };
   const major = Number.parseInt(found.server, 10);
-  if (major < NEEDED_PODMAN) return { name, status: "fail", detail: `Podman ${found.server} runs here; Mayfly needs ${NEEDED_PODMAN} or later. Update it from Podman Desktop.` };
+  if (major < NEEDED_PODMAN) return { name, status: "fail", detail: `Podman ${found.server} is installed. Update to ${NEEDED_PODMAN} or later in Podman Desktop.` };
   return { name, status: "pass", detail: `Podman ${found.server} is running.` };
 }
 
 async function checkRuntime({ runtimeReady }: DoctorPorts): Promise<Check> {
   const name = "App runtime";
-  if (await runtimeReady()) return { name, status: "pass", detail: "The runtime every app runs on is downloaded." };
-  return { name, status: "warn", detail: "The runtime every app runs on downloads with your first app, which then takes a little longer." };
+  if (await runtimeReady()) return { name, status: "pass", detail: "Runtime image downloaded." };
+  return { name, status: "warn", detail: "The runtime image downloads when you build your first app." };
 }
 
 async function checkSignIn({ signIn }: DoctorPorts): Promise<Check> {
   const name = "Sign-in service";
   const states = await signIn();
-  if (states.length === 0) return { name, status: "warn", detail: "The sign-in service is not running. It starts when Mayfly runs an app." };
-  if (states.every((state) => state === "running")) return { name, status: "pass", detail: "The sign-in service is running." };
-  return { name, status: "fail", detail: "The sign-in service has stopped. Its logs, in Settings, say why." };
+  if (states.length === 0) return { name, status: "warn", detail: "The sign-in service starts when you run an app." };
+  if (states.every((state) => state === "running")) return { name, status: "pass", detail: "Running." };
+  return { name, status: "fail", detail: "The sign-in service is not running. Check its logs in Settings." };
 }
 
 async function checkModel({ id, model, hasKey, list }: ModelProbe): Promise<ModelCheck> {
-  const answers = hasKey ? "accepts the key" : "answers without a key";
+  const access = hasKey ? "API key accepted." : "Connected without an API key.";
   try {
     const offered = await list();
-    if (offered.includes(model)) return { id, status: "pass", detail: `The provider ${answers} and has this model.` };
-    return { id, status: "warn", detail: `The provider ${answers} but does not list ${model}. Check the model's name.` };
+    if (offered.includes(model)) return { id, status: "pass", detail: `${access} Model listed.` };
+    return { id, status: "warn", detail: `${access} The provider does not list ${model}. Check the model name.` };
   } catch (error) {
     return { id, status: "fail", detail: error instanceof Error ? error.message : String(error) };
   }

@@ -35,6 +35,6 @@ describe("an app's light", () => {
   });
 
   it("says in words what it means", () => {
-    assert.equal(lightFor(app, healthWith({ state: "running", restarts: 1 }), null).meaning, "Running, but it restarted 1 time");
+    assert.equal(lightFor(app, healthWith({ state: "running", restarts: 1 }), null).meaning, "Running after 1 restart");
   });
 });

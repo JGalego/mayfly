@@ -18,7 +18,7 @@ describe("the doctor", () => {
     const examination = await examine(ready);
 
     assert.deepEqual(statuses(examination), ["Podman: pass", "App runtime: pass", "Sign-in service: pass"]);
-    assert.deepEqual(examination.models, [{ id: "openai", status: "pass", detail: "The provider accepts the key and has this model." }]);
+    assert.deepEqual(examination.models, [{ id: "openai", status: "pass", detail: "API key accepted. Model listed." }]);
   });
 
   it("says what to do when Podman is missing, its machine is off, or it is too old", async () => {
@@ -26,9 +26,9 @@ describe("the doctor", () => {
     const off = await examine({ ...ready, podman: async () => ({ client: "5.8.9", server: null }) });
     const old = await examine({ ...ready, podman: async () => ({ client: "4.3.1", server: "4.3.1" }) });
 
-    assert.match(missing.ready[0]?.detail ?? "", /cannot find Podman/);
-    assert.match(off.ready[0]?.detail ?? "", /machine does not answer/);
-    assert.match(old.ready[0]?.detail ?? "", /needs 5 or later/);
+    assert.match(missing.ready[0]?.detail ?? "", /Set it up in Podman Desktop's Dashboard/);
+    assert.match(off.ready[0]?.detail ?? "", /Start it in Podman Desktop's Dashboard/);
+    assert.match(old.ready[0]?.detail ?? "", /Update to 5 or later/);
     assert.deepEqual(statuses(off), ["Podman: fail"]);
     assert.equal(off.models[0]?.status, "pass");
   });
@@ -53,7 +53,7 @@ describe("the doctor", () => {
     assert.deepEqual(models.map(({ id, status }) => `${id}: ${status}`), ["local: pass", "keyed: pass", "refused: fail", "unknown: warn"]);
     assert.deepEqual(
       models.map(({ detail }) => detail),
-      ["The provider answers without a key and has this model.", "The provider accepts the key and has this model.", "The key was refused.", "The provider answers without a key but does not list m. Check the model's name."],
+      ["Connected without an API key. Model listed.", "API key accepted. Model listed.", "The key was refused.", "Connected without an API key. The provider does not list m. Check the model name."],
     );
   });
 });

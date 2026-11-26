@@ -23,7 +23,7 @@
         "mayfly.developerMode": {
           "type": "boolean",
           "default": false,
-          "description": "Developer mode: show the code Mayfly writes, every version with a way back to it, a code editor, and each app's health and logs"
+          "description": "Show code, version history, app health, logs and model usage"
         }
       }
     }

@@ -7,7 +7,7 @@ const VERDICT: Record<Verdict, string> = { running: "✓ Running", starting: "�
 
 /** Each app and the sign-in service, and how their containers are doing, as Podman sees them. */
 export function healthView(services: readonly ServiceHealth[] | undefined): HTMLElement[] {
-  if (services === undefined) return [h("li", "quiet", "Asking Podman…")];
+  if (services === undefined) return [h("li", "quiet", "Checking Podman…")];
   return services.map((service) => {
     const verdict = verdictOf(service);
     const name = h("p", "health-name", service.name, h("span", `pill ${verdict}`, VERDICT[verdict]));

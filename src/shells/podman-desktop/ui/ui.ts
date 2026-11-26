@@ -37,7 +37,7 @@ const SETTINGS_TABS: readonly SettingsTab[] = ["general", "models", "logs", "usa
 // Logs and usage are for developers.
 const DEVELOPER_TABS: readonly SettingsTab[] = ["logs", "usage"];
 
-const TITLES: Record<Exclude<Progress["kind"], "remove">, string> = { create: "Writing your app", change: "Changing your app", ask: "Answering", deploy: "Deploying", save: "Trying your edit", rename: "Renaming", start: "Starting" };
+const TITLES: Record<Exclude<Progress["kind"], "remove">, string> = { create: "Creating app", change: "Updating app", ask: "Answering", deploy: "Deploying", save: "Testing edit", rename: "Renaming", start: "Starting" };
 
 const NOTICE_MS = 4000;
 const CONFIRM_MS = 4000;
@@ -256,7 +256,7 @@ function send(): void {
   const text = request.value.trim();
   if (text === "" || view.kind === "settings") return;
   const typed = parse(text);
-  if (typed.kind === "unknown") return showError(`Mayfly has no /${typed.name} command. Type / to see the ones it has.`);
+  if (typed.kind === "unknown") return showError(`Unknown command: /${typed.name}. Type / to list commands.`);
   if (typed.kind === "command") return runCommand(typed.command, typed.argument);
   if (state === undefined || state.working !== null) return;
   lastSent = { app: view.kind === "app" ? view.name : null, request: text, ...(view.kind === "new" && newAppModel !== undefined ? { model: newAppModel } : {}) };
@@ -308,11 +308,11 @@ function renderCode(app: AppView, showing: Showing): void {
   const base = startingPoint(app);
   const code = base === undefined ? undefined : showing.code(app.name, base.id);
   element<HTMLButtonElement>("edit-code").disabled = code === undefined || state?.working !== null;
-  element("code-caption").textContent = base === undefined ? "No attempt has written any code yet." : `routes.ts · version ${base.id}${base.id === app.head ? ", running now" : ", the latest attempt"} · by ${base.by.name}`;
+  element("code-caption").textContent = base === undefined ? "No code yet." : `routes.ts · version ${base.id}${base.id === app.head ? ", running" : ", latest attempt"} · by ${base.by.name}`;
   const key = `${app.name}:${base?.id ?? ""}:${code === undefined ? "" : "loaded"}`;
   if (key === codeShown) return;
   codeShown = key;
-  element("code-current").replaceChildren(code === undefined ? h("p", "quiet", base === undefined ? "" : "Fetching the code…") : codeView(code, "listing editable"));
+  element("code-current").replaceChildren(code === undefined ? h("p", "quiet", base === undefined ? "" : "Loading code…") : codeView(code, "listing editable"));
 }
 
 /** The editor's version, how its last save went, and what can be done now. */
@@ -321,7 +321,7 @@ function renderEditor(app: AppView, from: string): void {
   const saving = state?.working?.kind === "save" && state.working.app === app.name;
   const status = version === undefined ? "" : version.id === app.head ? "running now" : version.problem === null ? "passed, not running" : "failed";
   element("editor-base").textContent = `routes.ts · version ${from}${status === "" ? "" : `, ${status}`}`;
-  const problem = !saving && version?.problem != null ? [h("p", "", `Version ${from} didn't pass its trial. Fix it and save again:`), h("pre", "problem", version.problem)] : [];
+  const problem = !saving && version?.problem != null ? [h("p", "", `Version ${from} failed testing. Fix the error and save again.`), h("pre", "problem", version.problem)] : [];
   element("editor-status").replaceChildren(...(saving ? [h("p", "", spinner(), " Building and trying it…")] : problem));
   element("editor-status").hidden = !saving && problem.length === 0;
   element<HTMLTextAreaElement>("code-text").readOnly = saving;
@@ -334,7 +334,7 @@ function editorButtons(app: AppView): void {
   const busy = state?.working !== null;
   const version = app.versions.find((kept) => kept.id === editing?.from);
   element<HTMLButtonElement>("save-edit").disabled = !unsaved || busy;
-  const why = unsaved ? "Save your changes first" : version?.problem != null ? "This version didn't pass its trial" : version?.id === app.head ? "This version is running now" : "";
+  const why = unsaved ? "Save changes before deploying" : version?.problem != null ? "This version failed testing" : version?.id === app.head ? "This version is already running" : "";
   const deploy = element<HTMLButtonElement>("deploy-edit");
   deploy.disabled = why !== "" || busy;
   deploy.title = why || "Run this version at the app's address";
@@ -410,9 +410,9 @@ function renderDeployDialog(): void {
   deploying.shown = key;
   element("deploy-title").replaceChildren("Deploy version ", versionChip(deploying.version), " of ", nameChip(app.name), "?");
   element<HTMLButtonElement>("confirm-deploy").disabled = !ready;
-  const replaces = app.head === null ? ["Nothing is running yet."] : ["It replaces version ", versionChip(app.head), ", running now, at the same address."];
+  const replaces = app.head === null ? ["No version is running."] : ["Replaces version ", versionChip(app.head), " at the same address."];
   element("deploy-note").replaceChildren(...replaces, " It passed its trial when it was made.");
-  if (!ready) return void element("deploy-changes").replaceChildren(h("p", "quiet", "Fetching the code…"));
+  if (!ready) return void element("deploy-changes").replaceChildren(h("p", "quiet", "Loading code…"));
   const { view, added, removed } = changes(before, after);
   element("deploy-changes").replaceChildren(h("p", "diff-file", icon("file"), "routes.ts", h("span", "diff-added", `+${added}`), h("span", "diff-removed", `−${removed}`)), view);
 }
@@ -496,7 +496,7 @@ function startWork(message: Extract<FromUi, { readonly app: string }>, typed = "
 
 function useModelNamed(label: string): void {
   const model = state?.models.find((known) => known.label.toLowerCase() === label.toLowerCase());
-  if (model === undefined) return showError(`There is no model called ${label}. Type /model and pick one.`);
+  if (model === undefined) return showError(`Unknown model: ${label}. Type /model to list models.`);
   request.value = "";
   composerModel.value = model.id;
   pickModel();
@@ -539,14 +539,14 @@ function makeNewPassword(): void {
   const control = element("new-password");
   if (newPasswordArmed) {
     newPasswordArmed = false;
-    control.textContent = "Make a new password";
+    control.textContent = "Reset password";
     return post({ type: "new-password" });
   }
   newPasswordArmed = true;
-  control.textContent = "Sure? The old one stops working";
+  control.textContent = "Confirm reset (old password expires)";
   window.setTimeout(() => {
     newPasswordArmed = false;
-    control.textContent = "Make a new password";
+    control.textContent = "Reset password";
   }, CONFIRM_MS);
 }
 
@@ -658,7 +658,7 @@ function renderChat(state: State, app: AppView | undefined): void {
   element("app-name").textContent = app?.name ?? "";
   const openApp = element<HTMLButtonElement>("open-app");
   openApp.disabled = app?.head === null;
-  openApp.title = app?.head === null ? "No attempt has passed yet, so nothing is running." : "";
+  openApp.title = app?.head === null ? "No version has been deployed" : "Open in your browser";
   // While Mayfly works on the app, and above all while it removes it, the app is left alone.
   const busy = state.working !== null && state.working.app === (app?.name ?? null);
   const removing = busy && state.working?.kind === "remove";

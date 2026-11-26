@@ -18,9 +18,9 @@ const LOG_LINES = 1000;
 const CONTAINER = /^[a-z0-9-]+$/;
 const EMAIL = /^[^\s@]+@[^\s@]+$/;
 // What Mayfly says when the model said nothing after the code.
-const MADE = "Your app is ready.";
-const CHANGED = "Done. Your app has the change.";
-const SAVED = "Saved. It passed its trial. Deploy it when you want it running; until then your app is as it was.";
+const MADE = "App deployed.";
+const CHANGED = "Update deployed.";
+const SAVED = "Saved. Trial passed. Deploy to run this version.";
 
 /** A version as a shell shows it: how long its code and the model's thinking are, but not them, which the shell asks for when it needs them. */
 export type VersionView = Omit<Version, "routes" | "image" | "thinking"> & { readonly lines: number; readonly thinkingWords: number };
@@ -181,13 +181,13 @@ export function createEngine({ store, deployer, observer, identity, models, buil
 
     async retry(name, watch = UNWATCHED) {
       const last = existingApp(await store.load(), name).versions.findLast((version) => version.by.kind === "model");
-      if (last === undefined) throw new Error(`${name} has no request to send again.`);
+      if (last === undefined) throw new Error(`${name} has no request to retry.`);
       return engine.change(name, last.request, watch);
     },
 
     async undo(name, watch = UNWATCHED) {
       const { previous } = existingApp(await store.load(), name);
-      if (previous === undefined) throw new Error(`For ${name}, no version ran before this one.`);
+      if (previous === undefined) throw new Error(`${name} has no previous deployment.`);
       return engine.deploy(name, previous, watch);
     },
 
@@ -200,7 +200,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       const state = withOwner(await store.load());
       const app = existingApp(state, name);
       const running = runningVersion(app);
-      if (running === undefined) throw new Error(`${name} has no version that passed to start.`);
+      if (running === undefined) throw new Error(`${name} has no deployed version to start.`);
       // Built again, as when deploying, in case its image is gone; it passed its trial when it was made.
       watch({ kind: "building" });
       const image = await builder.build(name, running.routes);
@@ -235,7 +235,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       const app = existingApp(state, name);
       const newName = usableName(state, name, to);
       // Names go in backticks, which shells show as names rather than words.
-      const note = `Renamed \`${name}\` to \`${newName}\`. It is at the same address, and anyone signed in to it has to sign in again.`;
+      const note = `Renamed \`${name}\` to \`${newName}\`. The address is unchanged. Sign in again to use the app.`;
       const conversation: Turn[] = [...app.conversation, { from: "person", text: `Rename to \`${newName}\``, at: started }, { from: "mayfly", text: note, versions: [], took: Date.now() - started, at: Date.now() }];
       const renamed: App = { ...app, name: newName, conversation };
       const next: State = {
@@ -269,7 +269,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       const now = Date.now();
       const conversation: Turn[] = [
         { from: "person", text: `Use ${label} for this app`, at: now },
-        { from: "mayfly", text: `From now on, ${label} writes the changes to this app.`, versions: [], took: 0, at: now },
+        { from: "mayfly", text: `Model set to ${label}.`, versions: [], took: 0, at: now },
       ];
       const next: App = { ...app, model, conversation: [...app.conversation, ...conversation] };
       await store.save(withApp(state, next));
@@ -288,7 +288,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       const outcome = trial.ok ? { problem: null, image } : { problem: trial.problem, image: null };
       const attempt: Attempt = { routes, summary: "", spent: NO_USAGE, at: Date.now(), ...outcome };
       const by: Author = { kind: "person", name: state.owner.email };
-      return record(message || "Edit the code by hand", { name, attempts: [attempt], calls: [] }, { base: from, by, model: null, started, runs: false }, watch);
+      return record(message || "Manual edit", { name, attempts: [attempt], calls: [] }, { base: from, by, model: null, started, runs: false }, watch);
     },
 
     async deploy(name, id, watch = UNWATCHED) {
@@ -300,7 +300,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       // It passed its trial when it was made, on the same runtime, so it is built again but not tried again.
       watch({ kind: "building" });
       const image = await builder.build(name, version.routes);
-      const note = `Version ${id} is running now: “${version.request}”. Ask for a change to carry on from here.`;
+      const note = `Deployed version ${id}: “${version.request}”.`;
       const conversation: Turn[] = [
         { from: "person", text: `Deploy version ${id}`, at: started },
         { from: "mayfly", text: note, versions: [], took: Date.now() - started, at: Date.now() },
@@ -352,7 +352,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
 
     async changeEmail(email) {
       const address = email.trim();
-      if (!EMAIL.test(address)) throw new Error("That does not look like an email address.");
+      if (!EMAIL.test(address)) throw new Error("Enter a valid email address.");
       return updateOwner((owner) => ({ ...owner, email: address, username: address.split("@")[0] ?? address }));
     },
 
@@ -450,9 +450,9 @@ function replyFor(app: App, versions: readonly Version[], runs: boolean): string
   const last = versions.at(-1);
   if (last?.problem === null && !runs) return SAVED;
   if (last?.problem === null) return last.summary || (app.head === null ? MADE : CHANGED);
-  const unchanged = app.head === null ? "" : " Your app is as it was.";
-  const failed = versions.length === 1 ? "It didn't pass its trial." : `It still failed after ${versions.length} attempts.`;
-  return `${failed}${unchanged} The ${versions.length === 1 ? "" : "last "}problem was:\n\n${last?.problem ?? ""}`;
+  const unchanged = app.head === null ? "" : " Previous deployment unchanged.";
+  const failed = versions.length === 1 ? "Trial failed." : `All ${versions.length} attempts failed.`;
+  return `${failed}${unchanged} ${versions.length === 1 ? "Error" : "Last error"}:\n\n${last?.problem ?? ""}`;
 }
 
 /** Enters the calls in the ledger, and counts what each spent against the total and its app. */

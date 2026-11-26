@@ -48,19 +48,19 @@ export function logViewer(post: (message: FromUi) => void, { activity }: { activ
     count,
     list,
   );
-  source.setAttribute("aria-label", "Whose logs");
-  level.setAttribute("aria-label", "How serious");
-  since.setAttribute("aria-label", "How recent");
+  source.setAttribute("aria-label", "Log source");
+  level.setAttribute("aria-label", "Minimum log level");
+  since.setAttribute("aria-label", "Time range");
   search.type = "search";
   search.placeholder = "Find…";
-  search.setAttribute("aria-label", "Find in the logs");
-  if (activity) source.append(new Option("Mayfly's activity", MAYFLY));
+  search.setAttribute("aria-label", "Search logs");
+  if (activity) source.append(new Option("Mayfly activity", MAYFLY));
 
   const show = (): void => {
     const age = Number(since.value);
     const filter = { level: level.value as Level, since: age === 0 ? 0 : Date.now() - age, text: search.value };
     const shown = (lines ?? []).filter((line) => matches(line, filter));
-    const empty = lines === undefined ? "Fetching…" : lines.length === 0 ? "Nothing yet." : "No lines match.";
+    const empty = lines === undefined ? "Loading logs…" : lines.length === 0 ? "No logs yet." : "No matching lines.";
     count.textContent = lines === undefined || lines.length === 0 ? "" : `${shown.length} of ${lines.length} lines`;
     list.replaceChildren(...(shown.length === 0 ? [h("li", "quiet", empty)] : shown.map(lineItem)));
     list.scrollTop = list.scrollHeight;
@@ -94,7 +94,7 @@ export function logViewer(post: (message: FromUi) => void, { activity }: { activ
       const chosen = source.value;
       const before = source.value;
       const containers = services.flatMap((service) => service.containers.map((container) => new Option(`${service.name} · ${container.name}`, `${service.pod}/${container.name}`)));
-      source.replaceChildren(...(activity ? [new Option("Mayfly's activity", MAYFLY)] : []), ...containers);
+      source.replaceChildren(...(activity ? [new Option("Mayfly activity", MAYFLY)] : []), ...containers);
       if ([...source.options].some((option) => option.value === chosen)) source.value = chosen;
       // Containers turning up for the first time are worth reading straight away.
       if (before === "" && source.value !== "") ask();

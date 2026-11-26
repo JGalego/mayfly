@@ -71,9 +71,9 @@ function facts(version: VersionView, pick: (version: string) => void): HTMLEleme
   const rows: [string, Node | string][] = [
     ["Made by", made],
     ["When", at],
-    ["Started from", version.parent === null ? "Nothing: it came first" : parentLink(version.parent, pick)],
+    ["Based on", version.parent === null ? "None (first version)" : parentLink(version.parent, pick)],
   ];
-  if (version.attempt > 1) rows.push(["Attempt", `${version.attempt}, fixing the one before`]);
+  if (version.attempt > 1) rows.push(["Attempt", String(version.attempt)]);
   if (version.by.kind === "model") rows.push(["Tokens", tokens(version.spent)]);
   return h("dl", "facts", ...rows.flatMap(([term, value]) => [h("dt", "", term), h("dd", "", value)]));
 }
@@ -81,7 +81,7 @@ function facts(version: VersionView, pick: (version: string) => void): HTMLEleme
 function parentLink(parent: string, pick: (version: string) => void): HTMLButtonElement {
   const link = h("button", "link", h("code", "version-id", parent));
   link.type = "button";
-  link.title = "Show the version this one started from";
+  link.title = "Show parent version";
   link.addEventListener("click", () => pick(parent));
   return link;
 }
@@ -89,8 +89,8 @@ function parentLink(parent: string, pick: (version: string) => void): HTMLButton
 // Any version with code can start an experiment; one that passed and is not running can be deployed. Nothing is lost either way.
 function versionButtons(version: VersionView, status: Status, { deploy, edit }: VersionActions): Node[] {
   const buttons = [];
-  if (status === "passed") buttons.push(button("primary", "rocket", "Deploy", "Run this version at the app's address. Your next change starts from it.", deploy && (() => deploy(version.id))));
-  if (version.lines > 0) buttons.push(button("secondary", "pencil", "Edit from here", "Change this version's code by hand. Each save adds a version on top of it.", edit && (() => edit(version.id))));
+  if (status === "passed") buttons.push(button("primary", "rocket", "Deploy", "Replace the running version at the same address", deploy && (() => deploy(version.id))));
+  if (version.lines > 0) buttons.push(button("secondary", "pencil", "Edit from here", "Use this version as the base for an edit", edit && (() => edit(version.id))));
   return buttons.length === 0 ? [] : [h("p", "panel-actions", ...buttons)];
 }
 

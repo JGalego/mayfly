@@ -6,11 +6,11 @@ import { icon } from "./icons.ts";
 import { elapsed, lineCount, stagesOf, stagesOfVersions, wordCount, type Stage, type StageKind } from "./stages.ts";
 
 const STAGES: Record<StageKind, (attempt: number) => readonly [icon: string, label: string]> = {
-  writing: (attempt) => (attempt === 1 ? ["✍️", "Writing the code"] : ["🩹", `Fixing it · attempt ${attempt}`]),
-  edited: () => ["✏️", "Edited by hand"],
-  building: () => ["🔨", "Building the app"],
-  trying: () => ["🧪", "Trying it out, cut off from the network"],
-  deploying: () => ["🚀", "Starting it behind sign-in"],
+  writing: (attempt) => (attempt === 1 ? ["✍️", "Writing code"] : ["🩹", `Revising code · attempt ${attempt}`]),
+  edited: () => ["✏️", "Manual edit"],
+  building: () => ["🔨", "Building image"],
+  trying: () => ["🧪", "Testing without network access"],
+  deploying: () => ["🚀", "Deploying behind sign-in"],
 };
 
 /** What the page knows about showing things: whether to show code, which sections are open, and the code it has fetched. */
@@ -38,7 +38,6 @@ type Status = "active" | "done" | "failed";
 // Stages already on screen, so only a new one slides in when the page is redrawn.
 let shown = { since: 0, count: 0 };
 
-/** What Mayfly is doing for a request: a clock, and a row for each stage. Behind the curtain, the code and what failed too. */
 export function progressView({ since, steps }: Progress, title: string, showing: Showing): HTMLElement {
   const stages = stagesOf(steps);
   const seen = shown.since === since ? shown.count : 0;
@@ -52,10 +51,9 @@ export function progressView({ since, steps }: Progress, title: string, showing:
     row.classList.toggle("new", index >= seen);
     return row;
   });
-  return h("div", "progress", h("p", "progress-title", title), h("p", "quiet", clock, " · usually about a minute"), h("ol", "stages", ...rows));
+  return h("div", "progress", h("p", "progress-title", title), h("p", "quiet", clock), h("ol", "stages", ...rows));
 }
 
-/** Behind the curtain, what a request changed in the app: from the version running before it to the one it made. */
 export function whatChanged(app: string, before: string, after: string, showing: Showing): HTMLDetailsElement {
   return diffFold(app, before, after, { key: `changed:${app}:${after}`, label: "What changed", open: false }, showing);
 }
@@ -67,7 +65,7 @@ export function makingOf(app: string, versions: readonly VersionView[], took: nu
     const folds = stage.version === undefined ? undefined : { key: `${app}:${stage.version}`, latest: false, app };
     return stageItem(stage, stage.problem === undefined ? "done" : "failed", details(stage, showing, folds));
   });
-  const summary = h("summary", "", `How it was made · ${attempts} · ${elapsed(0, took)}`);
+  const summary = h("summary", "", `Build details · ${attempts} · ${elapsed(0, took)}`);
   return disclosure(h("details", "making-of", summary, h("ol", "stages", ...rows)), `making:${app}:${versions[0]?.id ?? ""}`, false, showing);
 }
 
@@ -99,10 +97,9 @@ function liveNote({ kind, code }: Stage): string {
   return code === "" ? " · starting to write" : ` · ${lineCount(code)} lines`;
 }
 
-/** What a stage shows: behind the curtain, the model's thinking, the code and what it changed; and anything that failed. */
 function details(stage: Stage, showing: Showing, folds?: Folds): Node[] {
   const shown = showing.developer && folds !== undefined ? behindTheCurtain(stage, showing, folds) : [];
-  if (stage.problem !== undefined) shown.push(showing.developer ? h("pre", "problem", stage.problem) : h("p", "quiet", "It didn't pass, so Mayfly tried again."));
+  if (stage.problem !== undefined) shown.push(showing.developer ? h("pre", "problem", stage.problem) : h("p", "quiet", "Attempt failed."));
   return shown;
 }
 
@@ -112,7 +109,7 @@ function behindTheCurtain(stage: Stage, showing: Showing, folds: Folds): Node[] 
   if (stage.code !== undefined && stage.live === true) shown.push(codeView(stage.code, "listing live"));
   else if (stage.code !== undefined || (stage.lines ?? 0) > 0) shown.push(codeFold(stage, showing, folds));
   if (folds.app !== undefined && stage.version !== undefined && stage.parent !== undefined) {
-    const fold = { key: `diff:${folds.key}`, label: "Changes from the version before", open: folds.changesOpen ?? false };
+    const fold = { key: `diff:${folds.key}`, label: "Changes from the parent version", open: folds.changesOpen ?? false };
     shown.push(diffFold(folds.app, stage.parent, stage.version, fold, showing));
   }
   return shown;
@@ -124,7 +121,7 @@ function thinkingFold(stage: Stage, showing: Showing, { key, latest, app }: Fold
   const isOpen = showing.isOpen(`thinking:${key}`, stillThinking);
   const text = stage.thinking ?? (isOpen && app !== undefined && stage.version !== undefined ? showing.thinking(app, stage.version) : undefined);
   const words = stage.thinkingWords ?? wordCount(stage.thinking ?? "");
-  const body = text === undefined ? h("p", "quiet", "Fetching the thinking…") : h("pre", stillThinking ? "thinking live" : "thinking", text);
+  const body = text === undefined ? h("p", "quiet", "Loading model reasoning…") : h("pre", stillThinking ? "thinking live" : "thinking", text);
   const summary = h("summary", "", icon("thinking"), ` The model's thinking · ${words.toLocaleString()} words`);
   return disclosure(h("details", "code", summary, body), `thinking:${key}`, stillThinking, showing);
 }
@@ -134,7 +131,7 @@ function codeFold(stage: Stage, showing: Showing, { key, latest, app }: Folds): 
   const isOpen = showing.isOpen(`code:${key}`, latest);
   const code = stage.code ?? (isOpen && app !== undefined && stage.version !== undefined ? showing.code(app, stage.version) : undefined);
   const lines = stage.lines ?? (stage.code === undefined ? 0 : lineCount(stage.code));
-  const body = code === undefined ? h("p", "quiet", "Fetching the code…") : codeView(code, "listing");
+  const body = code === undefined ? h("p", "quiet", "Loading code…") : codeView(code, "listing");
   return disclosure(h("details", "code", h("summary", "", `routes.ts · ${lines} lines`), body), `code:${key}`, latest, showing);
 }
 
@@ -146,7 +143,7 @@ function diffFold(app: string, before: string, after: string, { key, label, open
   const shown = old === undefined || now === undefined ? undefined : changes(old, now);
   const summary = h("summary", "", label);
   if (shown !== undefined) summary.append(" · ", h("span", "diff-added", `+${shown.added}`), " ", h("span", "diff-removed", `−${shown.removed}`));
-  return disclosure(h("details", "code", summary, shown?.view ?? h("p", "quiet", "Fetching the code…")), key, open, showing);
+  return disclosure(h("details", "code", summary, shown?.view ?? h("p", "quiet", "Loading code…")), key, open, showing);
 }
 
 /** Keeps a fold open or closed across redraws, as the person left it. */

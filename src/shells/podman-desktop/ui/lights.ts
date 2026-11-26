@@ -15,15 +15,15 @@ export interface Light {
  * Unknown means Podman has not been asked yet.
  */
 export function lightFor(app: AppView, health: readonly ServiceHealth[] | undefined, working: string | null | undefined): Light {
-  if (working === app.name) return { colour: "orange", meaning: "Mayfly is working on it" };
-  if (app.head === null) return { colour: "grey", meaning: "Not running yet: no attempt has passed" };
-  if (health === undefined) return { colour: "unknown", meaning: "Asking Podman how it is doing" };
+  if (working === app.name) return { colour: "orange", meaning: "Work in progress" };
+  if (app.head === null) return { colour: "grey", meaning: "Not deployed" };
+  if (health === undefined) return { colour: "unknown", meaning: "Checking Podman" };
   const containers = health.find((service) => service.kind === "app" && service.name === app.name)?.containers ?? [];
   if (containers.length === 0) return { colour: "red", meaning: "Not running" };
   if (containers.some((container) => container.state !== "running")) return { colour: "red", meaning: "Stopped" };
-  if (containers.some((container) => container.health === "unhealthy")) return { colour: "unhealthy", meaning: "Running, but failing its health check" };
-  if (containers.some((container) => container.health === "starting")) return { colour: "starting", meaning: "Starting: its health check has not passed yet" };
+  if (containers.some((container) => container.health === "unhealthy")) return { colour: "unhealthy", meaning: "Running, but failing health checks" };
+  if (containers.some((container) => container.health === "starting")) return { colour: "starting", meaning: "Starting: waiting for health checks" };
   const restarts = containers.reduce((sum, container) => sum + container.restarts, 0);
-  if (restarts > 0) return { colour: "yellow", meaning: `Running, but it restarted ${restarts} ${restarts === 1 ? "time" : "times"}` };
+  if (restarts > 0) return { colour: "yellow", meaning: `Running after ${restarts} ${restarts === 1 ? "restart" : "restarts"}` };
   return { colour: "green", meaning: "Running" };
 }

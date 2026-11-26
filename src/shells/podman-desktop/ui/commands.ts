@@ -12,12 +12,12 @@ export interface Command {
 export const COMMANDS: readonly Command[] = [
   { name: "ask", says: "Ask about the app without changing it", takes: "a question", needsApp: true },
   { name: "fix", says: "Fix the errors in the app's logs", needsApp: true },
-  { name: "retry", says: "Send your last request again", needsApp: true },
-  { name: "undo", says: "Put back the version that ran before", needsApp: true },
-  { name: "start", says: "Run the app again after it stopped", needsApp: true },
-  { name: "model", says: "Switch the model that writes the app", takes: "provider · model", needsApp: false },
-  { name: "rename", says: "Give the app a new name", takes: "a new name", needsApp: true },
-  { name: "remove", says: "Remove the app for good", needsApp: true },
+  { name: "retry", says: "Retry the last request", needsApp: true },
+  { name: "undo", says: "Redeploy the previous version", needsApp: true },
+  { name: "start", says: "Start the stopped app", needsApp: true },
+  { name: "model", says: "Switch models", takes: "provider · model", needsApp: false },
+  { name: "rename", says: "Rename and redeploy the app", takes: "a new name", needsApp: true },
+  { name: "remove", says: "Delete the app and its history", needsApp: true },
 ];
 
 /** What the composer holds: a request for the model, a command and what follows it, or a command Mayfly does not know. */

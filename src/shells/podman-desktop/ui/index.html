@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <!-- Podman Desktop gives the page its theme's colours in an inline style element, so inline styles are allowed. Scripts are not. -->
+    <!-- Podman Desktop injects its theme as inline CSS. -->
     <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src {{cspSource}}; script-src {{cspSource}}; style-src {{cspSource}} 'unsafe-inline'">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="ui.css">
@@ -30,12 +30,12 @@
           <div class="popover-anchor">
             <button id="show-sign-in" class="secondary" type="button" aria-expanded="false" aria-controls="sign-in-popover" data-icon="key">Sign-in details</button>
             <div id="sign-in-popover" class="popover sign-in" hidden>
-              <p class="popover-title">Sign in to your apps as</p>
-              <button id="copy-email" class="chip" type="button" title="Copy the email"><span id="owner"></span><span class="chip-note"><span class="to-copy" data-icon="copy">Copy</span><span class="copied-note" data-icon="check">Copied</span></span></button>
-              <button id="copy-password" class="chip" type="button" title="Copy the password"><span class="dots" aria-label="password">••••••••</span><span class="chip-note"><span class="to-copy" data-icon="copy">Copy</span><span class="copied-note" data-icon="check">Copied</span></span></button>
+              <p class="popover-title">App credentials</p>
+              <button id="copy-email" class="chip" type="button" title="Copy email"><span id="owner"></span><span class="chip-note"><span class="to-copy" data-icon="copy">Copy</span><span class="copied-note" data-icon="check">Copied</span></span></button>
+              <button id="copy-password" class="chip" type="button" title="Copy password"><span class="dots" aria-label="password">••••••••</span><span class="chip-note"><span class="to-copy" data-icon="copy">Copy</span><span class="copied-note" data-icon="check">Copied</span></span></button>
             </div>
           </div>
-          <button id="start-app" class="primary" type="button" title="Podman stopped it. Run it again, and the sign-in service with it." data-icon="play" hidden>Start</button>
+          <button id="start-app" class="primary" type="button" title="Start the app and sign-in service" data-icon="play" hidden>Start</button>
           <button id="open-app" class="primary" type="button" title="Opens in your browser" data-icon-after="external">Open app</button>
         </div>
         <div id="app-tabs" class="tabs" role="tablist" aria-label="App">
@@ -49,8 +49,7 @@
         <div id="thread">
           <section id="welcome">
             <img src="logo.svg" alt="" class="hero">
-            <h1>What do you need?</h1>
-            <p class="quiet">Describe a small app in your own words. Mayfly writes it, tries it, and runs it on this computer, behind sign-in.</p>
+            <h1>New app</h1>
             <ul id="examples" aria-label="Examples"></ul>
           </section>
           <ol id="turns"></ol>
@@ -84,7 +83,7 @@
                   </div>
                 </div>
                 <div id="editor-status" class="editor-status" hidden></div>
-                <input id="code-message" type="text" maxlength="200" placeholder="What did you change? (optional)" aria-label="What you changed">
+                <input id="code-message" type="text" maxlength="200" placeholder="Version note (optional)" aria-label="Version note">
                 <div class="editor-actions">
                   <button id="close-editor" class="quiet-button" type="button">Close</button>
                   <button id="save-edit" class="secondary" type="submit">Save</button>
@@ -94,13 +93,13 @@
             </form>
           </div>
         </div>
-        <aside id="version-panel" aria-label="The version picked in the history" hidden></aside>
+        <aside id="version-panel" aria-label="Selected version" hidden></aside>
       </div>
       <form id="composer">
         <ul id="command-menu" class="command-menu" role="listbox" aria-label="Commands" hidden></ul>
         <textarea id="request" rows="2" maxlength="2000" aria-label="Your request" aria-autocomplete="list" aria-controls="command-menu" aria-expanded="false"></textarea>
         <div class="composer-actions">
-          <select id="composer-model" aria-label="The model that writes this app" title="The model that writes this app"></select>
+          <select id="composer-model" aria-label="App model" title="App model"></select>
           <button id="send" class="primary" type="submit" data-icon="rocket">Send</button>
         </div>
       </form>
@@ -120,35 +119,32 @@
         <div id="settings-general-tab" class="settings-page">
           <section>
             <div class="section-head">
-              <h2>Is Mayfly ready?</h2>
+              <h2>Setup checks</h2>
               <button id="run-doctor" class="quiet-button" type="button">Check again</button>
             </div>
             <ul id="doctor" class="checks"></ul>
           </section>
           <section>
-            <h2>Signing in</h2>
-            <p class="quiet">Your apps ask you to sign in with this email and password.</p>
+            <h2>App credentials</h2>
             <form id="owner-form" class="sign-in-row">
               <input id="owner-email" type="email" required autocomplete="off" aria-label="Email">
               <button class="quiet-button" type="submit">Save</button>
             </form>
             <div class="sign-in-row">
               <span class="chip"><span class="dots" aria-label="password">••••••••</span></span>
-              <button id="settings-copy-password" class="quiet-button" type="button">Copy</button>
-              <button id="new-password" class="quiet-button" type="button">Make a new password</button>
+              <button id="settings-copy-password" class="quiet-button" type="button">Copy password</button>
+              <button id="new-password" class="quiet-button" type="button">Reset password</button>
             </div>
           </section>
           <section>
             <h2>Advanced</h2>
             <label class="check"><input id="developer" type="checkbox"> Enable developer mode</label>
-            <p class="quiet">For people who want to see under the hood: the code as Mayfly writes it, what each change did, every version, a code editor to try changes from any of them, a way to deploy any that passed, and how each app is running, with its logs.</p>
             <label class="check"><input id="autostart" type="checkbox"> Start stopped apps automatically</label>
-            <p class="quiet">When Podman Desktop starts, Mayfly waits for Podman, then starts every app that should be running but isn't, and the sign-in service with them.</p>
+            <p class="quiet">Runs when Podman Desktop starts.</p>
           </section>
         </div>
         <div id="settings-models-tab" class="settings-page">
           <section>
-            <p class="quiet">They write and change your apps. Each app can use a different one, and every version remembers which one wrote it.</p>
             <ul id="model-list" class="model-list"></ul>
             <button id="add-model" class="quiet-button add-model" type="button">+ Add a model</button>
             <form id="model-form" hidden>
@@ -161,7 +157,7 @@
               <input id="model-name" type="text" maxlength="200" required placeholder="gpt-6.2-sol">
               <label for="api-key">API key</label>
               <input id="api-key" type="password" autocomplete="off">
-              <p class="quiet">Podman Desktop keeps the key in its secret storage. Mayfly sends it only to the endpoint it was saved for.</p>
+              <p class="quiet">Stored in Podman Desktop's secret storage. Sent only to the saved endpoint.</p>
               <div class="editor-actions">
                 <button id="cancel-model" class="quiet-button" type="button">Cancel</button>
                 <button class="primary" type="submit">Save</button>
@@ -175,14 +171,12 @@
               <h2>Health</h2>
               <button id="refresh-health" class="quiet-button" type="button">Refresh</button>
             </div>
-            <p class="quiet">Whether each app and the sign-in service are running, as Podman sees them.</p>
             <ul id="health" class="health-list"></ul>
           </section>
           <div id="settings-logs"></div>
         </div>
         <div id="settings-usage-tab" class="settings-page">
           <section>
-            <p class="quiet">What each call to a model spent, whether the code it wrote passed, and how long it took, from a ledger of every call.</p>
             <div id="ledger"></div>
           </section>
         </div>
@@ -191,17 +185,17 @@
 
     <p id="banner" role="status" hidden></p>
     <footer id="statusbar">
-      <button id="status-apps" class="status-item" type="button" title="How your apps are doing. More in Settings."></button>
+      <button id="status-apps" class="status-item" type="button" title="App status"></button>
       <span class="status-spacer"></span>
-      <button id="status-tokens" class="status-item" type="button" aria-expanded="false" title="Tokens sent to the model (↑) and written by it (↓). Click for each app's." data-icon="coins"><span id="token-info"></span></button>
+      <button id="status-tokens" class="status-item" type="button" aria-expanded="false" title="Token usage by app" data-icon="coins"><span id="token-info"></span></button>
       <div id="token-popover" class="popover" hidden></div>
     </footer>
     <dialog id="remove-dialog" aria-labelledby="remove-title">
       <form method="dialog">
         <h2 id="remove-title">Remove this app?</h2>
-        <p>Mayfly stops it and deletes it for good: the app, its conversation and every version. Anything people saved in their own browsers stays there.</p>
+        <p>This stops the app and deletes its conversation and all versions. Data stored in browsers is not removed.</p>
         <div class="editor-actions">
-          <button value="keep" class="quiet-button" autofocus>Keep it</button>
+          <button value="keep" class="quiet-button" autofocus>Cancel</button>
           <button id="confirm-remove" value="remove" class="danger">Remove</button>
         </div>
       </form>
@@ -209,7 +203,7 @@
     <dialog id="discard-dialog" aria-labelledby="discard-title">
       <form method="dialog">
         <h2 id="discard-title">Discard your changes?</h2>
-        <p>Your edits to <code class="name-chip">routes.ts</code> are not saved. Save them first to keep them as a version.</p>
+        <p>Unsaved edits to <code class="name-chip">routes.ts</code> will be lost.</p>
         <div class="editor-actions">
           <button value="keep" class="quiet-button" autofocus>Keep editing</button>
           <button value="discard" class="danger">Discard</button>
@@ -219,7 +213,7 @@
     <dialog id="rename-dialog" aria-labelledby="rename-title">
       <form method="dialog">
         <h2 id="rename-title"></h2>
-        <p>Mayfly redeploys the app under its new name, at the same address. Anyone signed in to it has to sign in again.</p>
+        <p>The address stays the same, but users must sign in again.</p>
         <div class="editor-actions">
           <button value="keep" class="quiet-button" autofocus>Cancel</button>
           <button value="rename" class="primary">Rename &amp; redeploy</button>

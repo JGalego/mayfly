@@ -89,7 +89,7 @@ describe("the engine", () => {
 
     assert.equal(after.head, before.head);
     assert.equal(after.versions.length, 4);
-    assert.match(after.conversation.at(-1)?.text ?? "", /as it was.*crashed/s);
+    assert.match(after.conversation.at(-1)?.text ?? "", /Previous deployment unchanged\..*crashed/s);
     assert.equal(deployed.length, 1);
   });
 
@@ -117,7 +117,7 @@ describe("the engine", () => {
     assert.equal(names(deployed.at(-2)).length, 3);
     assert.equal(branched.versions.at(-1)?.parent, first.head);
     assert.equal(branched.versions.length, 3);
-    assert.match(back.conversation.at(-1)?.text ?? "", new RegExp(`${first.head} is running now.*split lunch bills`));
+    assert.match(back.conversation.at(-1)?.text ?? "", new RegExp(`Deployed version ${first.head}.*split lunch bills`));
   });
 
   it("saves code the person edited by hand, from any version, as theirs: tried, but not running until they deploy it", async () => {
@@ -131,7 +131,7 @@ describe("the engine", () => {
     assert.partialDeepStrictEqual(mine, { parent: first.head, request: "Say two", by: { kind: "person", name: "owner@mayfly.local" }, problem: null, spent: { input: 0, output: 0, thinking: 0 } });
     assert.equal(saved.head, changed.head);
     assert.equal(deployed.length, 2);
-    assert.match(saved.conversation.at(-1)?.text ?? "", /passed its trial\. Deploy it/);
+    assert.match(saved.conversation.at(-1)?.text ?? "", /Trial passed\. Deploy to run this version/);
     const next = await engine.save("lunch", mine?.id ?? "", "export default 3;\n", "");
     assert.equal(next.versions.at(-1)?.parent, mine?.id);
     assert.equal((await engine.deploy("lunch", mine?.id ?? "")).head, mine?.id);
@@ -145,8 +145,8 @@ describe("the engine", () => {
     const after = await engine.save("lunch", before.head ?? "", "throw 1;\n", "");
 
     assert.equal(after.head, before.head);
-    assert.partialDeepStrictEqual(after.versions.at(-1), { parent: before.head, request: "Edit the code by hand", problem: "crashed" });
-    assert.match(after.conversation.at(-1)?.text ?? "", /didn't pass its trial\. Your app is as it was/);
+    assert.partialDeepStrictEqual(after.versions.at(-1), { parent: before.head, request: "Manual edit", problem: "crashed" });
+    assert.match(after.conversation.at(-1)?.text ?? "", /Trial failed\. Previous deployment unchanged/);
   });
 
   it("answers a question about an app from its code without changing it, keeping the call in the ledger as a question", async () => {
@@ -190,7 +190,7 @@ describe("the engine", () => {
     const { engine, deployed } = setUp([reply("lunch"), reply("lunch")]);
     const first = await engine.create("split lunch bills");
 
-    await assert.rejects(engine.undo("lunch"), /no version ran before/);
+    await assert.rejects(engine.undo("lunch"), /no previous deployment/);
     const changed = await engine.change("lunch", "add totals");
     const undone = await engine.undo("lunch");
     const redone = await engine.undo("lunch");
@@ -210,7 +210,7 @@ describe("the engine", () => {
     assert.ok(names(deployed.at(-1)).every((name) => name.includes("mayfly-bills")));
     assert.deepEqual((await engine.ledger()).map((call) => call.app), ["bills"]);
     assert.deepEqual(after.conversation.slice(-2).map((turn) => turn.text.split(".")[0]), ["Rename to `bills`", "Renamed `lunch` to `bills`"]);
-    assert.match(after.conversation.at(-1)?.text ?? "", /sign in again/);
+    assert.match(after.conversation.at(-1)?.text ?? "", /Sign in again/);
   });
 
   it("refuses a new name that is not usable, taken, or the same", async () => {
@@ -247,7 +247,7 @@ describe("the engine", () => {
     const { engine } = setUp([reply("lunch"), reply("lunch"), reply("lunch")], [crashed, crashed, crashed]);
     await engine.create("split lunch bills");
 
-    await assert.rejects(engine.start("lunch"), /lunch has no version that passed to start/);
+    await assert.rejects(engine.start("lunch"), /lunch has no deployed version to start/);
   });
 
   it("refuses to save from a version it does not have, or to deploy one that failed", async () => {
@@ -267,7 +267,7 @@ describe("the engine", () => {
 
     assert.equal(made.model, "fast");
     assert.equal(made.versions[0]?.by.name, "Fast model");
-    assert.match(switched.conversation.at(-1)?.text ?? "", /Careful model writes the changes/);
+    assert.match(switched.conversation.at(-1)?.text ?? "", /Model set to Careful model/);
     assert.equal(changed.versions.at(-1)?.by.name, "Careful model");
   });
 
@@ -393,7 +393,7 @@ describe("the engine", () => {
     assert.deepEqual([after.email, after.username], ["me@home.test", "me"]);
     assert.notEqual(after.password, before.password);
     assert.equal(synced.at(-1)?.owner?.password, after.password);
-    await assert.rejects(engine.changeEmail("not an email"), /does not look like an email/);
+    await assert.rejects(engine.changeEmail("not an email"), /Enter a valid email address/);
   });
 
   it("creates the owner once, with a long random password", async () => {

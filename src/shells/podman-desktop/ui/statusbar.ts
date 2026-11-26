@@ -28,7 +28,7 @@ export function setUpStatusbar(openSettings: (tab: "logs") => void): void {
 export function renderStatusbar(state: State, app: AppView | undefined, health: readonly ServiceHealth[] | undefined): void {
   const apps = appCounts(state, health);
   element("status-apps").replaceChildren(...apps.shown);
-  element("status-apps").title = apps.said === "" ? "No apps yet" : `${apps.said}. Click for their health and logs.`;
+  element("status-apps").title = apps.said === "" ? "No apps yet" : apps.said;
   element("status-apps").setAttribute("aria-label", apps.said === "" ? "No apps yet" : apps.said);
   element("token-info").replaceChildren(...tokenSummary(app, state.spent));
   element("token-popover").replaceChildren(tokenBreakdown(state));
@@ -78,7 +78,7 @@ function tokenBreakdown({ apps, spent }: State): HTMLElement {
     "",
     h("p", "popover-title", "Tokens by app"),
     h("p", "quiet", ...(thinking ? ["↑ sent to the model, ↓ written in its replies, ", icon("thinking"), " spent thinking"] : ["↑ sent to the model, ↓ written by it"])),
-    h("table", "token-table", h("tbody", "", ...rows, tokenRow("All, removed apps too", spent, "total", thinking))),
+    h("table", "token-table", h("tbody", "", ...rows, tokenRow("Total (includes removed apps)", spent, "total", thinking))),
   );
 }
 

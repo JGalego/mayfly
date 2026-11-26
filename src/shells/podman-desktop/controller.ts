@@ -9,7 +9,7 @@ const MAX_REQUEST = 2000;
 // Far more than any app Mayfly writes, and a bound on what the page can make the extension build.
 const MAX_ROUTES = 200_000;
 const MAX_MESSAGE = 200;
-const BUSY = "Mayfly is still working on your last request. Wait for it to finish.";
+const BUSY = "A request is in progress. Wait for it to finish.";
 // The model's draft changes many times a second. The page gets the latest at most this often.
 const DRAFT_MS = 150;
 // Enough to see the last few hours of work, and small enough to keep in memory.
@@ -84,12 +84,12 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       return showState(session);
     case "owner-email":
       await session.engine.changeEmail(request.email);
-      await session.post({ type: "notice", text: "Your apps now sign you in with this email." });
+      await session.post({ type: "notice", text: "Sign-in email updated." });
       return showState(session);
     case "new-password":
       // Straight to the clipboard: like the old one, the new password never goes to the page.
       await session.copy((await session.engine.newPassword()).password);
-      return session.post({ type: "notice", text: "New password made and copied. Paste it when your app asks you to sign in." });
+      return session.post({ type: "notice", text: "Password reset. The new password is on your clipboard." });
     case "developer":
       return saveDeveloper(request.on, session);
     case "autostart":
@@ -114,9 +114,9 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
     case "fix":
       return runAlone({ app: request.app, request: "Fix the errors in the app's logs", kind: "change" }, session, (watch) => session.engine.fix(request.app, watch));
     case "retry":
-      return runAlone({ app: request.app, request: "Send the last request again", kind: "change" }, session, (watch) => session.engine.retry(request.app, watch));
+      return runAlone({ app: request.app, request: "Retry the last request", kind: "change" }, session, (watch) => session.engine.retry(request.app, watch));
     case "undo":
-      return runAlone({ app: request.app, request: "Put back the version that ran before", kind: "deploy" }, session, (watch) => session.engine.undo(request.app, watch));
+      return runAlone({ app: request.app, request: "Redeploy the previous version", kind: "deploy" }, session, (watch) => session.engine.undo(request.app, watch));
     case "rename":
       return rename(request.app, request.name.trim(), session);
     case "start":
@@ -185,16 +185,16 @@ async function runAlone(work: Parameters<typeof run>[0], session: Session, job: 
 async function saveByHand(app: string, from: string, routes: string, message: string, session: Session): Promise<void> {
   const problem = problemWithEdit(routes, message, session);
   if (problem !== undefined) return void (await session.post({ type: "error", text: problem }));
-  const saved = await run({ app, request: message || "Edit the code by hand", kind: "save" }, session, (watch) => session.engine.save(app, from, routes, message, watch));
+  const saved = await run({ app, request: message || "Manual edit", kind: "save" }, session, (watch) => session.engine.save(app, from, routes, message, watch));
   const version = saved.versions.at(-1);
   if (version !== undefined) await session.post({ type: "saved", app, version: version.id });
 }
 
 function problemWithEdit(routes: string, message: string, session: Session): string | undefined {
   if (session.working !== null) return BUSY;
-  if (routes.trim() === "") return "The code is empty.";
-  if (routes.length > MAX_ROUTES) return "That is too much code for one app.";
-  if (message.length > MAX_MESSAGE) return `Keep the message under ${MAX_MESSAGE} characters.`;
+  if (routes.trim() === "") return "routes.ts is empty.";
+  if (routes.length > MAX_ROUTES) return `routes.ts must be ${MAX_ROUTES} characters or fewer.`;
+  if (message.length > MAX_MESSAGE) return `Version notes are limited to ${MAX_MESSAGE} characters.`;
   return undefined;
 }
 
@@ -219,7 +219,7 @@ async function run(work: Omit<Progress, "since" | "steps"> & { kind: keyof typeo
   // Deploying runs a version that passed, and answering makes none; anything else passed if its last attempt did.
   const last = app.versions.at(-1);
   const passed = ["deploy", "ask", "rename", "start"].includes(work.kind) || last === undefined || last.problem === null;
-  const text = `${DONE[work.kind]} ${app.name}${passed ? "" : ", but it did not pass its trial"}`;
+  const text = passed ? `${DONE[work.kind]} ${app.name}` : `Trial failed for ${app.name}`;
   note(session, passed ? "info" : "error", text);
   session.notify({ text, failed: !passed });
   await showState(session);
@@ -254,8 +254,8 @@ function postProgress(session: Session): void {
 
 function problemWithWork(work: Work, session: Session): string | undefined {
   if (session.working !== null) return BUSY;
-  if (work.request === "") return "Say what you need first.";
-  if (work.request.length > MAX_REQUEST) return `Keep it under ${MAX_REQUEST} characters.`;
+  if (work.request === "") return "Enter a request.";
+  if (work.request.length > MAX_REQUEST) return `Requests are limited to ${MAX_REQUEST} characters.`;
   return undefined;
 }
 

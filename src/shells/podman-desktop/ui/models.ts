@@ -44,7 +44,7 @@ function openForm(model: ModelView | undefined): void {
   endpoint.value = model?.baseUrl ?? "";
   modelName.value = model?.model ?? "";
   apiKey.value = "";
-  apiKey.placeholder = model?.hasApiKey === true ? "Saved. Paste a new key to replace it." : "Paste your API key";
+  apiKey.placeholder = model?.hasApiKey === true ? "Leave blank to keep the saved key" : "";
   element("model-form-title").textContent = model === undefined ? "Add a model" : `Change ${model.label}`;
   showEndpointField();
 }
@@ -82,7 +82,7 @@ function modelCard(model: ModelView, isDefault: boolean, check: HTMLElement[], p
 
 function keyCheck(model: ModelView, checks: readonly ModelCheck[] | undefined): HTMLElement[] {
   const check = checks?.find(({ id }) => id === model.id);
-  if (check === undefined) return [h("p", "model-check quiet", model.hasApiKey ? "Trying the key…" : "Trying the model…")];
+  if (check === undefined) return [h("p", "model-check quiet", "Checking provider…")];
   return [h("p", `model-check ${check.status}`, findingMark(check.status), check.detail)];
 }
 
