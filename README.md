@@ -60,6 +60,15 @@ Every app runs on one image: Node 24 on [Wolfi](https://github.com/wolfi-dev), b
 | No known high or critical vulnerabilities | [Grype](https://github.com/anchore/grype) |
 | The policies themselves | Rego tests, `conftest verify` |
 
+Each commit on `main` that passes CI is published to [`ghcr.io/jgalego/mayfly-runtime`](https://github.com/JGalego/mayfly/pkgs/container/mayfly-runtime), tagged with its commit SHA and `main`. CI rebuilds it and publishes it only if it is the exact image that passed the checks above. It is signed with [Sigstore](https://www.sigstore.dev/) and carries an SBOM and build provenance. Check one before you use it:
+
+```sh
+gh attestation verify oci://ghcr.io/jgalego/mayfly-runtime:main --owner JGalego
+cosign verify ghcr.io/jgalego/mayfly-runtime:main \
+  --certificate-identity-regexp '^https://github.com/JGalego/mayfly/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
 ## Architecture
 
 Mayfly's engine is a TypeScript library with a small API. People use it through a UI built on top: the Podman Desktop extension now, a web app for Enterprise and SaaS later. The core holds the contract, turns a manifest into a pod spec and applies expiry rules, and it imports nothing outside itself. Everything else (storage, identity, the model and the deployer) plugs in through small interfaces, the ports below.

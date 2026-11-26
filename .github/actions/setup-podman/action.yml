@@ -1,0 +1,21 @@
+name: Set up Podman 5
+description: Rootless Podman 5 from conda-forge through pixi, which must already be installed.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        pixi global install "podman>=5"
+        echo "$HOME/.pixi/bin" >> "$GITHUB_PATH"
+        env="$HOME/.pixi/envs/podman"
+        # Use the env's runtime and conmon, not the runner's older ones.
+        cat > "$env/etc/containers/containers.conf.d/20-use-env-runtime.conf" <<EOF
+        [engine]
+        runtime = "runc"
+        conmon_path = ["$env/bin/conmon"]
+        [engine.runtimes]
+        runc = ["$env/bin/runc"]
+        EOF
+        # Ubuntu blocks user namespaces for binaries without an AppArmor profile, which rootless Podman needs.
+        sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+        "$HOME/.pixi/bin/podman" --version

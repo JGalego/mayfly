@@ -7,6 +7,7 @@ environments:
       linux-64:
       - conda: https://conda.anaconda.org/conda-forge/linux-64/conftest-0.71.1-hfc2019e_0.conda
       - conda: https://conda.anaconda.org/conda-forge/linux-64/grype-0.122.1-hfc2019e_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/syft-1.57.2-hfc2019e_0.conda
 packages:
 - conda: https://conda.anaconda.org/conda-forge/linux-64/conftest-0.71.1-hfc2019e_0.conda
   sha256: c26b9064fc0c7745d7b5a149143aa02cebe3a41346ffd918333f49b0e2e214a8
@@ -22,3 +23,10 @@ packages:
   license_family: APACHE
   size: 56337349
   timestamp: 1795031918730
+- conda: https://conda.anaconda.org/conda-forge/linux-64/syft-1.57.2-hfc2019e_0.conda
+  sha256: f208195d19d734a2adbc5a2cf3a2663d30dfbf99f8b64cc72701a5506d182830
+  md5: 0a701b8f95674dcf032c899adf2428d4
+  license: Apache-2.0
+  license_family: APACHE
+  size: 54017034
+  timestamp: 1794910253072
