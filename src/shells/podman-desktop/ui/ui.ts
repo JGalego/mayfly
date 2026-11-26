@@ -223,7 +223,7 @@ function receive(message: ToUi): void {
       return showBanner(message.text, "notice");
     case "error":
       savedModel(false);
-      return showError(message.text);
+      return showError(message.text, message.recorded === true);
   }
 }
 
@@ -770,9 +770,11 @@ function renderHistory(app: AppView | undefined, showing: Showing, idle: boolean
   panel.replaceChildren(...versionPanel(app, version, showing, { pick: (id) => pick({ app: app.name, version: id }), close: () => pick(undefined), ...actions }));
 }
 
-function turnItem({ from, text, at }: Turn, extras: readonly Node[] = []): HTMLLIElement {
+function turnItem(said: Turn, extras: readonly Node[] = []): HTMLLIElement {
+  const { from, text, at } = said;
   // Mayfly's replies, and its model's, can be Markdown. What a person typed shows as they typed it.
-  const words = from === "mayfly" ? h("div", "md", ...markdownView(text)) : h("p", "", ...withChips(text));
+  const failure = said.from === "mayfly" && said.failed === true;
+  const words = from === "mayfly" ? h("div", failure ? "md failure" : "md", ...markdownView(text)) : h("p", "", ...withChips(text));
   // When it was said, for anyone who wants to know.
   if (at !== 0) words.title = new Date(at).toLocaleString();
   return turn(from, h("div", "", words, ...extras));
@@ -817,12 +819,18 @@ function avatar(): HTMLImageElement {
 
 
 /** Work the person asked for from a conversation fails in that conversation, as Mayfly's reply, with what they typed back in the composer. Anything else fails in the banner. */
-function showError(text: string): void {
+/**
+ * Work the person asked for from a conversation fails in that conversation, with what they typed back in the composer. The engine keeps
+ * most failures in the app's conversation itself; the rest, like a new app's, the page says there until something else is asked.
+ * Anything else, or seen from elsewhere, fails in the banner.
+ */
+function showError(text: string, recorded = false): void {
   const sent = lastSent;
   lastSent = undefined;
   const conversation = view.kind === "app" ? view.name : null;
   if (sent === undefined || sent.app !== conversation || view.kind === "settings") return showBanner(text, "error");
   if (request.value === "") request.value = sent.request;
+  if (recorded) return;
   failed = { app: conversation, text };
   render();
 }

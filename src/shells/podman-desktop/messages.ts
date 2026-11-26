@@ -91,4 +91,5 @@ export type ToUi =
   | { readonly type: "logs"; readonly pod: string; readonly container: string; readonly lines: readonly string[] }
   | { readonly type: "code"; readonly app: string; readonly version: string; readonly routes: string; readonly thinking: string }
   | { readonly type: "notice"; readonly text: string }
-  | { readonly type: "error"; readonly text: string };
+  /** Recorded when the app's conversation already says it, so the page need not. */
+  | { readonly type: "error"; readonly text: string; readonly recorded?: true };

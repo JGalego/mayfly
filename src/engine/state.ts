@@ -43,7 +43,15 @@ export interface Author {
 /** One message in an app's conversation. Mayfly's replies name the versions made for the request before them. */
 export type Turn =
   | { readonly from: "person"; readonly text: string; readonly at: number }
-  | { readonly from: "mayfly"; readonly text: string; readonly versions: readonly string[]; readonly took: number; readonly at: number };
+  | {
+      readonly from: "mayfly";
+      readonly text: string;
+      readonly versions: readonly string[];
+      readonly took: number;
+      readonly at: number;
+      /** What was asked did not go through, and the text says why. */
+      readonly failed?: true;
+    };
 
 /** An app, everything it has been, and what it keeps across deploys: its port and its secrets. */
 export interface App {
@@ -61,6 +69,8 @@ export interface App {
   readonly head: string | null;
   /** The version that ran before the one running now, for putting it back. */
   readonly previous?: string;
+  /** The last change asked of the model, whether or not it went through, for sending it again. */
+  readonly lastRequest?: string;
   readonly conversation: readonly Turn[];
   readonly spent: Usage;
 }

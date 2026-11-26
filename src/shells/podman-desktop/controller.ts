@@ -1,4 +1,4 @@
-import type { AppView, Engine } from "../../engine/engine.ts";
+import { RecordedFailure, type AppView, type Engine } from "../../engine/engine.ts";
 import type { Step, Watcher } from "../../engine/step.ts";
 import type { Examination } from "./doctor.ts";
 import type { Activity, FromUi, Progress, ToUi, Work } from "./messages.ts";
@@ -53,7 +53,7 @@ export function createController(ports: ControllerPorts): (message: unknown) => 
     } catch (error) {
       const text = error instanceof Error ? error.message : String(error);
       note(session, "error", text);
-      await ports.post({ type: "error", text });
+      await ports.post({ type: "error", text, ...(error instanceof RecordedFailure ? { recorded: true } : {}) });
       await showState(session);
     }
   };

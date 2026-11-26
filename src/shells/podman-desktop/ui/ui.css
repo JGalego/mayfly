@@ -564,7 +564,7 @@ main {
 }
 
 /* Why work asked for in the conversation did not go through. */
-.turn p.failure {
+.turn .failure {
   color: var(--error);
 }
 

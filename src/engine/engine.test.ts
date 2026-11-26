@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ConfigMap, KubeObject } from "../core/kube.ts";
-import { createEngine } from "./engine.ts";
+import { createEngine, RecordedFailure } from "./engine.ts";
 import type { Builder, Deployer, IdentitySource, Message, ModelProvider, Observer, StateStore, Trial } from "./ports.ts";
 import { EMPTY_STATE, type State } from "./state.ts";
 
@@ -251,6 +251,24 @@ describe("the engine", () => {
     await assert.rejects(engine.start("lunch"), /lunch has no deployed version to start/);
   });
 
+  it("keeps a request that failed in the conversation, with why, and sends it again on retry", async () => {
+    const { engine } = setUp([reply("lunch"), new Error("The model's service is down."), reply("lunch")]);
+    await engine.create("split lunch bills");
+
+    await assert.rejects(engine.change("lunch", "add totals"), (error) => error instanceof RecordedFailure && error.message === "The model's service is down.");
+    const [app] = await engine.list();
+    const retried = await engine.retry("lunch");
+
+    assert.deepEqual(
+      app?.conversation.slice(-2).map((turn) => [turn.from, turn.text, turn.from === "mayfly" && turn.failed === true]),
+      [
+        ["person", "add totals", false],
+        ["mayfly", "The model's service is down.", true],
+      ],
+    );
+    assert.equal(retried.versions.at(-1)?.request, "add totals");
+  });
+
   it("refuses to save from a version it does not have, or to deploy one that failed", async () => {
     const { engine } = setUp([reply("lunch"), reply("lunch")], [crashed, { ok: true }]);
     const app = await engine.create("split lunch bills");
@@ -411,7 +429,8 @@ function reply(name: string, summary = "", code = "export default 1;"): string {
   return `name: ${name}\n\`\`\`ts\n${code}\n\`\`\`\n${summary}`;
 }
 
-function setUp(replies: string[], trials: Trial[] = [], named: (id: string | null) => string = () => "the test model") {
+// A reply, or an error the model's service fails with instead.
+function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: string | null) => string = () => "the test model") {
   const log: string[] = [];
   const asked: string[] = [];
   /** What the app's logs say, when a test needs them to say something. */
@@ -438,7 +457,9 @@ function setUp(replies: string[], trials: Trial[] = [], named: (id: string | nul
     provider: "the test provider",
     complete: async (_system, messages: readonly Message[]) => {
       asked.push(messages[0]?.content ?? "");
-      return { text: replies.shift() ?? "", thinking: "", usage: COST };
+      const next = replies.shift() ?? "";
+      if (next instanceof Error) throw next;
+      return { text: next, thinking: "", usage: COST };
     },
   });
   let builds = 0;

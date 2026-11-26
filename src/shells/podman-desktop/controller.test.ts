@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import type { AppView, Engine } from "../../engine/engine.ts";
+import { RecordedFailure, type AppView, type Engine } from "../../engine/engine.ts";
 import type { ModelCall } from "../../engine/state.ts";
 import type { Step, Watcher } from "../../engine/step.ts";
 import { createController } from "./controller.ts";
@@ -309,6 +309,17 @@ describe("the Mayfly panel's controller", () => {
     assert.equal(stateOf(posted.at(-1))?.working, null);
   });
 
+  it("tells the page when a failure is already in the app's conversation, so it is not said twice", async () => {
+    const kept = setUp({ apps: [lunch], changeFails: new RecordedFailure("The model's service is down.") });
+    const lost = setUp({ apps: [lunch], changeFails: new Error("Podman is not running.") });
+
+    await kept.handle({ type: "send", app: "lunch-split", request: "add totals" });
+    await lost.handle({ type: "send", app: "lunch-split", request: "add totals" });
+
+    assert.deepEqual(kept.posted.find((m) => m.type === "error"), { type: "error", text: "The model's service is down.", recorded: true });
+    assert.deepEqual(lost.posted.find((m) => m.type === "error"), { type: "error", text: "Podman is not running." });
+  });
+
   it("tells the person when work ends, and when it fails", async () => {
     const done = setUp({ apps: [lunch] });
     const failing = setUp({ apps: [], createFails: "The model's service is down." });
@@ -439,12 +450,14 @@ interface Options {
   developer?: boolean;
   keyFor?: string[];
   createFails?: string;
+  /** What a change fails with, if it does. */
+  changeFails?: Error;
   waitForCreate?: boolean;
   /** The apps Podman is not running. */
   stopped?: string[];
 }
 
-function setUp({ apps, created: made = lunch, steps = [], developer: developing = false, keyFor = [OPENAI_ENDPOINT], createFails, waitForCreate = false, stopped: stoppedApps = [] }: Options) {
+function setUp({ apps, created: made = lunch, steps = [], developer: developing = false, keyFor = [OPENAI_ENDPOINT], createFails, changeFails, waitForCreate = false, stopped: stoppedApps = [] }: Options) {
   const posted: ToUi[] = [];
   const notes: { text: string; failed: boolean }[] = [];
   const opened: string[] = [];
@@ -484,6 +497,7 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
     },
     change: async (name, request) => {
       calls.push(`change ${name} ${request}`);
+      if (changeFails !== undefined) throw changeFails;
       return lunch;
     },
     rename: async (name, to) => {
