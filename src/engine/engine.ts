@@ -13,8 +13,8 @@ const FIRST_PORT = 18100;
 const MADE = "Your app is ready.";
 const CHANGED = "Done. Your app has the change.";
 
-/** A version as a shell shows it, without its code, which the shell asks for when it needs it. */
-export type VersionView = Omit<Version, "routes" | "image">;
+/** A version as a shell shows it: how long its code is, but not the code, which the shell asks for when it needs it. */
+export type VersionView = Omit<Version, "routes" | "image"> & { readonly lines: number };
 
 /** What a shell shows of an app. Never its secrets. */
 export interface AppView {
@@ -178,6 +178,6 @@ function spend(state: State, spent: Usage, name?: string): State {
 }
 
 function appView(app: App): AppView {
-  const versions = app.versions.map(({ routes: _routes, image: _image, ...view }) => view);
+  const versions = app.versions.map(({ routes, image: _image, ...view }) => ({ ...view, lines: routes.split("\n").length - 1 }));
   return { name: app.name, url: appUrl(app.hostPort), head: app.head, versions, conversation: app.conversation, spent: app.spent };
 }

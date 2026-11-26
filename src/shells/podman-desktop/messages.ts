@@ -24,7 +24,8 @@ export type FromUi =
   | { readonly type: "remove"; readonly name: string }
   | { readonly type: "copy-password" }
   | { readonly type: "save-settings"; readonly choice: ModelChoice; readonly apiKey: string }
-  | { readonly type: "peek"; readonly on: boolean };
+  | { readonly type: "peek"; readonly on: boolean }
+  | { readonly type: "code"; readonly app: string; readonly version: string };
 
 /** What the extension tells the page. Never a secret. */
 export type ToUi =
@@ -41,5 +42,6 @@ export type ToUi =
     }
   | { readonly type: "progress"; readonly working: Progress }
   | { readonly type: "created"; readonly name: string }
+  | { readonly type: "code"; readonly app: string; readonly version: string; readonly routes: string }
   | { readonly type: "notice"; readonly text: string }
   | { readonly type: "error"; readonly text: string };

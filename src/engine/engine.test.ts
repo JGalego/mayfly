@@ -78,6 +78,7 @@ describe("the engine", () => {
     assert.deepEqual(secretOf(deployed[1]), secretOf(deployed[0]));
     assert.equal(after.versions[1]?.parent, before.head);
     assert.equal(await engine.code("lunch", after.head ?? ""), "v2\n");
+    assert.equal(after.versions[1]?.lines, 1);
   });
 
   it("leaves a running app as it was when every attempt at a change fails, and says so", async () => {

@@ -1,7 +1,8 @@
+import type { VersionView } from "../../../engine/engine.ts";
 import type { Progress } from "../messages.ts";
-import { codeDetails, codeView } from "./code.ts";
+import { codeView } from "./code.ts";
 import { h, keepTime } from "./dom.ts";
-import { elapsed, lineCount, stagesOf, type Stage, type StageKind } from "./stages.ts";
+import { elapsed, lineCount, stagesOf, stagesOfVersions, type Stage, type StageKind } from "./stages.ts";
 
 const STAGES: Record<StageKind, (attempt: number) => readonly [icon: string, label: string]> = {
   writing: (attempt) => (attempt === 1 ? ["✍️", "Writing the code"] : ["🩹", `Fixing it · attempt ${attempt}`]),
@@ -10,11 +11,22 @@ const STAGES: Record<StageKind, (attempt: number) => readonly [icon: string, lab
   deploying: () => ["🚀", "Starting it behind sign-in"],
 };
 
+/** What the page knows about showing things: whether to show code, which sections are open, and the code it has fetched. */
+export interface Showing {
+  readonly peek: boolean;
+  isOpen(key: string, byDefault: boolean): boolean;
+  setOpen(key: string, open: boolean): void;
+  /** A version's code, or undefined while it is being fetched. */
+  code(app: string, version: string): string | undefined;
+}
+
+type Status = "active" | "done" | "failed";
+
 // Stages already on screen, so only a new one slides in when the page is redrawn.
 let shown = { since: 0, count: 0 };
 
 /** What Mayfly is doing for a request: a clock, and a row for each stage. Behind the curtain, the code and what failed too. */
-export function progressView({ since, steps }: Progress, title: string, peek: boolean): HTMLElement {
+export function progressView({ since, steps }: Progress, title: string, showing: Showing): HTMLElement {
   const stages = stagesOf(steps);
   const seen = shown.since === since ? shown.count : 0;
   shown = { since, count: stages.length };
@@ -23,9 +35,22 @@ export function progressView({ since, steps }: Progress, title: string, peek: bo
   clock.dataset.since = String(since);
   const rows = stages.map((stage, index) => {
     const status = stage.problem !== undefined ? "failed" : index === stages.length - 1 ? "active" : "done";
-    return stageItem(stage, status, { peek, isNew: index >= seen, codeOpen: index === latestCode });
+    const row = stageItem(stage, status, details(stage, showing, { key: `live:${since}:${stage.attempt}`, open: index === latestCode }));
+    row.classList.toggle("new", index >= seen);
+    return row;
   });
   return h("div", "progress", h("p", "progress-title", title), h("p", "quiet", clock, " · usually about a minute"), h("ol", "stages", ...rows));
+}
+
+/** How a finished request was made, kept under its reply and folded away. */
+export function makingOf(app: string, versions: readonly VersionView[], took: number, showing: Showing): HTMLDetailsElement {
+  const attempts = versions.length === 1 ? "1 attempt" : `${versions.length} attempts`;
+  const rows = stagesOfVersions(versions).map((stage) => {
+    const code = stage.version === undefined ? undefined : { key: `code:${app}:${stage.version}`, open: false, app };
+    return stageItem(stage, stage.problem === undefined ? "done" : "failed", details(stage, showing, code));
+  });
+  const summary = h("summary", "", `How it was made · ${attempts} · ${elapsed(0, took)}`);
+  return disclosure(h("details", "making-of", summary, h("ol", "stages", ...rows)), `making:${app}:${versions[0]?.id ?? ""}`, false, showing);
 }
 
 /** Moves every clock on the page on to now. */
@@ -33,14 +58,12 @@ export function tickClocks(): void {
   for (const clock of document.querySelectorAll<HTMLElement>(".elapsed")) clock.textContent = elapsed(Number(clock.dataset.since), Date.now());
 }
 
-function stageItem(stage: Stage, status: "active" | "done" | "failed", options: { peek: boolean; isNew: boolean; codeOpen: boolean }): HTMLLIElement {
+function stageItem(stage: Stage, status: Status, extras: readonly Node[]): HTMLLIElement {
   const [icon, label] = STAGES[stage.kind](stage.attempt);
   const heading = h("p", "stage-label", label);
   if (status === "active") heading.append(h("span", "quiet", liveNote(stage)));
-  if (status !== "active") heading.append(h("span", `stage-mark ${status}`, status === "done" ? "✓" : "✗"));
-  const item = h("li", `stage ${status}`, keepTime(h("span", "stage-icon", icon)), h("div", "stage-body", heading, ...details(stage, options)));
-  item.classList.toggle("new", options.isNew);
-  return item;
+  else heading.append(h("span", `stage-mark ${status}`, status === "done" ? "✓" : "✗"));
+  return h("li", `stage ${status}`, keepTime(h("span", "stage-icon", icon)), h("div", "stage-body", heading, ...extras));
 }
 
 // Reasoning models think before they write, and that thinking is not streamed. Saying so explains the wait.
@@ -50,9 +73,29 @@ function liveNote({ kind, code }: Stage): string {
   return code === "" ? " · starting to write" : ` · ${lineCount(code)} lines`;
 }
 
-function details(stage: Stage, { peek, codeOpen }: { peek: boolean; codeOpen: boolean }): Node[] {
+/** The code and the problem a stage shows. Code shows behind the curtain only. */
+function details(stage: Stage, showing: Showing, code?: { key: string; open: boolean; app?: string }): Node[] {
   const shown: Node[] = [];
-  if (peek && stage.code !== undefined) shown.push(stage.live === true ? codeView(stage.code, "listing live") : codeDetails(stage.code, codeOpen));
-  if (stage.problem !== undefined) shown.push(peek ? h("pre", "problem", stage.problem) : h("p", "quiet", "It didn't pass, so Mayfly is fixing it."));
+  if (showing.peek && stage.code !== undefined && stage.live === true) shown.push(codeView(stage.code, "listing live"));
+  else if (showing.peek && code !== undefined && (stage.code !== undefined || stage.version !== undefined)) shown.push(codeFold(stage, showing, code));
+  if (stage.problem !== undefined) shown.push(showing.peek ? h("pre", "problem", stage.problem) : h("p", "quiet", "It didn't pass, so Mayfly tried again."));
   return shown;
+}
+
+/** A stage's code, folded under its length. A kept version's code is fetched the first time it is opened. */
+function codeFold(stage: Stage, showing: Showing, { key, open, app }: { key: string; open: boolean; app?: string }): HTMLDetailsElement {
+  const isOpen = showing.isOpen(key, open);
+  const code = stage.code ?? (isOpen && app !== undefined && stage.version !== undefined ? showing.code(app, stage.version) : undefined);
+  const lines = stage.lines ?? (stage.code === undefined ? 0 : lineCount(stage.code));
+  const body = code === undefined ? h("p", "quiet", "Fetching the code…") : codeView(code, "listing");
+  return disclosure(h("details", "code", h("summary", "", `routes.ts · ${lines} lines`), body), key, open, showing);
+}
+
+/** Keeps a fold open or closed across redraws, as the person left it. */
+function disclosure(fold: HTMLDetailsElement, key: string, byDefault: boolean, showing: Showing): HTMLDetailsElement {
+  fold.open = showing.isOpen(key, byDefault);
+  fold.addEventListener("toggle", () => {
+    if (fold.open !== showing.isOpen(key, byDefault)) showing.setOpen(key, fold.open);
+  });
+  return fold;
 }

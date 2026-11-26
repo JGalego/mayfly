@@ -57,6 +57,8 @@ function handle(request: FromUi, session: Session): Promise<unknown> {
       return saveSettings(request.choice, request.apiKey.trim(), session);
     case "peek":
       return savePeek(request.on, session);
+    case "code":
+      return sendCode(request.app, request.version, session);
   }
 }
 
@@ -133,6 +135,10 @@ async function saveSettings(choice: ModelChoice, apiKey: string, session: Sessio
   await showState(session);
 }
 
+async function sendCode(app: string, version: string, session: Session): Promise<void> {
+  await session.post({ type: "code", app, version, routes: await session.engine.code(app, version) });
+}
+
 async function savePeek(on: boolean, session: Session): Promise<void> {
   await session.settings.savePeek(on);
   await showState(session);
@@ -166,7 +172,7 @@ async function showState(session: Session): Promise<void> {
 // Messages come from the page, so each is checked for its shape before anything acts on it.
 function readRequest(message: unknown): FromUi | undefined {
   if (typeof message !== "object" || message === null) return undefined;
-  const { type, app, request, name, choice, apiKey, on } = message as Record<string, unknown>;
+  const { type, app, request, name, choice, apiKey, on, version } = message as Record<string, unknown>;
   switch (type) {
     case "ready":
     case "copy-password":
@@ -178,6 +184,8 @@ function readRequest(message: unknown): FromUi | undefined {
       return typeof name === "string" ? { type, name } : undefined;
     case "peek":
       return typeof on === "boolean" ? { type, on } : undefined;
+    case "code":
+      return typeof app === "string" && typeof version === "string" ? { type, app, version } : undefined;
     case "save-settings": {
       const model = readChoice(choice);
       return model !== undefined && typeof apiKey === "string" ? { type, choice: model, apiKey } : undefined;

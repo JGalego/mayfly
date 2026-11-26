@@ -83,6 +83,14 @@ describe("the Mayfly panel's controller", () => {
     assert.equal(posted.filter((m) => m.type === "progress").length, 1);
   });
 
+  it("sends the code of a version the page asks for", async () => {
+    const { handle, posted } = setUp({ apps: [lunch] });
+
+    await handle({ type: "code", app: "lunch-split", version: "v1" });
+
+    assert.deepEqual(posted, [{ type: "code", app: "lunch-split", version: "v1", routes: "export default 1;\n" }]);
+  });
+
   it("remembers whether to peek behind the curtain", async () => {
     const { handle, posted } = setUp({ apps: [] });
 

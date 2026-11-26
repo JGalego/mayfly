@@ -4,7 +4,7 @@ import type { Usage } from "../../../engine/usage.ts";
 import type { FromUi, ToUi, Work } from "../messages.ts";
 import { isProvider, PROVIDERS } from "../settings.ts";
 import { h, keepTime } from "./dom.ts";
-import { progressView, tickClocks } from "./progress.ts";
+import { makingOf, progressView, tickClocks, type Showing } from "./progress.ts";
 
 // Podman Desktop puts this function on every webview page, to send messages to the extension.
 declare function acquirePodmanDesktopApi(): { postMessage(message: FromUi): void };
@@ -40,6 +40,11 @@ const drafts = new Map<string, string>();
 /** What the person sent last, to give back if it fails. */
 let lastSent: Work | undefined;
 let removeArmed = false;
+/** Folds the person opened or closed, so a redraw leaves them as they were. */
+const folds = new Map<string, boolean>();
+/** Versions' code fetched from the extension, and the ones already asked for. */
+const codes = new Map<string, string>();
+const asked = new Set<string>();
 let bannerTimer: number | undefined;
 
 provider.replaceChildren(...Object.entries(PROVIDERS).map(([value, label]) => new Option(label, value)));
@@ -77,6 +82,9 @@ function receive(message: ToUi): void {
       return receiveState(message);
     case "progress":
       if (state !== undefined) state = { ...state, working: message.working };
+      return render();
+    case "code":
+      codes.set(`${message.app}:${message.version}`, message.routes);
       return render();
     case "created":
       if (view.kind === "new") go({ kind: "app", name: message.name });
@@ -223,8 +231,9 @@ function renderChat(state: State, app: AppView | undefined): void {
   element("needs-key").hidden = state.hasApiKey;
   element("examples").hidden = !state.hasApiKey;
   const turns = [...(app?.conversation ?? []), ...(working === null ? [] : [{ from: "person", text: working.request } as const])];
-  const items = turns.map((turn) => turnItem(turn));
-  const pending = working === null ? [] : [turn("mayfly", progressView(working, app === undefined ? "Writing your app" : "Changing your app", state.peek))];
+  const showing = showingFor(state);
+  const items = turns.map((said) => turnItem(said, app === undefined ? [] : madeOf(said, app, showing)));
+  const pending = working === null ? [] : [turn("mayfly", progressView(working, app === undefined ? "Writing your app" : "Changing your app", showing))];
   const thread = element("thread");
   const following = thread.scrollHeight - thread.scrollTop - thread.clientHeight < FOLLOW_PX;
   element("turns").replaceChildren(...items, ...pending);
@@ -233,6 +242,32 @@ function renderChat(state: State, app: AppView | undefined): void {
   request.placeholder = app === undefined ? "Describe the app you need" : `Ask for a change to ${app.name}`;
   request.disabled = !state.hasApiKey;
   element<HTMLButtonElement>("send").disabled = !state.hasApiKey || state.working !== null;
+}
+
+/** Under each of Mayfly's replies, how it was made. */
+function madeOf(said: Turn, app: AppView, showing: Showing): Node[] {
+  if (said.from !== "mayfly" || said.versions.length === 0) return [];
+  const versions = said.versions.flatMap((id) => app.versions.find((version) => version.id === id) ?? []);
+  return [makingOf(app.name, versions, said.took, showing)];
+}
+
+function showingFor({ peek }: State): Showing {
+  return {
+    peek,
+    isOpen: (key, byDefault) => folds.get(key) ?? byDefault,
+    setOpen: (key, open) => {
+      folds.set(key, open);
+      render();
+    },
+    code: (app, version) => {
+      const key = `${app}:${version}`;
+      if (!asked.has(key)) {
+        asked.add(key);
+        post({ type: "code", app, version });
+      }
+      return codes.get(key);
+    },
+  };
 }
 
 function turnItem({ from, text }: Turn, extras: readonly Node[] = []): HTMLLIElement {
