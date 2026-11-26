@@ -151,6 +151,9 @@ document.addEventListener("keydown", (event) => {
   event.preventDefault();
   conversationFind.open();
 });
+// The extension notifies about work that ends while the page lacks the focus, as when Podman Desktop is in the background.
+window.addEventListener("focus", () => post({ type: "focus", on: true }));
+window.addEventListener("blur", () => post({ type: "focus", on: false }));
 const appFilter = element<HTMLInputElement>("app-filter");
 appFilter.addEventListener("input", () => state !== undefined && renderSidebar(state));
 appFilter.addEventListener("keydown", (event) => {

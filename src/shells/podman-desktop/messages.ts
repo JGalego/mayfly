@@ -58,6 +58,8 @@ export type FromUi =
   | { readonly type: "ask"; readonly app: string; readonly question: string }
   | { readonly type: "fix" | "retry" | "undo" | "start"; readonly app: string }
   | { readonly type: "autostart"; readonly on: boolean }
+  /** Whether the page has the focus, which it loses when Podman Desktop's window goes to the background. */
+  | { readonly type: "focus"; readonly on: boolean }
   /** Sent by the extension, not the page, when Podman Desktop starts and the person wants stopped apps started. */
   | { readonly type: "start-stopped" }
   | { readonly type: "rename"; readonly app: string; readonly name: string }

@@ -19,8 +19,8 @@ const DONE: Record<Exclude<Progress["kind"], "remove">, string> = { create: "Mad
 export interface ControllerPorts {
   readonly engine: Engine;
   readonly post: (message: ToUi) => Promise<unknown>;
-  /** Tells the person that work ended, and whether it failed, for when they are looking elsewhere. */
-  readonly notify: (note: { readonly text: string; readonly failed: boolean }) => void;
+  /** Tells the person that work ended, and whether it failed, for when they are looking elsewhere. Seen says whether the page had the focus. */
+  readonly notify: (note: { readonly text: string; readonly failed: boolean; readonly seen: boolean }) => void;
   readonly openExternal: (url: string) => Promise<unknown>;
   readonly copy: (text: string) => Promise<unknown>;
   readonly settings: {
@@ -40,11 +40,11 @@ export interface ControllerPorts {
 }
 
 // One request at a time: each one reads and writes the whole state.
-type Session = ControllerPorts & { working: Progress | null; draftDue: boolean; activity: Activity[] };
+type Session = ControllerPorts & { working: Progress | null; draftDue: boolean; activity: Activity[]; focused: boolean };
 
 /** Handles what the page asks for. The page is trusted with nothing: it names apps, never URLs, and never sees a secret. */
 export function createController(ports: ControllerPorts): (message: unknown) => Promise<void> {
-  const session: Session = { ...ports, working: null, draftDue: false, activity: [] };
+  const session: Session = { ...ports, working: null, draftDue: false, activity: [], focused: true };
   return async (message) => {
     const request = readRequest(message);
     if (request === undefined) return;
@@ -99,6 +99,9 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       return showState(session);
     case "start-stopped":
       return startStopped(session);
+    case "focus":
+      session.focused = request.on;
+      return;
     case "code":
       return sendCode(request.app, request.version, session);
     case "health":
@@ -212,7 +215,7 @@ async function run(work: Omit<Progress, "since" | "steps"> & { kind: keyof typeo
   await showState(session);
   const app = await job((step) => showProgress(step, session))
     .catch((error: unknown) => {
-      session.notify({ text: `Could not finish “${work.request}”: ${error instanceof Error ? error.message : String(error)}`, failed: true });
+      session.notify({ text: `Could not finish “${work.request}”: ${error instanceof Error ? error.message : String(error)}`, failed: true, seen: session.focused });
       throw error;
     })
     .finally(() => {
@@ -223,7 +226,7 @@ async function run(work: Omit<Progress, "since" | "steps"> & { kind: keyof typeo
   const passed = ["deploy", "ask", "rename", "start"].includes(work.kind) || last === undefined || last.problem === null;
   const text = passed ? `${DONE[work.kind]} ${app.name}` : `Trial failed for ${app.name}`;
   note(session, passed ? "info" : "error", text);
-  session.notify({ text, failed: !passed });
+  session.notify({ text, failed: !passed, seen: session.focused });
   await showState(session);
   return app;
 }
@@ -362,6 +365,7 @@ function readRequest(message: unknown): FromUi | undefined {
       return typeof url === "string" ? { type, url } : undefined;
     case "developer":
     case "autostart":
+    case "focus":
       return typeof on === "boolean" ? { type, on } : undefined;
     case "start-stopped":
       return { type };

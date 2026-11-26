@@ -320,6 +320,15 @@ describe("the Mayfly panel's controller", () => {
     assert.deepEqual(lost.posted.find((m) => m.type === "error"), { type: "error", text: "Podman is not running." });
   });
 
+  it("says whether the page had the focus when work ended, as the person may be in another window", async () => {
+    const { handle, notes } = setUp({ apps: [lunch] });
+
+    await handle({ type: "focus", on: false });
+    await handle({ type: "send", app: "lunch-split", request: "add totals" });
+
+    assert.equal(notes.at(-1)?.seen, false);
+  });
+
   it("tells the person when work ends, and when it fails", async () => {
     const done = setUp({ apps: [lunch] });
     const failing = setUp({ apps: [], createFails: "The model's service is down." });
@@ -327,8 +336,8 @@ describe("the Mayfly panel's controller", () => {
     await done.handle({ type: "send", app: "lunch-split", request: "add totals" });
     await failing.handle({ type: "send", app: null, request: "split lunch bills" });
 
-    assert.deepEqual(done.notes, [{ text: "Changed lunch-split", failed: false }]);
-    assert.deepEqual(failing.notes, [{ text: "Could not finish “split lunch bills”: The model's service is down.", failed: true }]);
+    assert.deepEqual(done.notes, [{ text: "Changed lunch-split", failed: false, seen: true }]);
+    assert.deepEqual(failing.notes, [{ text: "Could not finish “split lunch bills”: The model's service is down.", failed: true, seen: true }]);
   });
 
   it("refuses an empty request", async () => {
@@ -470,7 +479,7 @@ interface Options {
 
 function setUp({ apps, created: made = lunch, steps = [], developer: developing = false, keyFor = [OPENAI_ENDPOINT], createFails, changeFails, waitForCreate = false, stopped: stoppedApps = [] }: Options) {
   const posted: ToUi[] = [];
-  const notes: { text: string; failed: boolean }[] = [];
+  const notes: { text: string; failed: boolean; seen: boolean }[] = [];
   const opened: string[] = [];
   const copied: string[] = [];
   const calls: string[] = [];

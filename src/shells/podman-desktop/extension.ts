@@ -68,9 +68,9 @@ async function openPanel(context: api.ExtensionContext, engine: Engine, keys: Ke
   const handle = createController({
     engine,
     post: (message) => panel.webview.postMessage(message),
-    // Only when the person is not looking at Mayfly: there, the conversation already says it.
-    notify: ({ text, failed }) => {
-      if (!panel.active) api.window.showNotification({ title: "Mayfly", body: text, type: failed ? "error" : "info" });
+    // Only when the person is not looking at Mayfly, on another page or in another window: there, the conversation already says it.
+    notify: ({ text, failed, seen }) => {
+      if (!panel.active || !seen) api.window.showNotification({ title: "Mayfly", body: text, type: failed ? "error" : "info" });
     },
     openExternal: (url) => api.env.openExternal(api.Uri.parse(url)),
     copy: (text) => api.env.clipboard.writeText(text),
