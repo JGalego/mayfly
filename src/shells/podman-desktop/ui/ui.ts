@@ -329,9 +329,7 @@ function render(): void {
   if (view.kind === "settings") {
     renderModels(state, post, () => render());
     element("health").replaceChildren(...healthView(health));
-    const { verdict, items } = doctorView(checks);
-    element("doctor-verdict").textContent = verdict;
-    element("doctor").replaceChildren(...items);
+    element("doctor").replaceChildren(...doctorView(checks));
   }
   else renderChat(state, app);
   renderStatusbar(state, app);
