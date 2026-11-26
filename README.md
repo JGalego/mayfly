@@ -25,7 +25,29 @@ Every container runs as a non-root user with all capabilities dropped, a read-on
 
 ## Architecture
 
-A headless TypeScript engine with a small API. State storage, identity source, model provider and deployer are passed in through small interfaces. The core (manifest to pod spec, the contract, expiry rules) imports no adapters. The first shell is a Podman Desktop extension, the first deployer is local Podman, and the default model provider is any OpenAI-compatible endpoint with your own key.
+Dependencies point inward. The core imports nothing else.
+
+```mermaid
+flowchart LR
+  shell["Podman Desktop extension"] --> api
+  subgraph engine["Engine: headless TypeScript library"]
+    api["API"] --> core["Core<br/>contract · manifest → pod spec · expiry"]
+    api --> ports["Ports<br/>state · identity · model · deployer"]
+  end
+  podman["Podman deployer"] -. implements .-> ports
+  model["OpenAI-compatible model provider<br/>your own key"] -. implements .-> ports
+```
+
+Each app runs as one pod:
+
+```mermaid
+flowchart LR
+  browser(["Browser"]) -->|"127.0.0.1 only"| proxy
+  subgraph pod["Pod: mayfly-app"]
+    proxy["oauth2-proxy<br/>sign-in · policy roles"] -->|"identity headers"| app["Generated app<br/>business logic only"]
+  end
+  proxy <-->|"OIDC"| idp["Dev IdP"]
+```
 
 ## Offerings
 

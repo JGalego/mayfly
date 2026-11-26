@@ -21,6 +21,7 @@ Read `README.md` for the product, the contract and the scope.
 ## Docs
 
 - Minimal. One line per paragraph or list item, with no hard wrapping.
+- Prefer visuals over text: if a diagram (Mermaid) can replace a paragraph, use the diagram.
 - Comments say why, not what, and only when the code can't.
 
 ## Scope
