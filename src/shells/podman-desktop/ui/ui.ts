@@ -1,9 +1,10 @@
 import type { AppView } from "../../../engine/engine.ts";
 import type { Turn } from "../../../engine/state.ts";
-import type { Usage } from "../../../engine/usage.ts";
-import type { FromUi, ToUi, Work } from "../messages.ts";
+import type { FromUi, Progress, ToUi, Work } from "../messages.ts";
 import { isProvider, PROVIDERS } from "../settings.ts";
 import { h, keepTime } from "./dom.ts";
+import { tokens } from "./format.ts";
+import { historyView } from "./history.ts";
 import { makingOf, progressView, tickClocks, whatChanged, type Showing } from "./progress.ts";
 
 // Podman Desktop puts this function on every webview page, to send messages to the extension.
@@ -11,7 +12,11 @@ declare function acquirePodmanDesktopApi(): { postMessage(message: FromUi): void
 
 type State = Extract<ToUi, { type: "state" }>;
 /** What the main area shows: a new app's empty conversation, an app's conversation, or the settings. */
-type View = { readonly kind: "new" } | { readonly kind: "app"; readonly name: string } | { readonly kind: "settings" };
+type View = { readonly kind: "new" } | { readonly kind: "app"; readonly name: string; readonly tab: Tab } | { readonly kind: "settings" };
+/** An app's conversation, or its history. */
+type Tab = "chat" | "history";
+
+const TITLES: Record<Progress["kind"], string> = { create: "Writing your app", change: "Changing your app", restore: "Going back" };
 
 const NOTICE_MS = 4000;
 const CONFIRM_MS = 4000;
@@ -56,6 +61,8 @@ element("new-app").addEventListener("click", () => go({ kind: "new" }));
 element("show-settings").addEventListener("click", () => go({ kind: "settings" }));
 element("add-key").addEventListener("click", () => go({ kind: "settings" }));
 element("open-app").addEventListener("click", openApp);
+element("tab-chat").addEventListener("click", () => showTab("chat"));
+element("tab-history").addEventListener("click", () => showTab("history"));
 element("remove-app").addEventListener("click", removeApp);
 for (const what of ["email", "password"] as const) element(`copy-${what}`).addEventListener("click", () => copySignIn(what));
 element("composer").addEventListener("submit", (event) => {
@@ -88,7 +95,7 @@ function receive(message: ToUi): void {
       codes.set(`${message.app}:${message.version}`, message.routes);
       return render();
     case "created":
-      if (view.kind === "new") go({ kind: "app", name: message.name });
+      if (view.kind === "new") go({ kind: "app", name: message.name, tab: "chat" });
       return;
     case "notice":
       return showBanner(message.text, "notice");
@@ -150,6 +157,16 @@ function copySignIn(what: "email" | "password"): void {
   const chip = element(`copy-${what}`);
   chip.classList.add("copied");
   window.setTimeout(() => chip.classList.remove("copied"), COPIED_MS);
+}
+
+// Going back rebuilds and restarts the app, which the conversation shows as it happens.
+function goBack(app: string, version: string): void {
+  post({ type: "restore", app, version });
+  go({ kind: "app", name: app, tab: "chat" });
+}
+
+function showTab(tab: Tab): void {
+  if (view.kind === "app") go({ ...view, tab });
 }
 
 function openApp(): void {
@@ -220,7 +237,7 @@ function appItem(app: AppView, working: boolean): HTMLLIElement {
   control.textContent = app.name;
   if (working) control.append(spinner());
   markCurrent(control, view.kind === "app" && view.name === app.name);
-  control.addEventListener("click", () => go({ kind: "app", name: app.name }));
+  control.addEventListener("click", () => go({ kind: "app", name: app.name, tab: "chat" }));
   const item = document.createElement("li");
   item.append(control);
   return item;
@@ -242,10 +259,16 @@ function renderChat(state: State, app: AppView | undefined): void {
   const turns = [...(app?.conversation ?? []), ...(working === null ? [] : [{ from: "person", text: working.request } as const])];
   const showing = showingFor(state);
   const items = turns.map((said) => turnItem(said, app === undefined ? [] : madeOf(said, app, showing)));
-  const pending = working === null ? [] : [turn("mayfly", progressView(working, app === undefined ? "Writing your app" : "Changing your app", showing))];
+  const pending = working === null ? [] : [turn("mayfly", progressView(working, TITLES[working.kind], showing))];
   const thread = element("thread");
   const following = thread.scrollHeight - thread.scrollTop - thread.clientHeight < FOLLOW_PX;
-  element("turns").replaceChildren(...items, ...pending);
+  const tab = view.kind === "app" ? view.tab : "chat";
+  element("turns").hidden = tab !== "chat";
+  element("turns").replaceChildren(...(tab === "chat" ? [...items, ...pending] : []));
+  element("history").hidden = tab !== "history";
+  element("history").replaceChildren(...(tab === "history" && app !== undefined ? [historyView(app, showing, { restore: (version) => goBack(app.name, version), busy: state.working !== null })] : []));
+  for (const name of ["chat", "history"] as const) element(`tab-${name}`).setAttribute("aria-selected", String(tab === name));
+  element("tab-history").textContent = `History · ${app?.versions.length ?? 0}`;
   if (following) scrollToEnd(thread);
   for (const live of document.querySelectorAll<HTMLElement>(".live")) scrollToEnd(live);
   request.placeholder = app === undefined ? "Describe the app you need" : `Ask for a change to ${app.name}`;
@@ -320,9 +343,6 @@ function renderStatusbar({ model, hasApiKey, spent }: State, app: AppView | unde
   element("tokens").textContent = app === undefined ? all : `${app.name}: ${tokens(app.spent)} · ${all}`;
 }
 
-function tokens({ input, output }: Usage): string {
-  return `${input.toLocaleString()} tokens in, ${output.toLocaleString()} out`;
-}
 
 function showError(text: string): void {
   showBanner(text, "error");

@@ -38,6 +38,10 @@
             <button id="copy-password" class="chip" type="button" title="Copy the password"><span class="dots" aria-label="password">••••••••</span><span class="chip-note">Copy</span></button>
           </div>
         </div>
+        <div class="tabs" role="tablist" aria-label="App">
+          <button id="tab-chat" role="tab" type="button">Conversation</button>
+          <button id="tab-history" role="tab" type="button">History</button>
+        </div>
         <button id="remove-app" class="quiet-button" type="button">Remove</button>
         <button id="open-app" class="primary" type="button">Open app</button>
       </header>
@@ -50,6 +54,7 @@
           <p id="needs-key" hidden><button id="add-key" class="primary" type="button">Add your API key</button></p>
         </section>
         <ol id="turns"></ol>
+        <div id="history" hidden></div>
       </div>
       <form id="composer">
         <textarea id="request" rows="2" maxlength="2000" aria-label="Your request"></textarea>

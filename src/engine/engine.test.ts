@@ -104,6 +104,29 @@ describe("the engine", () => {
     assert.deepEqual([deployed.length, removed.length], [0, 0]);
   });
 
+  it("goes back to an earlier version at the same URL, and the next change branches from it", async () => {
+    const { engine, deployed } = setUp([reply("lunch", "", "v1"), reply("lunch", "", "v2"), reply("lunch", "", "v3")]);
+    const first = await engine.create("split lunch bills");
+    await engine.change("lunch", "add totals");
+
+    const back = await engine.restore("lunch", first.head ?? "");
+    const branched = await engine.change("lunch", "add names");
+
+    assert.equal(back.head, first.head);
+    assert.equal(back.url, first.url);
+    assert.equal(names(deployed.at(-2)).length, 3);
+    assert.equal(branched.versions.at(-1)?.parent, first.head);
+    assert.equal(branched.versions.length, 3);
+    assert.match(back.conversation.at(-1)?.text ?? "", /split lunch bills/);
+  });
+
+  it("refuses to go back to a version that failed", async () => {
+    const { engine } = setUp([reply("lunch"), reply("lunch")], [crashed, { ok: true }]);
+    const app = await engine.create("split lunch bills");
+
+    await assert.rejects(engine.restore("lunch", app.versions[0]?.id ?? ""), /no version .* that passed/);
+  });
+
   it("refuses to change an app it does not know", async () => {
     const { engine } = setUp([]);
 

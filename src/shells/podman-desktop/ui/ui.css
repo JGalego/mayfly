@@ -503,6 +503,138 @@ pre.live::after {
   animation: blink 1s steps(1) infinite;
 }
 
+/* An app's tabs: its conversation and its history. */
+.tabs {
+  display: flex;
+  gap: 0.2rem;
+  padding: 0.2rem;
+  border-radius: 8px;
+  background: var(--hover);
+}
+
+.tabs button {
+  padding: 0.3rem 0.8rem;
+  color: var(--muted);
+}
+
+.tabs button[aria-selected="true"] {
+  color: var(--text);
+  background: var(--bg);
+  box-shadow: 0 1px 2px light-dark(#0002, #0006);
+}
+
+/* History: a graph of versions, newest first. */
+.history {
+  max-width: var(--column);
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+}
+
+.history-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: stretch;
+}
+
+.history-body {
+  flex: 1;
+  min-width: 0;
+  padding: 0.6rem 0;
+}
+
+.history-title {
+  font-weight: 600;
+}
+
+.version-id {
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  font: 12px ui-monospace, "Cascadia Code", Consolas, monospace;
+  background: var(--hover);
+}
+
+.history-row.failed .history-title {
+  color: var(--muted);
+}
+
+.go-back {
+  align-self: center;
+  white-space: nowrap;
+}
+
+.go-back:hover {
+  color: var(--accent);
+}
+
+.graph {
+  display: flex;
+  flex: none;
+}
+
+.lane {
+  position: relative;
+  width: 16px;
+}
+
+.lane.line::before,
+.lane.dot::before,
+.lane.join::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 7px;
+  border-left: 2px solid var(--line);
+}
+
+.lane.dot.tip::before {
+  top: 50%;
+}
+
+.lane.dot.root::before {
+  bottom: 50%;
+}
+
+.lane.dot.tip.root::before {
+  display: none;
+}
+
+.lane.join::before {
+  bottom: 50%;
+}
+
+.lane.join::after {
+  content: "";
+  position: absolute;
+  top: calc(50% - 2px);
+  right: 9px;
+  left: -9px;
+  border-bottom: 2px solid var(--line);
+}
+
+.lane.dot::after {
+  content: "";
+  position: absolute;
+  top: calc(50% - 6px);
+  left: 2px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--success);
+  border-radius: 50%;
+  background: var(--bg);
+}
+
+.history-row.running .lane.dot::after {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: 0 0 0 3px light-dark(#8e51ff33, #8e51ff55);
+}
+
+.history-row.failed .lane.dot::after {
+  border-color: var(--error);
+}
+
 /* Highlighted code: TypeScript, and the HTML and CSS in its templates. */
 .hljs-comment,
 .hljs-meta {

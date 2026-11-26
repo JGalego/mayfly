@@ -44,7 +44,7 @@ describe("the Mayfly panel's controller", () => {
     await handle({ type: "send", app: null, request: " split lunch bills " });
 
     assert.deepEqual(calls, ["create split lunch bills"]);
-    assert.partialDeepStrictEqual(stateOf(posted[0])?.working, { app: null, request: "split lunch bills", steps: [] });
+    assert.partialDeepStrictEqual(stateOf(posted[0])?.working, { app: null, request: "split lunch bills", kind: "create", steps: [] });
     assert.equal(stateOf(posted[1])?.working, null);
     assert.deepEqual(posted[2], { type: "created", name: "lunch-split" });
     assert.deepEqual(opened, [lunch.url]);
@@ -81,6 +81,16 @@ describe("the Mayfly panel's controller", () => {
     t.mock.timers.tick(150);
 
     assert.equal(posted.filter((m) => m.type === "progress").length, 1);
+  });
+
+  it("goes back to an earlier version, showing the work while it runs", async () => {
+    const { handle, posted, calls } = setUp({ apps: [lunch] });
+
+    await handle({ type: "restore", app: "lunch-split", version: "v1" });
+
+    assert.deepEqual(calls, ["restore lunch-split v1"]);
+    assert.equal(stateOf(posted[0])?.working?.kind, "restore");
+    assert.equal(stateOf(posted.at(-1))?.working, null);
   });
 
   it("sends the code of a version the page asks for", async () => {
@@ -250,6 +260,10 @@ function setUp({ apps, created: made = lunch, steps = [], peek: peeking = false,
       return made;
     },
     code: async () => "export default 1;\n",
+    restore: async (name, version) => {
+      calls.push(`restore ${name} ${version}`);
+      return lunch;
+    },
     change: async (name, request) => {
       calls.push(`change ${name} ${request}`);
       return lunch;

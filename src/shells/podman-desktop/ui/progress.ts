@@ -58,6 +58,14 @@ export function makingOf(app: string, versions: readonly VersionView[], took: nu
   return disclosure(h("details", "making-of", summary, h("ol", "stages", ...rows)), `making:${app}:${versions[0]?.id ?? ""}`, false, showing);
 }
 
+/** A kept version's code, and behind the curtain its changes from the version before. */
+export function versionDetails(app: string, version: VersionView, showing: Showing): Node[] {
+  if (version.lines === 0) return [];
+  const parent = version.parent === null ? {} : { parent: version.parent };
+  const stage: Stage = { kind: "writing", attempt: version.attempt, version: version.id, lines: version.lines, ...parent };
+  return details(stage, showing, { key: `code:${app}:${version.id}`, open: false, app });
+}
+
 /** Moves every clock on the page on to now. */
 export function tickClocks(): void {
   for (const clock of document.querySelectorAll<HTMLElement>(".elapsed")) clock.textContent = elapsed(Number(clock.dataset.since), Date.now());

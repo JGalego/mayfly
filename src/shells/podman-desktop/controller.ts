@@ -1,10 +1,11 @@
-import type { Engine } from "../../engine/engine.ts";
-import type { Step } from "../../engine/step.ts";
+import type { AppView, Engine } from "../../engine/engine.ts";
+import type { Step, Watcher } from "../../engine/step.ts";
 import type { FromUi, Progress, ToUi, Work } from "./messages.ts";
 import { endpointOf, isProvider, type ModelChoice } from "./settings.ts";
 
 const MAX_REQUEST = 2000;
 const MAX_MODEL_NAME = 200;
+const BUSY = "Mayfly is still working on your last request. Wait for it to finish.";
 // The model's draft changes many times a second. The page gets the latest at most this often.
 const DRAFT_MS = 150;
 
@@ -59,23 +60,36 @@ function handle(request: FromUi, session: Session): Promise<unknown> {
       return savePeek(request.on, session);
     case "code":
       return sendCode(request.app, request.version, session);
+    case "restore":
+      return restore(request.app, request.version, session);
   }
 }
 
 async function send(work: Work, session: Session): Promise<void> {
   const problem = problemWithWork(work, session);
   if (problem !== undefined) return void (await session.post({ type: "error", text: problem }));
-  session.working = { ...work, since: Date.now(), steps: [] };
-  await showState(session);
   const { engine } = session;
-  const watch = (step: Step): void => showProgress(step, session);
-  const app = await (work.app === null ? engine.create(work.request, watch) : engine.change(work.app, work.request, watch)).finally(() => {
-    session.working = null;
-  });
-  await showState(session);
+  const kind = work.app === null ? "create" : "change";
+  const app = await run({ ...work, kind }, session, (watch) => (work.app === null ? engine.create(work.request, watch) : engine.change(work.app, work.request, watch)));
   if (work.app !== null) return;
   await session.post({ type: "created", name: app.name });
   if (app.head !== null) await session.openExternal(app.url);
+}
+
+async function restore(app: string, version: string, session: Session): Promise<void> {
+  if (session.working !== null) return void (await session.post({ type: "error", text: BUSY }));
+  await run({ app, request: `Go back to version ${version}`, kind: "restore" }, session, (watch) => session.engine.restore(app, version, watch));
+}
+
+/** Does one piece of work, showing its progress while it runs. */
+async function run(work: Omit<Progress, "since" | "steps">, session: Session, job: (watch: Watcher) => Promise<AppView>): Promise<AppView> {
+  session.working = { ...work, since: Date.now(), steps: [] };
+  await showState(session);
+  const app = await job((step) => showProgress(step, session)).finally(() => {
+    session.working = null;
+  });
+  await showState(session);
+  return app;
 }
 
 function showProgress(step: Step, session: Session): void {
@@ -103,7 +117,7 @@ function postProgress(session: Session): void {
 }
 
 function problemWithWork(work: Work, session: Session): string | undefined {
-  if (session.working !== null) return "Mayfly is still working on your last request. Wait for it to finish.";
+  if (session.working !== null) return BUSY;
   if (work.request === "") return "Say what you need first.";
   if (work.request.length > MAX_REQUEST) return `Keep it under ${MAX_REQUEST} characters.`;
   return undefined;
@@ -115,7 +129,7 @@ async function open(name: string, session: Session): Promise<void> {
 }
 
 async function remove(name: string, session: Session): Promise<void> {
-  if (session.working !== null) return void (await session.post({ type: "error", text: "Wait for Mayfly to finish first." }));
+  if (session.working !== null) return void (await session.post({ type: "error", text: BUSY }));
   await session.engine.remove(name);
   await showState(session);
 }
@@ -186,6 +200,7 @@ function readRequest(message: unknown): FromUi | undefined {
     case "peek":
       return typeof on === "boolean" ? { type, on } : undefined;
     case "code":
+    case "restore":
       return typeof app === "string" && typeof version === "string" ? { type, app, version } : undefined;
     case "save-settings": {
       const model = readChoice(choice);

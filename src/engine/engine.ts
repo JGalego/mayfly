@@ -32,6 +32,8 @@ export interface Engine {
   create(description: string, watch?: Watcher): Promise<AppView>;
   /** Has the model change an app as asked. An attempt that passes replaces the running one at the same URL. Every attempt is kept. */
   change(name: string, request: string, watch?: Watcher): Promise<AppView>;
+  /** Runs an earlier version that passed again, at the same URL. The next change starts from it, so history branches rather than being lost. */
+  restore(name: string, version: string, watch?: Watcher): Promise<AppView>;
   /** The code of one version of an app. */
   code(name: string, version: string): Promise<string>;
   list(): Promise<AppView[]>;
@@ -94,6 +96,26 @@ export function createEngine({ store, deployer, identity, model, builder }: Port
       const base = runningVersion(app) ?? app.versions.findLast((version) => version.routes !== "");
       const generation = await generate({ change: request, app: { name, routes: base?.routes ?? "" } }, watch);
       return record(request, generation, base?.id ?? null, started, watch);
+    },
+
+    async restore(name, id, watch = UNWATCHED) {
+      const started = Date.now();
+      const state = withOwner(await store.load());
+      const app = existingApp(state, name);
+      const version = findVersion(app, id);
+      if (version?.problem !== null) throw new Error(`${name} has no version ${id} that passed`);
+      // It passed its trial when it was made, on the same runtime, so it is built again but not tried again.
+      watch({ kind: "building" });
+      const image = await builder.build(name, version.routes);
+      const note = `Back to the version made for “${version.request}”. Ask for a change to carry on from here.`;
+      const conversation: Turn[] = [{ from: "person", text: `Go back to version ${id}` }, { from: "mayfly", text: note, versions: [], took: Date.now() - started }];
+      const next: App = { ...app, head: id, conversation: [...app.conversation, ...conversation] };
+      const nextState = withApp(state, next);
+      watch({ kind: "deploying" });
+      await identity.sync(nextState);
+      await deployer.deploy(appObjects(next, image, identity.settingsFor(next)));
+      await store.save(nextState);
+      return appView(next);
     },
 
     async code(name, id) {
