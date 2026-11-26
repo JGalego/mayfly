@@ -81,6 +81,8 @@ function historyRow(app: AppView, row: GraphRow, width: number, picked: boolean,
   );
   item.type = "button";
   item.title = `${STATUS[status]}, by ${version.by.name}`;
+  // Said in words, not the marks: "c3: Greet people by their first name. Passed, 25 minutes ago".
+  item.setAttribute("aria-label", `${version.id}: ${version.request === "" ? "No request" : version.request}. ${STATUS[status]}, ${when(version.at)}`);
   item.setAttribute("aria-pressed", String(picked));
   item.addEventListener("click", () => pick(version.id));
   return h("li", `history-row ${status}${picked ? " picked" : ""}`, lanes(row, width), item);
@@ -132,7 +134,10 @@ function statusOf(app: AppView, version: VersionView): Status {
 function lanes({ lanes, tip, root }: GraphRow, width: number): HTMLElement {
   const cells = Array.from({ length: width }, (_, index): Lane => lanes[index] ?? "empty");
   const across = connection(cells);
-  return h("span", "graph", ...cells.map((lane) => h("span", lane === "dot" ? `lane dot${tip ? " tip" : ""}${root ? " root" : ""}` : `lane ${lane}`)), ...(across === undefined ? [] : [acrossBar(across)]));
+  const drawn = h("span", "graph", ...cells.map((lane) => h("span", lane === "dot" ? `lane dot${tip ? " tip" : ""}${root ? " root" : ""}` : `lane ${lane}`)), ...(across === undefined ? [] : [acrossBar(across)]));
+  // Only a picture of how versions branch; the row's label says what matters.
+  drawn.setAttribute("aria-hidden", "true");
+  return drawn;
 }
 
 /** The line across a row, from the lane of one end to the lane of the other. */

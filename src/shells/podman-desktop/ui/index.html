@@ -63,12 +63,12 @@
             <ul id="examples" aria-label="Examples"></ul>
           </section>
           <ol id="turns"></ol>
-          <div id="history" hidden></div>
-          <div id="logs-tab" hidden>
+          <div id="history" role="tabpanel" aria-labelledby="tab-history" hidden></div>
+          <div id="logs-tab" role="tabpanel" aria-labelledby="tab-logs" hidden>
             <ul id="app-health" class="health-list"></ul>
             <div id="app-logs"></div>
           </div>
-          <div id="code-tab" hidden>
+          <div id="code-tab" role="tabpanel" aria-labelledby="tab-code" hidden>
             <div id="code-reading">
               <div class="code-head">
                 <p id="code-caption" class="quiet"></p>
@@ -136,7 +136,7 @@
         </div>
       </header>
       <div id="settings-body">
-        <div id="settings-general-tab" class="settings-page">
+        <div id="settings-general-tab" class="settings-page" role="tabpanel" aria-labelledby="settings-tab-general">
           <section>
             <div class="section-head">
               <h2>Setup checks</h2>
@@ -163,7 +163,7 @@
             <p class="quiet">Runs when Podman Desktop starts.</p>
           </section>
         </div>
-        <div id="settings-models-tab" class="settings-page">
+        <div id="settings-models-tab" class="settings-page" role="tabpanel" aria-labelledby="settings-tab-models">
           <section>
             <ul id="model-list" class="model-list"></ul>
             <button id="add-model" class="quiet-button add-model" type="button">+ Add a model</button>
@@ -185,7 +185,7 @@
             </form>
           </section>
         </div>
-        <div id="settings-logs-tab" class="settings-page">
+        <div id="settings-logs-tab" class="settings-page" role="tabpanel" aria-labelledby="settings-tab-logs">
           <section>
             <div class="section-head">
               <h2>Health</h2>
@@ -195,7 +195,7 @@
           </section>
           <div id="settings-logs"></div>
         </div>
-        <div id="settings-usage-tab" class="settings-page">
+        <div id="settings-usage-tab" class="settings-page" role="tabpanel" aria-labelledby="settings-tab-usage">
           <section>
             <div id="ledger"></div>
           </section>

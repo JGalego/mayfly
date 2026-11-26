@@ -8,6 +8,7 @@ import { changes, codeView } from "./code.ts";
 import { codeEditor } from "./editor.ts";
 import { findBar } from "./find-bar.ts";
 import { threadFind } from "./thread-find.ts";
+import { chooseTab, keyboardTabs } from "./tabs.ts";
 import { commandMenu } from "./command-menu.ts";
 import { parse, suggestions, type Command } from "./commands.ts";
 import { nameChip, withChips } from "./chips.ts";
@@ -154,6 +155,8 @@ document.addEventListener("keydown", (event) => {
 // The extension notifies about work that ends while the page lacks the focus, as when Podman Desktop is in the background.
 window.addEventListener("focus", () => post({ type: "focus", on: true }));
 window.addEventListener("blur", () => post({ type: "focus", on: false }));
+keyboardTabs(element("app-tabs"));
+keyboardTabs(element("settings-tabs"));
 const appFilter = element<HTMLInputElement>("app-filter");
 appFilter.addEventListener("input", () => state !== undefined && renderSidebar(state));
 appFilter.addEventListener("keydown", (event) => {
@@ -671,7 +674,7 @@ function renderSettings(current: State, wanted: SettingsTab): void {
   const tab = current.developer || !DEVELOPER_TABS.includes(wanted) ? wanted : "general";
   for (const name of SETTINGS_TABS) {
     element(`settings-tab-${name}`).hidden = !current.developer && DEVELOPER_TABS.includes(name);
-    element(`settings-tab-${name}`).setAttribute("aria-selected", String(tab === name));
+    chooseTab(element(`settings-tab-${name}`), tab === name);
     element(`settings-${name}-tab`).hidden = tab !== name;
   }
   renderModels(current, examination?.models, post, () => render());
@@ -703,6 +706,8 @@ function appItem(app: AppView, { colour, meaning }: Light): HTMLLIElement {
   control.type = "button";
   control.className = "nav-item";
   control.title = meaning;
+  // The light's meaning is part of the app's name for screen readers, as a label inside a button is not read.
+  control.setAttribute("aria-label", `${app.name}, ${meaning}`);
   const light = h("span", `light ${colour}`);
   light.setAttribute("aria-label", meaning);
   control.append(light, h("span", "app-name", app.name));
@@ -762,7 +767,7 @@ function renderChat(state: State, app: AppView | undefined): void {
   conversationFind.mark();
   element("history").hidden = tab !== "history";
   renderHistory(tab === "history" ? app : undefined, showing, state.working === null);
-  for (const name of ["chat", "history", "code", "logs"] as const) element(`tab-${name}`).setAttribute("aria-selected", String(tab === name));
+  for (const name of ["chat", "history", "code", "logs"] as const) chooseTab(element(`tab-${name}`), tab === name);
   element("logs-tab").hidden = tab !== "logs";
   if (tab === "logs" && app !== undefined) renderAppLogs(app);
   else appLogsShown = undefined;
