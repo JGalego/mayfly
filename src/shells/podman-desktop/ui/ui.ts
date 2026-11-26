@@ -699,7 +699,6 @@ function renderChat(state: State, app: AppView | undefined): void {
   element("app-tabs").hidden = !state.developer;
   element("code-tab").hidden = tab !== "code";
   if (tab === "code" && app !== undefined) renderCode(app, showing);
-  element("history-label").textContent = `History · ${app?.versions.length ?? 0}`;
   if (following && tab === "chat") scrollToEnd(thread);
   for (const live of document.querySelectorAll<HTMLElement>(".live")) scrollToEnd(live);
   request.placeholder = app === undefined ? "Describe the app you need" : "Ask for a change, or type / for commands";
