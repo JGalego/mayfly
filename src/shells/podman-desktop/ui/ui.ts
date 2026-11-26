@@ -18,7 +18,7 @@ import { logViewer } from "./logs.ts";
 import { historyView, versionPanel } from "./history.ts";
 import { addIcons, icon } from "./icons.ts";
 import { renderStatusbar, setUpStatusbar } from "./statusbar.ts";
-import { renderModels, savedModel, setUpModels } from "./models.ts";
+import { openForm, renderModels, savedModel, setUpModels } from "./models.ts";
 import { popover } from "./popover.ts";
 import { makingOf, progressView, tickClocks, whatChanged, type Showing } from "./progress.ts";
 
@@ -128,6 +128,11 @@ element("new-app").addEventListener("click", () => go({ kind: "new" }));
 element("show-settings").addEventListener("click", () => go({ kind: "settings", tab: "general" }));
 for (const tab of SETTINGS_TABS) element(`settings-tab-${tab}`).addEventListener("click", () => go({ kind: "settings", tab }));
 element("open-app").addEventListener("click", openApp);
+element("add-key").addEventListener("click", () => {
+  const model = state === undefined ? undefined : activeModel(state, undefined);
+  go({ kind: "settings", tab: "models" });
+  openForm(model);
+});
 element("start-app").addEventListener("click", () => view.kind === "app" && startWork({ type: "start", app: view.name }));
 element("tab-chat").addEventListener("click", () => showTab("chat"));
 element("tab-history").addEventListener("click", () => showTab("history"));
@@ -690,6 +695,10 @@ function renderChat(state: State, app: AppView | undefined): void {
   for (const tab of element("app-tabs").querySelectorAll("button")) tab.disabled = removing;
   const failure = failed !== undefined && failed.app === (app?.name ?? null) && working === null ? [turn("mayfly", h("p", "failure", failed.text))] : [];
   element("welcome").hidden = app !== undefined || working !== null || failure.length > 0;
+  // A nudge, not a gate: OpenAI always wants a key, while a compatible endpoint, like a local model, may need none.
+  const model = activeModel(state, app);
+  element("key-hint").hidden = app !== undefined || model?.provider !== "openai" || model.hasApiKey;
+  element("key-hint-text").textContent = `${model?.label ?? "This model"} needs an API key.`;
   const turns = [...(app?.conversation ?? []), ...(working === null ? [] : [{ from: "person", text: working.request, at: working.since } as const])];
   const showing = showingFor(state);
   const items = turns.map((said) => turnItem(said, app === undefined ? [] : madeOf(said, app, showing)));

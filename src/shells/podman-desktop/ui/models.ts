@@ -38,7 +38,7 @@ export function setUpModels(post: (message: FromUi) => void, redraw: () => void)
 }
 
 /** Opens the form on a model, or on a new one. */
-function openForm(model: ModelView | undefined): void {
+export function openForm(model: ModelView | undefined): void {
   editing = model?.id ?? "";
   provider.value = model?.provider ?? "openai";
   endpoint.value = model?.baseUrl ?? "";
