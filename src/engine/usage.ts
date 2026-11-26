@@ -13,9 +13,10 @@ export function addUsage(a: Usage, b: Usage): Usage {
   return { input: a.input + b.input, output: a.output + b.output, thinking: a.thinking + b.thinking };
 }
 
-/** What one call to a model spent, and when it ended. */
+/** What one call to a model spent, when it ended and how long it took. */
 export interface Spending {
   readonly at: number;
+  readonly took: number;
   readonly spent: Usage;
 }
 
@@ -26,8 +27,9 @@ export function metered(model: ModelProvider): { readonly model: ModelProvider; 
     model: {
       ...model,
       async complete(system, messages, listener) {
+        const started = Date.now();
         const completion = await model.complete(system, messages, listener);
-        spending.push({ at: Date.now(), spent: completion.usage });
+        spending.push({ at: Date.now(), took: Date.now() - started, spent: completion.usage });
         return completion;
       },
     },

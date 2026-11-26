@@ -1,8 +1,9 @@
 import type { ModelCall } from "../../../engine/state.ts";
-import { addUsage, NO_USAGE, type Usage } from "../../../engine/usage.ts";
+import { addUsage, type Usage } from "../../../engine/usage.ts";
+import { barChart, legend, type Column, type Series } from "./bar-chart.ts";
 import { h } from "./dom.ts";
-import { compact } from "./format.ts";
-import { groupsOf, periodsOf, spanStart, ticksFor, totalOf, UNNAMED, unrecorded, type Grain, type GroupBy, type Period, type Span } from "./ledger.ts";
+import { choicesOf, filtered, groupsOf, periodsOf, spanStart, tallyOf, totalOf, UNNAMED, unrecorded, type Filter, type Grain, type GroupBy, type Period, type Span, type Tally } from "./ledger.ts";
+import { elapsed } from "./stages.ts";
 
 const SPANS: readonly [string, string, Span][] = [
   ["days", "Last 14 days", { grain: "day", periods: 14 }],
@@ -17,12 +18,25 @@ const GROUPINGS: readonly [GroupBy, string][] = [
   ["app", "By app"],
 ];
 
-// Bottom to top in each column, and in the legend's order.
-const SERIES: readonly [keyof Usage, string][] = [
-  ["input", "Tokens in"],
-  ["output", "Tokens out"],
-  ["thinking", "Thinking"],
+const FILTERS: readonly [GroupBy, string][] = [
+  ["app", "All apps"],
+  ["model", "All models"],
+  ["provider", "All providers"],
 ];
+
+// Bottom to top in each column, and in the legend's order.
+const TOKENS: readonly Series[] = [
+  { key: "input", name: "Tokens in" },
+  { key: "output", name: "Tokens out" },
+  { key: "thinking", name: "Thinking" },
+];
+
+const OUTCOMES: readonly Series[] = [
+  { key: "passed", name: "Passed" },
+  { key: "failed", name: "Failed" },
+];
+
+const COLUMNS = ["Calls", "In", "Out", "Thinking", "Total", "Passed", "Median time"];
 
 /** What the page knows that the ledger does not: everything spent, and the apps that still exist. */
 export interface Context {
@@ -36,20 +50,24 @@ export interface LedgerView {
   show(calls: readonly ModelCall[] | undefined, context: Context): void;
 }
 
-/** What the models spent and when: a span and a grouping to pick, a column per period, and the same as tables. */
+/** How the models did and when: a span and the calls to look at, then charts of their tokens and attempts, and the same as tables. */
 export function ledgerView(): LedgerView {
   const span = picker(SPANS.map(([value, label]) => [value, label]), "days", "How far back");
+  const filters = Object.fromEntries(FILTERS.map(([key, all]) => [key, picker([["", all]], "", all)])) as Record<GroupBy, HTMLSelectElement>;
   const grouping = picker(GROUPINGS, "model", "Group by");
   const body = h("div", "ledger-body");
   let shown: { calls: readonly ModelCall[] | undefined; context: Context; key: string } | undefined;
   const render = (): void => {
     if (shown === undefined) return;
+    if (shown.calls === undefined) return void body.replaceChildren(h("p", "quiet", "Fetching…"));
+    offer(filters, choicesOf(shown.calls));
     const chosen = SPANS.find(([value]) => value === span.value)?.[2] ?? { grain: "day", periods: 14 };
-    body.replaceChildren(...(shown.calls === undefined ? [h("p", "quiet", "Fetching…")] : ledgerBody(shown.calls, shown.context, chosen, grouping.value as GroupBy)));
+    const filter: Filter = { app: filters.app.value, model: filters.model.value, provider: filters.provider.value };
+    body.replaceChildren(...ledgerBody(shown.calls, shown.context, chosen, filter, grouping));
   };
-  for (const control of [span, grouping]) control.addEventListener("change", render);
+  for (const control of [span, grouping, ...Object.values(filters)]) control.addEventListener("change", render);
   return {
-    element: h("div", "ledger", h("div", "log-controls", span, grouping), body),
+    element: h("div", "ledger", h("div", "log-controls", span, ...Object.values(filters)), body),
     show(calls, context) {
       const key = JSON.stringify([calls?.length, context]);
       if (shown !== undefined && shown.calls === calls && shown.key === key) return;
@@ -59,99 +77,88 @@ export function ledgerView(): LedgerView {
   };
 }
 
-function ledgerBody(calls: readonly ModelCall[], context: Context, span: Span, by: GroupBy): Node[] {
+/** Each filter offers what the calls name, keeping what was picked while there is still such a call. */
+function offer(filters: Record<GroupBy, HTMLSelectElement>, choices: Record<GroupBy, string[]>): void {
+  for (const [key, all] of FILTERS) {
+    const field = filters[key];
+    const kept = choices[key].includes(field.value) ? field.value : "";
+    field.replaceChildren(new Option(all, ""), ...choices[key].map((name) => new Option(name, name)));
+    field.value = kept;
+  }
+}
+
+function ledgerBody(every: readonly ModelCall[], context: Context, span: Span, filter: Filter, grouping: HTMLSelectElement): Node[] {
   const now = new Date();
-  const from = spanStart(span, calls, now);
-  const periods = periodsOf(calls, span.grain, from, now);
+  const from = spanStart(span, every, now);
+  const calls = filtered(every, filter);
   const since = span.periods === "all" ? 0 : from.getTime();
   const inSpan = calls.filter((call) => call.at >= since);
-  const spent = sum(inSpan.map((call) => call.spent));
   if (inSpan.length === 0) return [h("p", "quiet", "No calls to a model in this time.")];
-  const missing = span.periods === "all" ? unrecorded(context.spent, calls) : undefined;
-  return [legend(spent, inSpan.length), chart(periods, span.grain), groupTable(inSpan, by, context.apps, since, missing), periodTable(periods, span.grain)];
+  const periods = periodsOf(calls, span.grain, from, now);
+  const unfiltered = Object.values(filter).every((value) => value === "");
+  // What the ledger has no record of belongs to no app, model or provider it can name.
+  const missing = span.periods === "all" && unfiltered ? unrecorded(context.spent, every) : undefined;
+  return [
+    h("h3", "usage-heading", "Tokens"),
+    ...tokens(periods, span.grain, inSpan),
+    h("h3", "usage-heading", "Attempts"),
+    h("p", "quiet", "Whether the code each call wrote passed its trial."),
+    ...attempts(periods, span.grain, inSpan),
+    h("div", "usage-heading table-head", h("h3", "", "Totals"), grouping),
+    groupTable(inSpan, grouping.value as GroupBy, context.apps, missing),
+    periodTable(periods, span.grain),
+  ];
 }
 
-/** Which colour is which, with each one's total, so the legend doubles as the summary. */
-function legend(spent: Usage, calls: number): HTMLElement {
-  const items = SERIES.map(([key, label]) => h("span", "legend-item", h("span", `swatch series-${key}`), `${label} `, h("strong", "", compact(spent[key]))));
-  return h("p", "usage-legend", ...items, h("span", "quiet", `${calls.toLocaleString()} ${calls === 1 ? "call" : "calls"}`));
+function tokens(periods: readonly Period[], grain: Grain, calls: readonly ModelCall[]): Node[] {
+  const { spent } = tallyOf(calls);
+  const count = `${calls.length.toLocaleString()} ${calls.length === 1 ? "call" : "calls"}`;
+  return [legend(TOKENS, [spent.input, spent.output, spent.thinking], count), barChart(columnsOf(periods, grain, ({ spent: used }) => [used.input, used.output, used.thinking]), TOKENS)];
 }
 
-/** A column per period, its tokens stacked in, out and thinking, with round ticks behind and a readout on hover or focus. */
-function chart(periods: readonly Period[], grain: Grain): HTMLElement {
-  const ticks = ticksFor(Math.max(...periods.map((period) => totalOf(period.spent))));
-  const top = ticks.at(-1) ?? 1;
-  const readout = h("div", "usage-readout");
-  readout.hidden = true;
-  const grid = ticks.map((tick) => {
-    const line = h("div", "usage-grid", h("span", "usage-tick", compact(tick)));
-    line.style.bottom = `${(tick / top) * 100}%`;
-    return line;
-  });
+function attempts(periods: readonly Period[], grain: Grain, calls: readonly ModelCall[]): Node[] {
+  const { passed, failed } = tallyOf(calls);
+  const known = passed + failed;
+  if (known === 0) return [h("p", "quiet", "No call in this time has a known outcome.")];
+  const unknown = calls.length - known;
+  const notes = [`${Math.round((passed / known) * 100)}% passed`, ...(unknown === 0 ? [] : [`${unknown.toLocaleString()} more with no known outcome`])];
+  return [legend(OUTCOMES, [passed, failed], notes.join(" · ")), barChart(columnsOf(periods, grain, (period) => [period.passed, period.failed]), OUTCOMES, { counts: true })];
+}
+
+// Labels under at most seven columns, so they never run into each other.
+function columnsOf(periods: readonly Period[], grain: Grain, values: (period: Period) => number[]): Column[] {
   const every = Math.ceil(periods.length / 7);
-  const slots = periods.map((period, at) => slot(period, grain, top, at % every === 0 ? shortLabel(period.start, grain) : "", readout));
-  return h("div", "usage-chart", h("div", "usage-plot", ...grid, h("div", "usage-columns", ...slots), readout));
+  return periods.map((period, at) => ({ label: at % every === 0 ? shortLabel(period.start, grain) : "", title: longLabel(period.start, grain), values: values(period) }));
 }
 
-/** One period's column. The whole slot, not just the column, takes the pointer and the focus. */
-function slot(period: Period, grain: Grain, top: number, label: string, readout: HTMLElement): HTMLElement {
-  const segments = SERIES.filter(([key]) => period.spent[key] > 0).map(([key]) => {
-    const segment = h("div", `usage-segment series-${key}`);
-    segment.style.flexGrow = String(period.spent[key]);
-    return segment;
-  });
-  const column = h("div", "usage-column", ...segments);
-  column.style.height = `${(totalOf(period.spent) / top) * 100}%`;
-  const place = h("div", "usage-slot", h("div", "usage-bar", column), h("span", "usage-label", label));
-  place.tabIndex = 0;
-  place.setAttribute("aria-label", `${longLabel(period.start, grain)}: ${SERIES.map(([key, name]) => `${period.spent[key].toLocaleString()} ${name.toLowerCase()}`).join(", ")}`);
-  const open = (): void => {
-    readout.replaceChildren(h("p", "readout-title", longLabel(period.start, grain)), ...SERIES.map(([key, name]) => readoutRow(key, name, period.spent[key])));
-    readout.hidden = false;
-    // Over the column, but never past the chart's edges.
-    const half = readout.offsetWidth / 2;
-    const centre = place.offsetLeft + place.offsetWidth / 2;
-    readout.style.left = `${Math.min(Math.max(centre, half), (readout.parentElement?.clientWidth ?? 0) - half)}px`;
-  };
-  const close = (): void => void (readout.hidden = true);
-  place.addEventListener("pointerenter", open);
-  place.addEventListener("focus", open);
-  place.addEventListener("pointerleave", close);
-  place.addEventListener("blur", close);
-  return place;
-}
-
-// The value leads; a short stroke of the series' colour says which.
-function readoutRow(key: keyof Usage, name: string, value: number): HTMLElement {
-  return h("p", "readout-row", h("span", `line-key series-${key}`), h("strong", "", compact(value)), ` ${name.toLowerCase()}`);
-}
-
-/** The span's spending by model, provider or app, with the total and, for all time, what the ledger has no record of. */
-function groupTable(calls: readonly ModelCall[], by: GroupBy, apps: readonly string[], since: number, missing?: Usage): HTMLElement {
-  const groups = groupsOf(calls, by, since);
+/** The span's calls by model, provider or app, with the total and, for all time, what the ledger has no record of. */
+function groupTable(calls: readonly ModelCall[], by: GroupBy, apps: readonly string[], missing?: Usage): HTMLElement {
+  const groups = groupsOf(calls, by, 0);
   const removed = (name: string): boolean => by === "app" && name !== UNNAMED && !apps.includes(name);
-  const rows = groups.map(({ name, spent: used, calls: count }) => usageRow(removed(name) ? `${name} · removed` : name, used, count, ""));
-  const all = sum(groups.map((group) => group.spent));
-  if (missing !== undefined && totalOf(missing) > 0) rows.push(usageRow("Not in the ledger: apps removed or requests cut short before it was kept", missing, undefined, "quiet"));
-  const total = missing === undefined ? all : addUsage(all, missing);
-  const head = h("tr", "", ...["", "Calls", "In", "Out", "Thinking", "Total"].map((title) => h("th", "", title)));
-  return h("table", "usage-table", h("thead", "", head), h("tbody", "", ...rows, usageRow("Total", total, groups.reduce((n, group) => n + group.calls, 0), "total")));
+  const rows = groups.map((group) => usageRow(removed(group.name) ? `${group.name} · removed` : group.name, group, ""));
+  const total = tallyOf(calls);
+  if (missing === undefined || totalOf(missing) === 0) return table("", [...rows, usageRow("Total", total, "total")]);
+  rows.push(usageRow("Not in the ledger: apps removed or requests cut short before it was kept", { spent: missing }, "quiet"));
+  return table("", [...rows, usageRow("Total", { ...total, spent: addUsage(total.spent, missing) }, "total")]);
 }
 
-/** The chart's numbers, for reading without hovering. */
+/** The charts' numbers, for reading without hovering. */
 function periodTable(periods: readonly Period[], grain: Grain): HTMLElement {
-  const rows = periods.filter((period) => period.calls > 0).map((period) => usageRow(longLabel(period.start, grain), period.spent, period.calls, ""));
-  const head = h("tr", "", ...[grain === "day" ? "Day" : grain === "week" ? "Week" : "Month", "Calls", "In", "Out", "Thinking", "Total"].map((title) => h("th", "", title)));
-  return h("details", "code", h("summary", "", `The numbers by ${grain}`), h("table", "usage-table", h("thead", "", head), h("tbody", "", ...rows)));
+  const rows = periods.filter((period) => period.calls > 0).map((period) => usageRow(longLabel(period.start, grain), period, ""));
+  return h("details", "code", h("summary", "", `The numbers by ${grain}`), table(grain === "day" ? "Day" : grain === "week" ? "Week" : "Month", rows));
 }
 
-function usageRow(name: string, spent: Usage, calls: number | undefined, className: string): HTMLTableRowElement {
-  const numbers = [calls, spent.input, spent.output, spent.thinking, totalOf(spent)].map((value) => h("td", "number", value === undefined ? "" : value.toLocaleString()));
-  return h("tr", className, h("td", "", name), ...numbers);
+function table(first: string, rows: readonly HTMLTableRowElement[]): HTMLTableElement {
+  const head = h("tr", "", ...[first, ...COLUMNS].map((title) => h("th", "", title)));
+  return h("table", "usage-table", h("thead", "", head), h("tbody", "", ...rows));
 }
 
-function sum(usages: readonly Usage[]): Usage {
-  return usages.reduce(addUsage, NO_USAGE);
+/** A row of the tables. Passes count only calls whose outcome is known, and the time is the middle one, as a clock reads. */
+function usageRow(name: string, tally: Partial<Tally> & Pick<Tally, "spent">, className: string): HTMLTableRowElement {
+  const { spent, calls, passed = 0, failed = 0, took = null } = tally;
+  const known = passed + failed;
+  const cells = [calls?.toLocaleString() ?? "", ...[spent.input, spent.output, spent.thinking, totalOf(spent)].map((n) => n.toLocaleString()), known === 0 ? "" : `${passed} of ${known}`, took === null ? "" : elapsed(0, took)];
+  return h("tr", className, h("td", "", name), ...cells.map((cell) => h("td", "number", cell)));
 }
 
 function shortLabel(start: Date, grain: Grain): string {

@@ -7,6 +7,7 @@ const circle = (cx: number, cy: number, r: number): Shape => ["circle", { cx, cy
 // One style for every icon: lines 2 points wide with round ends, in the colour of the text beside them.
 const ICONS = {
   bot: [["rect", { x: 4, y: 8, width: 16, height: 12, rx: 3 }], path("M12 8V4"), circle(12, 3, 1), path("M9 13v2M15 13v2")],
+  chart: [path("M4 20h16M7 16v-4M12 16V6M17 16v-7")],
   check: [path("M5 12.5l4.5 4.5L19 7")],
   close: [path("M6 6l12 12M18 6L6 18")],
   code: [path("M8 7l-5 5 5 5M16 7l5 5-5 5")],

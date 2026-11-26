@@ -63,9 +63,11 @@ export interface App {
   readonly spent: Usage;
 }
 
-/** One call to a model: when it ended, for which app, to which model, and what it spent. Kept when the app is removed. */
+/** One call to a model: when it ended, for which app, to which model, what it spent and how it went. Kept when the app is removed. */
 export interface ModelCall {
   readonly at: number;
+  /** How long it took, in milliseconds. Calls kept before Mayfly timed them have none. */
+  readonly took?: number;
   /** The app it was for, or null for a new app that never got a name. */
   readonly app: string | null;
   /** Who provides the model, such as "OpenAI" or "localhost:11434". */
@@ -73,6 +75,8 @@ export interface ModelCall {
   /** The model as people know it, such as "OpenAI · gpt-6.2-sol". */
   readonly model: string;
   readonly spent: Usage;
+  /** Whether the code it wrote passed its trial. Unknown when the work was cut short, or the version it made is gone. */
+  readonly passed?: boolean;
 }
 
 export interface State {

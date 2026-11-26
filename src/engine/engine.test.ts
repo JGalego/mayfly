@@ -215,7 +215,7 @@ describe("the engine", () => {
     assert.deepEqual(await engine.spent(), { input: 400, output: 80, thinking: 0 });
   });
 
-  it("keeps a ledger of every call to a model: when, for which app, to whom, and what it spent, removed apps' too", async () => {
+  it("keeps a ledger of every call to a model: when, how long, for which app, to whom, what it spent and whether its code passed, removed apps' too", async () => {
     const { engine } = setUp([reply("lunch"), reply("lunch"), reply("lunch")], [crashed, { ok: true }, { ok: true }]);
     const before = Date.now();
     await engine.create("split lunch bills");
@@ -225,10 +225,11 @@ describe("the engine", () => {
 
     const calls = await engine.ledger();
     assert.deepEqual(
-      calls.map(({ app, provider, model, spent }) => ({ app, provider, model, spent })),
-      Array.from({ length: 3 }, () => ({ app: "lunch", provider: "the test provider", model: "the test model", spent: COST })),
+      calls.map(({ app, provider, model, spent, passed }) => ({ app, provider, model, spent, passed })),
+      [false, true, true].map((passed) => ({ app: "lunch", provider: "the test provider", model: "the test model", spent: COST, passed })),
     );
     assert.ok(calls.every((call) => call.at >= before && call.at <= Date.now()));
+    assert.ok(calls.every((call) => call.took !== undefined && call.took >= 0 && call.took <= call.at - before));
   });
 
   it("says when it starts the app, after the model's code passed its trial", async () => {

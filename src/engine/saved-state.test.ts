@@ -49,7 +49,23 @@ describe("upgradeState", () => {
 
     const { calls } = upgradeState({ owner, apps: [lunch] });
 
-    assert.deepEqual(calls, [{ at: 5, app: "lunch", provider: "OpenAI", model: "OpenAI · gpt-6.2-sol", spent: counted }]);
+    assert.deepEqual(calls, [{ at: 5, app: "lunch", provider: "OpenAI", model: "OpenAI · gpt-6.2-sol", spent: counted, passed: false }]);
+  });
+
+  it("gives calls kept before their outcome was noted the outcome of the version each made, before the app's next call", () => {
+    const version = { parent: null, request: "r", attempt: 1, routes: "", summary: "", spent: counted, by: { kind: "model", name: "m" } };
+    const app = upgradeState({ owner, apps: [unversioned] }).apps[0];
+    const lunch = { ...app, versions: [
+      { ...version, id: "a", at: 12, problem: "boom", image: null },
+      { ...version, id: "b", at: 32, problem: null, image: "i" },
+    ] };
+    const call = { app: "lunch", provider: "p", model: "m", spent: counted };
+    // The first call was cut short and made no version; the call for the removed app's version is gone with it.
+    const calls = [{ ...call, at: 5 }, { ...call, at: 10 }, { ...call, at: 30 }, { ...call, at: 40, app: "gone" }, { ...call, at: 50, passed: true }];
+
+    const upgraded = upgradeState({ owner, apps: [lunch], calls }).calls;
+
+    assert.deepEqual(upgraded.map((c) => c.passed), [undefined, false, true, undefined, true]);
   });
 
   it("leaves a state saved with versions as it is", () => {

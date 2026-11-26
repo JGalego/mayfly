@@ -85,10 +85,15 @@ export interface Engine {
 export function createEngine({ store, deployer, observer, identity, models, builder }: Ports): Engine {
   async function generate(ask: Ask, model: ModelProvider, watch: Watcher): Promise<Generated> {
     const meter = metered(model);
-    const callsFor = (app: string | null): ModelCall[] => meter.spending().map(({ at, spent }) => ({ at, app, provider: model.provider, model: model.name, spent }));
+    // Each attempt is one call, so a call's outcome is its attempt's. Work cut short leaves its calls' outcomes unknown.
+    const callsFor = (app: string | null, attempts: readonly Attempt[] = []): ModelCall[] =>
+      meter.spending().map(({ at, took, spent }, index) => {
+        const attempt = attempts[index];
+        return { at, took, app, provider: model.provider, model: model.name, spent, ...(attempt === undefined ? {} : { passed: attempt.problem === null }) };
+      });
     try {
       const generation = await generateApp(ask, { model: meter.model, builder, watch });
-      return { ...generation, calls: callsFor(generation.name) };
+      return { ...generation, calls: callsFor(generation.name, generation.attempts) };
     } catch (error) {
       // Cut short by the model's service or by Podman, the calls still cost what the model wrote.
       await store.save(charge(await store.load(), callsFor("change" in ask ? ask.app.name : null)));

@@ -26,10 +26,12 @@ type State = Extract<ToUi, { type: "state" }>;
 type View = { readonly kind: "new" } | { readonly kind: "app"; readonly name: string; readonly tab: Tab } | { readonly kind: "settings"; readonly tab: SettingsTab };
 /** An app's conversation, or its history. */
 type Tab = "chat" | "history" | "code" | "logs";
-/** What Mayfly needs and the models, how everything is running, or what the models spent. */
-type SettingsTab = "setup" | "logs" | "tokens";
+/** What Mayfly needs, the models, how everything is running, or how the models did. */
+type SettingsTab = "general" | "models" | "logs" | "usage";
 
-const SETTINGS_TABS: readonly SettingsTab[] = ["setup", "logs", "tokens"];
+const SETTINGS_TABS: readonly SettingsTab[] = ["general", "models", "logs", "usage"];
+// Logs and usage are for developers.
+const DEVELOPER_TABS: readonly SettingsTab[] = ["logs", "usage"];
 
 const TITLES: Record<Exclude<Progress["kind"], "remove">, string> = { create: "Writing your app", change: "Changing your app", restore: "Going back", edit: "Trying your edit" };
 
@@ -101,7 +103,7 @@ element("examples").replaceChildren(...EXAMPLES.map(exampleItem));
 
 window.addEventListener("message", (event: MessageEvent<ToUi>) => receive(event.data));
 element("new-app").addEventListener("click", () => go({ kind: "new" }));
-element("show-settings").addEventListener("click", () => go({ kind: "settings", tab: "setup" }));
+element("show-settings").addEventListener("click", () => go({ kind: "settings", tab: "general" }));
 for (const tab of SETTINGS_TABS) element(`settings-tab-${tab}`).addEventListener("click", () => go({ kind: "settings", tab }));
 element("add-key").addEventListener("click", () => state !== undefined && askForKey(state, shownApp()));
 element("open-app").addEventListener("click", openApp);
@@ -415,7 +417,7 @@ function canWrite(current: State, app: AppView | undefined): boolean {
 
 function askForKey(current: State, app: AppView | undefined): void {
   openForm(activeModel(current, app));
-  go({ kind: "settings", tab: "setup" });
+  go({ kind: "settings", tab: "models" });
 }
 
 // Choosing another model for an app is kept in its conversation; for a new app, it waits for the first message.
@@ -440,10 +442,9 @@ function render(): void {
 }
 
 function renderSettings(current: State, wanted: SettingsTab): void {
-  // Logs and tokens are for developers.
-  const tab = current.developer ? wanted : "setup";
-  element("settings-tabs").hidden = !current.developer;
+  const tab = current.developer || !DEVELOPER_TABS.includes(wanted) ? wanted : "general";
   for (const name of SETTINGS_TABS) {
+    element(`settings-tab-${name}`).hidden = !current.developer && DEVELOPER_TABS.includes(name);
     element(`settings-tab-${name}`).setAttribute("aria-selected", String(tab === name));
     element(`settings-${name}-tab`).hidden = tab !== name;
   }

@@ -1686,7 +1686,7 @@ dialog .editor-actions {
   font-weight: 600;
 }
 
-/* The token ledger. The three hues pass the colour-blind and contrast checks in both themes. */
+/* The usage charts. The three token hues pass the colour-blind and contrast checks in both themes. */
 .series-input {
   background: light-dark(#257de0, #338ced);
 }
@@ -1697,6 +1697,46 @@ dialog .editor-actions {
 
 .series-thinking {
   background: light-dark(#f47230, #e76624);
+}
+
+/* Passed and failed: green and orange, apart enough for colour-blind eyes in both themes, and always named beside them. */
+.series-passed {
+  background: light-dark(#15803d, #41b96a);
+}
+
+.series-failed {
+  background: light-dark(#f18a59, #cf4a22);
+}
+
+/* Usage needs the room: eight columns of numbers, and charts that read better wide. */
+#settings-usage-tab {
+  max-width: 56rem;
+}
+
+.ledger > .log-controls {
+  flex-wrap: nowrap;
+}
+
+.ledger > .log-controls select {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.usage-heading {
+  margin: 1.5rem 0 0.2rem;
+  font-size: 0.95rem;
+}
+
+.table-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.table-head h3 {
+  margin: 0;
+  font-size: inherit;
 }
 
 .usage-legend {
@@ -1719,15 +1759,17 @@ dialog .editor-actions {
   border-radius: 2px;
 }
 
+/* Room under the plot for the labels, as padding so the next heading's margin adds to it. */
 .usage-chart {
   position: relative;
   margin-top: 0.8rem;
+  padding-bottom: 1.6rem;
 }
 
 .usage-plot {
   position: relative;
   height: 160px;
-  margin: 0 0 1.6rem 2.6rem;
+  margin-left: 2.6rem;
 }
 
 .usage-grid {

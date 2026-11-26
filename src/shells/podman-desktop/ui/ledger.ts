@@ -4,24 +4,32 @@ import { addUsage, NO_USAGE, type Usage } from "../../../engine/usage.ts";
 export type Grain = "day" | "week" | "month";
 export type GroupBy = "model" | "provider" | "app";
 
+/** The app, model and provider whose calls to look at, each "" for all of them. */
+export type Filter = Readonly<Record<GroupBy, string>>;
+
 /** How far back to look, and in what steps. All time goes back to the first call, in months. */
 export interface Span {
   readonly grain: Grain;
   readonly periods: number | "all";
 }
 
-/** A day, week or month, and what the calls in it spent. */
-export interface Period {
-  readonly start: Date;
+/** What some calls spent, how many wrote code that passed its trial and how many code that failed, and the middle of the times they took. Calls whose outcome or time is unknown count in neither. */
+export interface Tally {
   readonly spent: Usage;
   readonly calls: number;
+  readonly passed: number;
+  readonly failed: number;
+  readonly took: number | null;
 }
 
-/** A model, provider or app, and what its calls spent. */
-export interface Group {
+/** A day, week or month, and its calls' tally. */
+export interface Period extends Tally {
+  readonly start: Date;
+}
+
+/** A model, provider or app, and its calls' tally. */
+export interface Group extends Tally {
   readonly name: string;
-  readonly spent: Usage;
-  readonly calls: number;
 }
 
 /** What a call made for a new app that failed before it had a name was for. */
@@ -35,27 +43,47 @@ export function spanStart({ grain, periods }: Span, calls: readonly ModelCall[],
 
 /** Each period from the one starting at `from` to the one holding `now`, with what the calls in it spent. */
 export function periodsOf(calls: readonly ModelCall[], grain: Grain, from: Date, now: Date): Period[] {
-  const periods: { start: Date; spent: Usage; calls: number }[] = [];
-  for (let start = from; start <= now; start = step(grain, start, 1)) periods.push({ start, spent: NO_USAGE, calls: 0 });
-  const index = new Map(periods.map((period, at) => [period.start.getTime(), at]));
-  for (const call of calls) {
-    const period = periods[index.get(startOf(grain, new Date(call.at)).getTime()) ?? -1];
-    if (period === undefined) continue;
-    period.spent = addUsage(period.spent, call.spent);
-    period.calls++;
-  }
-  return periods;
+  const starts: Date[] = [];
+  for (let start = from; start <= now; start = step(grain, start, 1)) starts.push(start);
+  const byStart = Map.groupBy(calls, (call) => startOf(grain, new Date(call.at)).getTime());
+  return starts.map((start) => ({ start, ...tallyOf(byStart.get(start.getTime()) ?? []) }));
 }
 
 /** What the calls since a moment spent, by model, provider or app, the most first. */
 export function groupsOf(calls: readonly ModelCall[], by: GroupBy, since: number): Group[] {
-  const groups = new Map<string, { name: string; spent: Usage; calls: number }>();
-  for (const call of calls.filter((call) => call.at >= since)) {
-    const name = by === "app" ? (call.app ?? UNNAMED) : call[by];
-    const group = groups.get(name) ?? { name, spent: NO_USAGE, calls: 0 };
-    groups.set(name, { name, spent: addUsage(group.spent, call.spent), calls: group.calls + 1 });
-  }
-  return [...groups.values()].sort((a, b) => totalOf(b.spent) - totalOf(a.spent));
+  const groups = Map.groupBy(calls.filter((call) => call.at >= since), (call) => nameIn(call, by));
+  return [...groups].map(([name, mine]) => ({ name, ...tallyOf(mine) })).sort((a, b) => totalOf(b.spent) - totalOf(a.spent));
+}
+
+export function tallyOf(calls: readonly ModelCall[]): Tally {
+  const spent = calls.reduce((sum, call) => addUsage(sum, call.spent), NO_USAGE);
+  const passed = calls.filter((call) => call.passed === true).length;
+  const failed = calls.filter((call) => call.passed === false).length;
+  return { spent, calls: calls.length, passed, failed, took: middleOf(calls.flatMap((call) => call.took ?? [])) };
+}
+
+/** The calls for the app, model and provider picked. */
+export function filtered(calls: readonly ModelCall[], filter: Filter): ModelCall[] {
+  const keys = (["app", "model", "provider"] as const).filter((key) => filter[key] !== "");
+  return calls.filter((call) => keys.every((key) => nameIn(call, key) === filter[key]));
+}
+
+/** Every app, model and provider the calls are for, in order, to pick from. */
+export function choicesOf(calls: readonly ModelCall[]): Record<GroupBy, string[]> {
+  const names = (key: GroupBy): string[] => [...new Set(calls.map((call) => nameIn(call, key)))].sort((a, b) => a.localeCompare(b));
+  return { app: names("app"), model: names("model"), provider: names("provider") };
+}
+
+function nameIn(call: ModelCall, key: GroupBy): string {
+  return key === "app" ? (call.app ?? UNNAMED) : call[key];
+}
+
+// The median: one slow call must not make a model look slow.
+function middleOf(values: readonly number[]): number | null {
+  if (values.length === 0) return null;
+  const sorted = values.toSorted((a, b) => a - b);
+  const half = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 1 ? (sorted[half] ?? null) : ((sorted[half - 1] ?? 0) + (sorted[half] ?? 0)) / 2;
 }
 
 /** What was spent that the ledger cannot say where: on apps removed, or requests cut short, before it was kept. */
@@ -69,12 +97,12 @@ export function totalOf({ input, output, thinking }: Usage): number {
   return input + output + thinking;
 }
 
-/** Round steps for an axis that reaches past the largest value: 0, 2,500, 5,000 and so on. */
-export function ticksFor(largest: number): number[] {
+/** Round steps, none smaller than the least, for an axis that reaches past the largest value: 0, 2,500, 5,000 and so on. */
+export function ticksFor(largest: number, least = 0): number[] {
   if (largest <= 0) return [0];
   const rough = largest / 4;
   const magnitude = 10 ** Math.floor(Math.log10(rough));
-  const size = [1, 2, 2.5, 5].map((step) => step * magnitude).find((step) => step >= rough) ?? 10 * magnitude;
+  const size = Math.max(least, [1, 2, 2.5, 5].map((step) => step * magnitude).find((step) => step >= rough) ?? 10 * magnitude);
   return Array.from({ length: Math.ceil(largest / size) + 1 }, (_, at) => at * size);
 }
 

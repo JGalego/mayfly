@@ -17,13 +17,27 @@ export function upgradeState(saved: unknown): State {
   const state = { ...EMPTY_STATE, ...(saved as Partial<State>) };
   const apps = state.apps.map((app) => ("versions" in app ? app : versioned(app as unknown as UnversionedApp))).map(withThinkingCounted);
   const calls = (saved as Partial<State>).calls ?? apps.flatMap(callsOf);
-  return { ...state, spent: counted(state.spent), apps, calls };
+  return { ...state, spent: counted(state.spent), apps, calls: withOutcomes(calls, apps) };
 }
 
 // The ledger starts with the calls that made the versions kept before it. Removed apps' calls were not kept.
 function callsOf(app: App): ModelCall[] {
   const made = app.versions.filter((version) => version.by.kind === "model");
-  return made.map(({ at, by, spent }) => ({ at, app: app.name, provider: providerIn(by.name), model: by.name, spent }));
+  return made.map(({ at, by, spent, problem }) => ({ at, app: app.name, provider: providerIn(by.name), model: by.name, spent, passed: problem === null }));
+}
+
+// A call kept before outcomes were noted takes the outcome of the version its attempt made: the first by its model after the
+// call ended and before the app's next call. A call cut short made none, and a removed app's versions are gone.
+function withOutcomes(calls: readonly ModelCall[], apps: readonly App[]): ModelCall[] {
+  const nextCall = new Map<string | null, number>();
+  const known = calls.toReversed().map((call) => {
+    const before = nextCall.get(call.app) ?? Infinity;
+    nextCall.set(call.app, call.at);
+    if (call.passed !== undefined) return call;
+    const made = apps.find((app) => app.name === call.app)?.versions.find((v) => v.by.kind === "model" && v.by.name === call.model && v.at >= call.at && v.at < before);
+    return made === undefined ? call : { ...call, passed: made.problem === null };
+  });
+  return known.toReversed();
 }
 
 // Versions name their model as people know it, its provider first: "OpenAI · gpt-6.2-sol".
