@@ -48,4 +48,37 @@ describe("inline", () => {
   it("leaves names with underscores, sums with stars and lone marks as they are", () => {
     for (const plain of ["user_name_field", "2 * 3 * 4", "a lone ` mark", "** not bold **"]) assert.deepEqual(inline(plain), [text(plain)], plain);
   });
+
+  it("reads links to web pages, and leaves any other kind of link as text", () => {
+    assert.deepEqual(inline("See [the docs](https://hono.dev/docs) or <https://hono.dev>, not [this](javascript:alert(1))."), [
+      text("See "),
+      { kind: "link", text: "the docs", url: "https://hono.dev/docs" },
+      text(" or "),
+      { kind: "link", text: "https://hono.dev", url: "https://hono.dev" },
+      text(", not [this](javascript:alert(1))."),
+    ]);
+  });
+});
+
+describe("tables and quotes", () => {
+  it("reads a table: its header, the line under it, and its rows", () => {
+    assert.deepEqual(blocks("| Route | Does |\n|---|:--|\n| `/` | home |\n| /bills | **list** |\n\nAfter."), [
+      {
+        kind: "table",
+        head: [[text("Route")], [text("Does")]],
+        rows: [
+          [[{ kind: "code", text: "/" }], [text("home")]],
+          [[text("/bills")], [{ kind: "strong", text: "list" }]],
+        ],
+      },
+      { kind: "paragraph", inline: [text("After.")] },
+    ]);
+  });
+
+  it("reads a quote over the lines that start with >", () => {
+    assert.deepEqual(blocks("> It said\n> this.\nThen that."), [
+      { kind: "quote", inline: [text("It said\nthis.")] },
+      { kind: "paragraph", inline: [text("Then that.")] },
+    ]);
+  });
 });

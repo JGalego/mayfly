@@ -67,6 +67,8 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       return send({ ...request, request: request.request.trim() }, session);
     case "open":
       return open(request.name, session);
+    case "open-link":
+      return openLink(request.url, session);
     case "remove":
       return remove(request.name, session);
     case "copy":
@@ -259,6 +261,13 @@ function problemWithWork(work: Work, session: Session): string | undefined {
   return undefined;
 }
 
+/** Opens a link from a reply in the browser. A model wrote it, so only a web page: nothing that runs or reads a file. */
+async function openLink(url: string, session: Session): Promise<void> {
+  const protocol = URL.canParse(url) ? new URL(url).protocol : "";
+  if (protocol !== "https:" && protocol !== "http:") return void (await session.post({ type: "error", text: "Mayfly opens only links to web pages." }));
+  await session.openExternal(url);
+}
+
 /** Opens an app, or a page of its auth proxy's, at the URL the engine knows. */
 async function open(name: string, session: Session): Promise<void> {
   const app = (await session.engine.list()).find((candidate) => candidate.name === name);
@@ -320,7 +329,7 @@ async function showState(session: Session): Promise<void> {
 // Messages come from the page, so each is checked for its shape before anything acts on it.
 function readRequest(message: unknown): FromUi | undefined {
   if (typeof message !== "object" || message === null) return undefined;
-  const { type, app, request, question, name, apiKey, on, version, what, from, routes, message: words, model, id, pod, container, starred, email } = message as Record<string, unknown>;
+  const { type, app, request, question, name, apiKey, on, version, what, from, routes, message: words, model, id, pod, container, starred, email, url } = message as Record<string, unknown>;
   switch (type) {
     case "ready":
     case "new-password":
@@ -349,6 +358,8 @@ function readRequest(message: unknown): FromUi | undefined {
     case "open":
     case "remove":
       return typeof name === "string" ? { type, name } : undefined;
+    case "open-link":
+      return typeof url === "string" ? { type, url } : undefined;
     case "developer":
     case "autostart":
       return typeof on === "boolean" ? { type, on } : undefined;

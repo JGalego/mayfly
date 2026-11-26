@@ -801,11 +801,16 @@ function renderHistory(app: AppView | undefined, showing: Showing, idle: boolean
   panel.replaceChildren(...versionPanel(app, version, showing, { pick: (id) => pick({ app: app.name, version: id }), close: () => pick(undefined), compare, ...actions }));
 }
 
+// A link in a reply opens in the browser, by way of the extension, which opens only web pages.
+function openLink(url: string): void {
+  post({ type: "open-link", url });
+}
+
 function turnItem(said: Turn, extras: readonly Node[] = []): HTMLLIElement {
   const { from, text, at } = said;
   // Mayfly's replies, and its model's, can be Markdown. What a person typed shows as they typed it.
   const failure = said.from === "mayfly" && said.failed === true;
-  const words = from === "mayfly" ? h("div", failure ? "md failure" : "md", ...markdownView(text)) : h("p", "", ...withChips(text));
+  const words = from === "mayfly" ? h("div", failure ? "md failure" : "md", ...markdownView(text, openLink)) : h("p", "", ...withChips(text));
   // When it was said, for anyone who wants to know.
   if (at !== 0) words.title = new Date(at).toLocaleString();
   return turn(from, h("div", "", words, ...extras));
@@ -828,7 +833,7 @@ function pendingView(working: Progress, showing: Showing): HTMLElement {
   if (working.kind === "remove") return h("p", "", spinner(), " Stopping and removing ", nameChip(working.app ?? ""), "…");
   if (working.kind !== "ask") return progressView(working, TITLES[working.kind], showing);
   const draft = working.steps.findLast((step) => step.kind === "draft");
-  return draft?.kind === "draft" ? h("div", "md", ...markdownView(draft.text)) : h("p", "", spinner(), " Thinking about your question…");
+  return draft?.kind === "draft" ? h("div", "md", ...markdownView(draft.text, openLink)) : h("p", "", spinner(), " Thinking about your question…");
 }
 
 function spinner(): HTMLSpanElement {

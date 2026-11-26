@@ -37,6 +37,8 @@ export type FromUi =
   | { readonly type: "ready" }
   | ({ readonly type: "send" } & Work)
   | { readonly type: "open"; readonly name: string }
+  /** A link in a reply, which the extension opens only if it leads to a web page. */
+  | { readonly type: "open-link"; readonly url: string }
   | { readonly type: "remove"; readonly name: string }
   | { readonly type: "copy"; readonly what: "email" | "password" }
   | { readonly type: "save-model"; readonly model: ModelSetting; readonly apiKey: string }

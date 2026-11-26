@@ -349,6 +349,17 @@ describe("the Mayfly panel's controller", () => {
     assert.deepEqual(opened, [lunch.url]);
   });
 
+  it("opens a link from a reply in the browser, but only to a web page", async () => {
+    const { handle, opened, posted } = setUp({ apps: [] });
+
+    await handle({ type: "open-link", url: "https://hono.dev/docs" });
+    await handle({ type: "open-link", url: "file:///etc/passwd" });
+    await handle({ type: "open-link", url: "javascript:alert(1)" });
+
+    assert.deepEqual(opened, ["https://hono.dev/docs"]);
+    assert.equal(posted.filter((m) => m.type === "error").length, 2);
+  });
+
   it("removes an app, showing it is being removed until it is gone", async () => {
     const { handle, posted, calls } = setUp({ apps: [lunch] });
 

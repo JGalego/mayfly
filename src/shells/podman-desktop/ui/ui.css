@@ -573,6 +573,32 @@ main {
   margin-top: 0.2rem;
 }
 
+.md-quote {
+  margin: 0;
+  padding-left: 0.75rem;
+  border-left: 3px solid var(--line);
+  color: var(--muted);
+  white-space: pre-wrap;
+}
+
+.md-table {
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.md-table th,
+.md-table td {
+  padding: 0.3rem 0.6rem;
+  border: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.md-table th {
+  font-weight: 600;
+  background: var(--hover);
+}
+
 .md > * + * {
   margin-top: 0.5rem;
 }
