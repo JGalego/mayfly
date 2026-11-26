@@ -1,7 +1,11 @@
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 
-/** Builds the stand-in app on the runtime image, which `npm run build:runtime` makes. */
+/** The runtime image `npm run build:runtime` makes. */
+export const RUNTIME_IMAGE = "localhost/mayfly-runtime:dev";
+
+/** Builds the stand-in app on the runtime image. */
 export function buildEchoImage(): string {
   const image = "localhost/mayfly-test-echo:1";
   execFileSync("podman", ["build", "--quiet", "--pull=never", "--tag", image, "test/fixtures/echo-app"]);
@@ -23,4 +27,13 @@ export async function waitUntilUp(url: string): Promise<void> {
 
 export function secret(): string {
   return randomBytes(16).toString("hex");
+}
+
+/** A model reply carrying one of the fixture apps, in the format the prompt asks for. */
+export function replyWith(name: string, fixture: string): string {
+  return `name: ${name}\n\`\`\`ts\n${readFileSync(`test/fixtures/${fixture}/routes.ts`, "utf8")}\`\`\``;
+}
+
+export function removeImages(images: readonly string[]): void {
+  if (images.length > 0) execFileSync("podman", ["rmi", "--force", ...images], { stdio: "ignore" });
 }

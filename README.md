@@ -86,6 +86,17 @@ flowchart LR
   model["OpenAI-compatible model provider<br/>your own key"] -. implements .-> ports
 ```
 
+An app is made from a description. The model writes `routes.ts`, Mayfly builds it on the runtime image and tries it out with no network and no privileges, and any failure goes back to the model, up to three times. Only an app that starts, passes its health check and serves an HTML home page gets deployed.
+
+```mermaid
+flowchart LR
+  d["Description"] --> m["Model<br/>OpenAI-compatible"]
+  m -->|"name + routes.ts"| b["Build<br/>runtime image + routes.ts"]
+  b --> t["Trial run<br/>no network, no privileges"]
+  t -->|"fails: its logs"| m
+  t -->|"passes"| dep["Deploy behind sign-in"]
+```
+
 Each app runs as one pod with two containers: oauth2-proxy and the app. The proxy is the only way in, and you reach it on 127.0.0.1. It signs you in with OIDC, checks your roles against the app's policy and passes the request on with your identity in headers. The app has no port on the host, so it only ever sees people who are signed in and allowed.
 
 ```mermaid
@@ -127,6 +138,7 @@ npm run typecheck
 npm run build:runtime                    # the runtime image every app starts from
 pixi run check-image                     # proves the image meets policy/
 npm run test:integration                 # signs in through Dex to a real app on Podman
+MAYFLY_LIVE=1 npm run test:integration   # also calls the real model from .env, which costs money
 ```
 
 CI runs the hooks, checks every commit message, proves the runtime image, and runs the integration tests on Podman 5.

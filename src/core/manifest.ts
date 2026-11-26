@@ -18,5 +18,9 @@ const IMAGE: Rule = { subject: "app image", pattern: /^\S+$/, description: "an i
 /** Reads untrusted input, keeping only the fields the contract defines. */
 export function parseManifest(value: unknown): Manifest {
   const fields = requireObject(value, "manifest");
-  return { name: requireMatch(fields.name, NAME), image: requireMatch(fields.image, IMAGE) };
+  return { name: parseAppName(fields.name), image: requireMatch(fields.image, IMAGE) };
+}
+
+export function parseAppName(value: unknown): string {
+  return requireMatch(value, NAME);
 }

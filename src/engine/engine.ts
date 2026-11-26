@@ -1,6 +1,7 @@
 import { appUrl } from "../core/app-url.ts";
 import type { Manifest } from "../core/manifest.ts";
 import { appObjects } from "./app-objects.ts";
+import { generateApp } from "./generate.ts";
 import type { Ports } from "./ports.ts";
 import { newPassword, newSecret } from "./secrets.ts";
 import { findApp, withApp, withoutApp, type App, type Owner, type State } from "./state.ts";
@@ -13,6 +14,8 @@ export interface DeployedApp {
 }
 
 export interface Engine {
+  /** Has the model write an app for the description, proves it runs, and deploys it. */
+  create(description: string): Promise<DeployedApp>;
   /** Runs an app behind sign-in, or replaces its running version while keeping its URL and secrets. */
   deploy(manifest: Manifest): Promise<DeployedApp>;
   list(): Promise<DeployedApp[]>;
@@ -21,17 +24,23 @@ export interface Engine {
   owner(): Promise<Owner>;
 }
 
-export function createEngine({ store, deployer, identity }: Ports): Engine {
+export function createEngine({ store, deployer, identity, model, builder }: Ports): Engine {
+  async function deploy(manifest: Manifest): Promise<DeployedApp> {
+    const state = withOwner(await store.load());
+    const app = placeApp(state, manifest);
+    const next = withApp(state, app);
+    await identity.sync(next);
+    await deployer.deploy(appObjects(app, identity.settingsFor(app)));
+    await store.save(next);
+    return deployedApp(app);
+  }
+
   return {
-    async deploy(manifest) {
-      const state = withOwner(await store.load());
-      const app = placeApp(state, manifest);
-      const next = withApp(state, app);
-      await identity.sync(next);
-      await deployer.deploy(appObjects(app, identity.settingsFor(app)));
-      await store.save(next);
-      return deployedApp(app);
+    async create(description) {
+      return deploy(await generateApp(description, { model, builder }));
     },
+
+    deploy,
 
     async list() {
       return (await store.load()).apps.map(deployedApp);

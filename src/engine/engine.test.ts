@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ConfigMap, KubeObject } from "../core/kube.ts";
 import { createEngine } from "./engine.ts";
-import type { Deployer, IdentitySource, StateStore } from "./ports.ts";
+import type { Builder, Deployer, IdentitySource, ModelProvider, StateStore } from "./ports.ts";
 import { EMPTY_STATE, type State } from "./state.ts";
 
 const expenses = { name: "expenses", image: "localhost/mayfly-expenses:1" };
@@ -92,6 +92,15 @@ describe("the engine", () => {
     await assert.rejects(engine.remove("ghost"), /no app named ghost/);
   });
 
+  it("creates an app from a description and deploys it behind sign-in", async () => {
+    const { engine, deployed } = setUp();
+
+    const app = await engine.create("split the team's lunch bills");
+
+    assert.equal(app.name, "lunch");
+    assert.ok(names(deployed[0]).includes("Pod/mayfly-lunch"));
+  });
+
   it("creates the owner once, with a long random password", async () => {
     const { engine } = setUp();
 
@@ -120,7 +129,10 @@ function setUp() {
     sync: async (next) => void (log.push("sync"), synced.push(next)),
     settingsFor: () => ({ OAUTH2_PROXY_CLIENT_ID: "fake" }),
   };
-  return { engine: createEngine({ store, deployer, identity }), deployed, removed, synced, log };
+  const model: ModelProvider = { complete: async () => 'name: lunch\n```ts\nexport default 1;\n```' };
+  const builder: Builder = { build: async (name) => `localhost/mayfly-app-${name}:1`, trial: async () => ({ ok: true }) };
+  const engine = createEngine({ store, deployer, identity, model, builder });
+  return { engine, deployed, removed, synced, log };
 }
 
 function names(objects: readonly KubeObject[] | undefined): string[] {
