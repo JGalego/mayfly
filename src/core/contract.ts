@@ -2,5 +2,6 @@
 
 /** Passed to the app as $PORT. */
 export const APP_PORT = 8080;
-export const HEALTH_PATH = "/healthz";
+/** The runtime image answers its own health check: Node calls the app's /healthz. */
+export const HEALTH_CHECK = ["/usr/bin/node", "/app/runtime/health-check.ts"];
 export const ROLES_CLAIM = "groups";

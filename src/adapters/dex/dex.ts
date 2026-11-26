@@ -2,6 +2,7 @@ import { hash } from "bcryptjs";
 import type { IdpSettings } from "../../core/auth-config-map.ts";
 import { HARDENED, LOOPBACK } from "../../core/hardening.ts";
 import type { KubeObject, Pod, Secret } from "../../core/kube.ts";
+import { execProbe } from "../../core/probe.ts";
 
 // Pinned: v2.45 is the first release that gives static users groups.
 const IMAGE = "ghcr.io/dexidp/dex:v2.46.1";
@@ -83,7 +84,7 @@ function dexPod(): Pod {
           args: ["dex", "serve", "/etc/dex/config.yaml"],
           ports: [{ containerPort: PORT, hostPort: PORT, hostIP: LOOPBACK }],
           volumeMounts: [{ name: "config", mountPath: "/etc/dex", readOnly: true }],
-          livenessProbe: { httpGet: { path: "/dex/healthz", port: PORT } },
+          livenessProbe: execProbe(["wget", "-q", "--spider", `http://127.0.0.1:${PORT}/dex/healthz`]),
           securityContext: HARDENED,
           resources: { limits: { cpu: "100m", memory: "128Mi" } },
         },

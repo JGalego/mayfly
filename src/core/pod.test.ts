@@ -38,8 +38,12 @@ describe("the pod Mayfly runs for an app", () => {
     assert.deepEqual(app.env, [{ name: "PORT", value: "8080" }]);
   });
 
-  it("checks the app's health at /healthz on its own port", () => {
-    assert.deepEqual(app.livenessProbe, { httpGet: { path: "/healthz", port: 8080 } });
+  it("checks the app's health by running the runtime's own check, which needs no shell or curl", () => {
+    assert.deepEqual(app.livenessProbe?.exec.command, ["/usr/bin/node", "/app/runtime/health-check.ts"]);
+  });
+
+  it("gives the proxy no liveness probe, since its image has nothing to run one with", () => {
+    assert.equal(proxy.livenessProbe, undefined);
   });
 
   it("forwards signed-in requests to the app over the pod's loopback", () => {

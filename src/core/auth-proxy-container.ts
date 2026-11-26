@@ -14,7 +14,10 @@ export interface AuthProxyInput {
   readonly hostPort: number;
 }
 
-/** Signs people in, admits only the policy's roles, and passes identity to the app in headers. */
+/**
+ * Signs people in, admits only the policy's roles, and passes identity to the app in headers.
+ * No liveness probe: the image is one binary with nothing to run a probe with. A crash still restarts it.
+ */
 export function buildAuthProxyContainer({ appName, hostPort }: AuthProxyInput): Container {
   return {
     name: "auth-proxy",
@@ -24,7 +27,6 @@ export function buildAuthProxyContainer({ appName, hostPort }: AuthProxyInput): 
     envFrom: [{ configMapRef: { name: authConfigName(appName) } }],
     env: secretEnv(appName),
     ports: [{ containerPort: PORT, hostPort, hostIP: LOOPBACK }],
-    livenessProbe: { httpGet: { path: "/ping", port: PORT } },
     securityContext: HARDENED,
     resources: { limits: { cpu: "100m", memory: "64Mi" } },
   };

@@ -23,7 +23,7 @@ export interface Secret {
 
 export type KubeObject = Pod | ConfigMap | Secret;
 
-/** Every container Mayfly writes is health-checked, hardened and capped. */
+/** Every container Mayfly writes is hardened and capped. */
 export interface Container {
   readonly name: string;
   readonly image: string;
@@ -33,7 +33,7 @@ export interface Container {
   readonly envFrom?: readonly { readonly configMapRef: { readonly name: string } }[];
   readonly ports?: readonly ContainerPort[];
   readonly volumeMounts?: readonly VolumeMount[];
-  readonly livenessProbe: Probe;
+  readonly livenessProbe?: Probe;
   readonly securityContext: SecurityContext;
   readonly resources: { readonly limits: { readonly cpu: string; readonly memory: string } };
 }
@@ -66,7 +66,10 @@ export interface VolumeMount {
 }
 
 export interface Probe {
-  readonly httpGet: { readonly path: string; readonly port: number };
+  readonly exec: { readonly command: readonly string[] };
+  readonly periodSeconds: number;
+  readonly timeoutSeconds: number;
+  readonly failureThreshold: number;
 }
 
 export interface SecurityContext {
