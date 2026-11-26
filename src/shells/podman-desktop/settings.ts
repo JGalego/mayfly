@@ -3,18 +3,42 @@ export const PROVIDERS = { openai: "OpenAI", "openai-compatible": "OpenAI-compat
 
 export type Provider = keyof typeof PROVIDERS;
 
-export interface ModelChoice {
+/** A model Mayfly can write apps with: who provides it, where, and its name there. */
+export interface ModelSetting {
+  readonly id: string;
   readonly provider: Provider;
   /** Used only by an OpenAI-compatible provider. OpenAI's endpoint is fixed. */
   readonly baseUrl: string;
   readonly model: string;
 }
 
+/** Every model the person set up, and the one new apps use. */
+export interface Models {
+  readonly models: readonly ModelSetting[];
+  readonly default: string;
+}
+
 const OPENAI_ENDPOINT = "https://api.openai.com/v1";
 
+const OPENAI: ModelSetting = { id: "openai", provider: "openai", baseUrl: "", model: "gpt-6.2-sol" };
+
+/** What Mayfly starts with: OpenAI's gpt-6.2-sol. */
+export const FIRST_MODELS: Models = { models: [OPENAI], default: OPENAI.id };
+
 /** Where the model's requests go, and so the only place its API key is sent. */
-export function endpointOf(choice: ModelChoice): string {
-  return choice.provider === "openai" ? OPENAI_ENDPOINT : choice.baseUrl;
+export function endpointOf(setting: ModelSetting): string {
+  return setting.provider === "openai" ? OPENAI_ENDPOINT : setting.baseUrl;
+}
+
+/** The model as people know it: "OpenAI · gpt-6.2-sol", or with the server for another provider. */
+export function labelOf({ provider, baseUrl, model }: ModelSetting): string {
+  if (provider === "openai") return `${PROVIDERS.openai} · ${model}`;
+  return `${URL.canParse(baseUrl) ? new URL(baseUrl).host : baseUrl} · ${model}`;
+}
+
+/** The model with this id, or the default one. */
+export function modelFor({ models, default: fallback }: Models, id: string | null): ModelSetting {
+  return models.find((setting) => setting.id === id) ?? models.find((setting) => setting.id === fallback) ?? OPENAI;
 }
 
 export function isProvider(value: unknown): value is Provider {

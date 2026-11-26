@@ -1,11 +1,12 @@
 import type { AppView } from "../../../engine/engine.ts";
 import type { Turn } from "../../../engine/state.ts";
 import type { FromUi, Progress, ToUi, Work } from "../messages.ts";
-import { isProvider, PROVIDERS } from "../settings.ts";
+import type { ModelView } from "../messages.ts";
 import { h, keepTime } from "./dom.ts";
 import { tokens } from "./format.ts";
 import { codeView } from "./code.ts";
 import { historyView } from "./history.ts";
+import { openForm, renderModels, savedModel, setUpModels } from "./models.ts";
 import { makingOf, progressView, tickClocks, whatChanged, type Showing } from "./progress.ts";
 
 // Podman Desktop puts this function on every webview page, to send messages to the extension.
@@ -34,10 +35,7 @@ const EXAMPLES = [
 
 const podmanDesktop = acquirePodmanDesktopApi();
 const request = element<HTMLTextAreaElement>("request");
-const provider = element<HTMLSelectElement>("provider");
-const endpoint = element<HTMLInputElement>("endpoint");
-const modelName = element<HTMLInputElement>("model-name");
-const apiKey = element<HTMLInputElement>("api-key");
+const composerModel = element<HTMLSelectElement>("composer-model");
 const peek = element<HTMLInputElement>("peek");
 
 let state: State | undefined;
@@ -57,14 +55,16 @@ const folds = new Map<string, boolean>();
 const codes = new Map<string, string>();
 const asked = new Set<string>();
 let bannerTimer: number | undefined;
+/** The model the person picked for the next new app, if not the default. */
+let newAppModel: string | undefined;
 
-provider.replaceChildren(...Object.entries(PROVIDERS).map(([value, label]) => new Option(label, value)));
+setUpModels(post, () => render());
 element("examples").replaceChildren(...EXAMPLES.map(exampleItem));
 
 window.addEventListener("message", (event: MessageEvent<ToUi>) => receive(event.data));
 element("new-app").addEventListener("click", () => go({ kind: "new" }));
 element("show-settings").addEventListener("click", () => go({ kind: "settings" }));
-element("add-key").addEventListener("click", () => go({ kind: "settings" }));
+element("add-key").addEventListener("click", () => state !== undefined && askForKey(state, shownApp()));
 element("open-app").addEventListener("click", openApp);
 element("tab-chat").addEventListener("click", () => showTab("chat"));
 element("tab-history").addEventListener("click", () => showTab("history"));
@@ -90,11 +90,7 @@ request.addEventListener("keydown", (event) => {
   event.preventDefault();
   send();
 });
-element("settings-form").addEventListener("submit", (event) => {
-  event.preventDefault();
-  saveSettings();
-});
-provider.addEventListener("change", showEndpointField);
+composerModel.addEventListener("change", pickModel);
 peek.addEventListener("change", () => post({ type: "peek", on: peek.checked }));
 
 window.setInterval(tickClocks, 1000);
@@ -103,6 +99,7 @@ post({ type: "ready" });
 function receive(message: ToUi): void {
   switch (message.type) {
     case "state":
+      savedModel(true);
       return receiveState(message);
     case "progress":
       if (state !== undefined) state = { ...state, working: message.working };
@@ -116,6 +113,7 @@ function receive(message: ToUi): void {
     case "notice":
       return showBanner(message.text, "notice");
     case "error":
+      savedModel(false);
       return showError(message.text);
   }
 }
@@ -126,8 +124,8 @@ function receiveState(next: State): void {
   // Whatever the outcome, an error for it came before this.
   if (previous !== undefined && previous.working !== null && next.working === null) lastSent = undefined;
   if (view.kind === "app" && shownApp() === undefined) view = { kind: "new" };
-  if (previous === undefined && !next.hasApiKey) return go({ kind: "settings" });
-  if (previous?.hasApiKey === false && next.hasApiKey && view.kind === "settings") return go({ kind: "new" });
+  // On first use, Settings opens on the default model, so the person can paste its key.
+  if (previous === undefined && !canWrite(next, undefined)) return askForKey(next, undefined);
   render();
 }
 
@@ -137,7 +135,6 @@ function go(next: View): void {
   request.value = drafts.get(draftKey(view)) ?? "";
   removeArmed = false;
   hideBanner();
-  if (view.kind === "settings") fillSettings();
   render();
   if (view.kind === "settings") return;
   request.focus();
@@ -149,8 +146,8 @@ function go(next: View): void {
 
 function send(): void {
   const text = request.value.trim();
-  if (text === "" || view.kind === "settings" || state?.working !== null || !state.hasApiKey) return;
-  lastSent = { app: view.kind === "app" ? view.name : null, request: text };
+  if (text === "" || view.kind === "settings" || state?.working !== null || !canWrite(state, shownApp())) return;
+  lastSent = { app: view.kind === "app" ? view.name : null, request: text, ...(view.kind === "new" && newAppModel !== undefined ? { model: newAppModel } : {}) };
   request.value = "";
   hideBanner();
   post({ type: "send", ...lastSent });
@@ -258,25 +255,27 @@ function removeApp(): void {
   }, CONFIRM_MS);
 }
 
-function saveSettings(): void {
-  if (!isProvider(provider.value)) return;
-  post({ type: "save-settings", choice: { provider: provider.value, baseUrl: endpoint.value, model: modelName.value }, apiKey: apiKey.value });
-  apiKey.value = "";
+/** The model an app uses, or a new app would: what the composer's picker shows. */
+function activeModel(current: State, app: AppView | undefined): ModelView | undefined {
+  const wanted = app === undefined ? (newAppModel ?? current.defaultModel) : (app.model ?? current.defaultModel);
+  return current.models.find((model) => model.id === wanted) ?? current.models.find((model) => model.id === current.defaultModel);
 }
 
-function fillSettings(): void {
-  if (state === undefined) return;
-  provider.value = state.model.provider;
-  endpoint.value = state.model.baseUrl;
-  modelName.value = state.model.model;
-  apiKey.value = "";
-  showEndpointField();
+function canWrite(current: State, app: AppView | undefined): boolean {
+  return activeModel(current, app)?.hasApiKey === true;
 }
 
-function showEndpointField(): void {
-  const compatible = provider.value === "openai-compatible";
-  for (const field of document.querySelectorAll<HTMLElement>(".compatible-only")) field.hidden = !compatible;
-  endpoint.required = compatible;
+function askForKey(current: State, app: AppView | undefined): void {
+  openForm(activeModel(current, app));
+  go({ kind: "settings" });
+}
+
+// Choosing another model for an app is kept in its conversation; for a new app, it waits for the first message.
+function pickModel(): void {
+  const app = shownApp();
+  if (app === undefined) newAppModel = composerModel.value;
+  else post({ type: "use-model", app: app.name, model: composerModel.value });
+  render();
 }
 
 function render(): void {
@@ -286,9 +285,9 @@ function render(): void {
   renderSidebar(state);
   element("chat").hidden = view.kind === "settings";
   element("settings").hidden = view.kind !== "settings";
-  apiKey.placeholder = state.hasApiKey ? "Saved. Paste a new key to replace it." : "Paste your API key";
   peek.checked = state.peek;
-  if (view.kind !== "settings") renderChat(state, app);
+  if (view.kind === "settings") renderModels(state, post, () => render());
+  else renderChat(state, app);
   renderStatusbar(state, app);
 }
 
@@ -327,9 +326,10 @@ function renderChat(state: State, app: AppView | undefined): void {
   element("remove-app").textContent = removeArmed ? "Remove for good?" : "Remove";
   element("remove-app").classList.toggle("armed", removeArmed);
   element("welcome").hidden = app !== undefined || working !== null;
-  element("needs-key").hidden = state.hasApiKey;
-  element("examples").hidden = !state.hasApiKey;
-  const turns = [...(app?.conversation ?? []), ...(working === null ? [] : [{ from: "person", text: working.request } as const])];
+  const writes = canWrite(state, app);
+  element("needs-key").hidden = writes;
+  element("examples").hidden = !writes;
+  const turns = [...(app?.conversation ?? []), ...(working === null ? [] : [{ from: "person", text: working.request, at: working.since } as const])];
   const showing = showingFor(state);
   const items = turns.map((said) => turnItem(said, app === undefined ? [] : madeOf(said, app, showing)));
   const pending = working === null ? [] : [turn("mayfly", progressView(working, TITLES[working.kind], showing))];
@@ -349,8 +349,11 @@ function renderChat(state: State, app: AppView | undefined): void {
   if (following && tab === "chat") scrollToEnd(thread);
   for (const live of document.querySelectorAll<HTMLElement>(".live")) scrollToEnd(live);
   request.placeholder = app === undefined ? "Describe the app you need" : `Ask for a change to ${app.name}`;
-  request.disabled = !state.hasApiKey;
-  element<HTMLButtonElement>("send").disabled = !state.hasApiKey || state.working !== null;
+  request.disabled = !writes;
+  element<HTMLButtonElement>("send").disabled = !writes || state.working !== null;
+  composerModel.replaceChildren(...state.models.map((model) => new Option(model.label, model.id)));
+  composerModel.value = activeModel(state, app)?.id ?? "";
+  composerModel.disabled = state.working !== null;
 }
 
 /** Under each of Mayfly's replies, how it was made. */
@@ -382,12 +385,11 @@ function showingFor({ peek }: State): Showing {
   };
 }
 
-function turnItem({ from, text }: Turn, extras: readonly Node[] = []): HTMLLIElement {
-  const words = document.createElement("p");
-  words.textContent = text;
-  const body = document.createElement("div");
-  body.append(words, ...extras);
-  return turn(from, body);
+function turnItem({ from, text, at }: Turn, extras: readonly Node[] = []): HTMLLIElement {
+  const words = h("p", "", text);
+  // When it was said, for anyone who wants to know.
+  if (at !== 0) words.title = new Date(at).toLocaleString();
+  return turn(from, h("div", "", words, ...extras));
 }
 
 function turn(from: Turn["from"], body: HTMLElement): HTMLLIElement {
@@ -414,8 +416,10 @@ function avatar(): HTMLImageElement {
   return image;
 }
 
-function renderStatusbar({ model, hasApiKey, spent }: State, app: AppView | undefined): void {
-  element("model-info").textContent = [PROVIDERS[model.provider], model.model, ...(hasApiKey ? [] : ["no API key"])].join(" · ");
+function renderStatusbar(current: State, app: AppView | undefined): void {
+  const { spent } = current;
+  const model = activeModel(current, app);
+  element("model-info").textContent = model === undefined ? "No model" : `${model.label}${model.hasApiKey ? "" : " · no API key"}`;
   const all = `All apps: ${tokens(spent)}`;
   element("tokens").textContent = app === undefined ? all : `${app.name}: ${tokens(app.spent)} · ${all}`;
 }

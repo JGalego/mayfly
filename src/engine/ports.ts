@@ -51,6 +51,7 @@ export interface Ports {
   readonly store: StateStore;
   readonly deployer: Deployer;
   readonly identity: IdentitySource;
-  readonly model: ModelProvider;
+  /** The model with this id, or the default model for null or for an id that no longer exists. */
+  readonly models: (id: string | null) => ModelProvider;
   readonly builder: Builder;
 }

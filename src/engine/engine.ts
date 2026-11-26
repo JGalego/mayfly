@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { appUrl } from "../core/app-url.ts";
 import { appObjects } from "./app-objects.ts";
 import { generateApp, type Ask, type Attempt, type Generation } from "./generate.ts";
-import type { Ports } from "./ports.ts";
+import type { ModelProvider, Ports } from "./ports.ts";
 import { newPassword, newSecret } from "./secrets.ts";
 import { findApp, findVersion, runningVersion, withApp, withoutApp, type App, type Author, type Owner, type State, type Turn, type Version } from "./state.ts";
 import { UNWATCHED, type Watcher } from "./step.ts";
@@ -20,6 +20,8 @@ export type VersionView = Omit<Version, "routes" | "image"> & { readonly lines: 
 export interface AppView {
   readonly name: string;
   readonly url: string;
+  /** The model that writes its changes, or null for the default one. */
+  readonly model: string | null;
   /** The version running now, or null while no attempt has passed. */
   readonly head: string | null;
   readonly versions: readonly VersionView[];
@@ -28,10 +30,12 @@ export interface AppView {
 }
 
 export interface Engine {
-  /** Has the model write an app for the description, and runs it behind sign-in once an attempt passes. Every attempt is kept. */
-  create(description: string, watch?: Watcher): Promise<AppView>;
-  /** Has the model change an app as asked. An attempt that passes replaces the running one at the same URL. Every attempt is kept. */
+  /** Has a model write an app for the description, and runs it behind sign-in once an attempt passes. Every attempt is kept. */
+  create(description: string, options?: { readonly model?: string | null; readonly watch?: Watcher }): Promise<AppView>;
+  /** Has the app's model change it as asked. An attempt that passes replaces the running one at the same URL. Every attempt is kept. */
   change(name: string, request: string, watch?: Watcher): Promise<AppView>;
+  /** Has another model write the app's changes from now on, or the default one for null. */
+  useModel(name: string, model: string | null): Promise<AppView>;
   /** Builds, tries and runs code the person wrote by hand, kept as a version of theirs. The message says what they changed. */
   edit(name: string, routes: string, message: string, watch?: Watcher): Promise<AppView>;
   /** Runs an earlier version that passed again, at the same URL. The next change starts from it, so history branches rather than being lost. */
@@ -46,8 +50,8 @@ export interface Engine {
   spent(): Promise<Usage>;
 }
 
-export function createEngine({ store, deployer, identity, model, builder }: Ports): Engine {
-  async function generate(ask: Ask, watch: Watcher): Promise<Generation> {
+export function createEngine({ store, deployer, identity, models, builder }: Ports): Engine {
+  async function generate(ask: Ask, model: ModelProvider, watch: Watcher): Promise<Generation> {
     const meter = metered(model);
     try {
       return await generateApp(ask, { model: meter.model, builder, watch });
@@ -61,17 +65,17 @@ export function createEngine({ store, deployer, identity, model, builder }: Port
   /** Keeps every attempt as a version and the exchange in the conversation, then runs the attempt that passed. */
   async function record(request: string, { name, attempts }: Generation, made: Made, watch: Watcher): Promise<AppView> {
     const state = withOwner(await store.load());
-    const app = findApp(state, name) ?? newApp(state, name);
+    const app = findApp(state, name) ?? newApp(state, name, made.model);
     const versions = chain(attempts, request, made);
     const last = versions.at(-1);
     const passed = last?.problem === null ? last : undefined;
     const spent = attempts.reduce((sum, attempt) => addUsage(sum, attempt.spent), NO_USAGE);
-    const reply: Turn = { from: "mayfly", text: replyFor(app, versions), versions: versions.map((version) => version.id), took: Date.now() - made.started };
+    const reply: Turn = { from: "mayfly", text: replyFor(app, versions), versions: versions.map((version) => version.id), took: Date.now() - made.started, at: Date.now() };
     const next: App = {
       ...app,
       versions: [...app.versions, ...versions],
       head: passed?.id ?? app.head,
-      conversation: [...app.conversation, { from: "person", text: request }, reply],
+      conversation: [...app.conversation, { from: "person", text: request, at: made.started }, reply],
       spent: addUsage(app.spent, spent),
     };
     const nextState = spend(withApp(state, next), spent);
@@ -85,17 +89,35 @@ export function createEngine({ store, deployer, identity, model, builder }: Port
   }
 
   return {
-    async create(description, watch = UNWATCHED) {
+    async create(description, { model: chosen = null, watch = UNWATCHED } = {}) {
       const started = Date.now();
       const taken = (await store.load()).apps.map((app) => app.name);
-      return record(description, await generate({ description, taken }, watch), { base: null, by: { kind: "model", name: model.name }, started }, watch);
+      const model = models(chosen);
+      const generation = await generate({ description, taken }, model, watch);
+      return record(description, generation, { base: null, by: { kind: "model", name: model.name }, model: chosen, started }, watch);
     },
 
     async change(name, request, watch = UNWATCHED) {
       const started = Date.now();
-      const base = startingPoint(existingApp(await store.load(), name));
-      const generation = await generate({ change: request, app: { name, routes: base?.routes ?? "" } }, watch);
-      return record(request, generation, { base: base?.id ?? null, by: { kind: "model", name: model.name }, started }, watch);
+      const app = existingApp(await store.load(), name);
+      const base = startingPoint(app);
+      const model = models(app.model);
+      const generation = await generate({ change: request, app: { name, routes: base?.routes ?? "" } }, model, watch);
+      return record(request, generation, { base: base?.id ?? null, by: { kind: "model", name: model.name }, model: app.model, started }, watch);
+    },
+
+    async useModel(name, model) {
+      const state = await store.load();
+      const app = existingApp(state, name);
+      const label = models(model).name;
+      const now = Date.now();
+      const conversation: Turn[] = [
+        { from: "person", text: `Use ${label} for this app`, at: now },
+        { from: "mayfly", text: `From now on, ${label} writes the changes to this app.`, versions: [], took: 0, at: now },
+      ];
+      const next: App = { ...app, model, conversation: [...app.conversation, ...conversation] };
+      await store.save(withApp(state, next));
+      return appView(next);
     },
 
     async edit(name, routes, message, watch = UNWATCHED) {
@@ -109,7 +131,7 @@ export function createEngine({ store, deployer, identity, model, builder }: Port
       if (!trial.ok) watch({ kind: "failed", problem: trial.problem });
       const outcome = trial.ok ? { problem: null, image } : { problem: trial.problem, image: null };
       const attempt: Attempt = { routes, summary: trial.ok ? "Your edit is running." : "", spent: NO_USAGE, at: Date.now(), ...outcome };
-      return record(message || "Edit the code by hand", { name, attempts: [attempt] }, { base: base?.id ?? null, by: { kind: "person", name: state.owner.email }, started }, watch);
+      return record(message || "Edit the code by hand", { name, attempts: [attempt] }, { base: base?.id ?? null, by: { kind: "person", name: state.owner.email }, model: null, started }, watch);
     },
 
     async restore(name, id, watch = UNWATCHED) {
@@ -122,7 +144,10 @@ export function createEngine({ store, deployer, identity, model, builder }: Port
       watch({ kind: "building" });
       const image = await builder.build(name, version.routes);
       const note = `Back to the version made for “${version.request}”. Ask for a change to carry on from here.`;
-      const conversation: Turn[] = [{ from: "person", text: `Go back to version ${id}` }, { from: "mayfly", text: note, versions: [], took: Date.now() - started }];
+      const conversation: Turn[] = [
+        { from: "person", text: `Go back to version ${id}`, at: started },
+        { from: "mayfly", text: note, versions: [], took: Date.now() - started, at: Date.now() },
+      ];
       const next: App = { ...app, head: id, conversation: [...app.conversation, ...conversation] };
       const nextState = withApp(state, next);
       watch({ kind: "deploying" });
@@ -166,10 +191,11 @@ export function createEngine({ store, deployer, identity, model, builder }: Port
   };
 }
 
-/** Who made a request's versions, what they started from, and when. */
+/** Who made a request's versions, what they started from, and when; and for a new app, the model it was made with. */
 interface Made {
   readonly base: string | null;
   readonly by: Author;
+  readonly model: string | null;
   readonly started: number;
 }
 
@@ -190,9 +216,9 @@ function withOwner(state: State): State & { readonly owner: Owner } {
 }
 
 /** A new app gets its own port and secrets, which it keeps for good, so its URL and sessions survive changes. */
-function newApp(state: State, name: string): App {
+function newApp(state: State, name: string, model: string | null): App {
   const port = { hostPort: freePort(state), clientSecret: newSecret(), cookieSecret: newSecret() };
-  return { name, ...port, versions: [], head: null, conversation: [], spent: NO_USAGE };
+  return { name, ...port, model, versions: [], head: null, conversation: [], spent: NO_USAGE };
 }
 
 function freePort(state: State): number {
@@ -228,5 +254,5 @@ function spend(state: State, spent: Usage, name?: string): State {
 
 function appView(app: App): AppView {
   const versions = app.versions.map(({ routes, image: _image, ...view }) => ({ ...view, lines: routes.split("\n").length - 1 }));
-  return { name: app.name, url: appUrl(app.hostPort), head: app.head, versions, conversation: app.conversation, spent: app.spent };
+  return { name: app.name, url: appUrl(app.hostPort), model: app.model, head: app.head, versions, conversation: app.conversation, spent: app.spent };
 }

@@ -1,12 +1,17 @@
 import type { AppView } from "../../engine/engine.ts";
 import type { Step } from "../../engine/step.ts";
 import type { Usage } from "../../engine/usage.ts";
-import type { ModelChoice } from "./settings.ts";
+import type { ModelSetting } from "./settings.ts";
+
+/** A model as the page shows it: its settings, its name, and whether its key is saved. Never the key. */
+export type ModelView = ModelSetting & { readonly label: string; readonly hasApiKey: boolean };
 
 /** A request in a conversation. An app of null starts a new app. */
 export interface Work {
   readonly app: string | null;
   readonly request: string;
+  /** For a new app, the model to write it, or the default one. */
+  readonly model?: string;
 }
 
 /** A request Mayfly is working on, and what it has done so far. */
@@ -25,7 +30,10 @@ export type FromUi =
   | { readonly type: "open"; readonly name: string }
   | { readonly type: "remove"; readonly name: string }
   | { readonly type: "copy"; readonly what: "email" | "password" }
-  | { readonly type: "save-settings"; readonly choice: ModelChoice; readonly apiKey: string }
+  | { readonly type: "save-model"; readonly model: ModelSetting; readonly apiKey: string }
+  | { readonly type: "remove-model"; readonly id: string }
+  | { readonly type: "default-model"; readonly id: string }
+  | { readonly type: "use-model"; readonly app: string; readonly model: string }
   | { readonly type: "peek"; readonly on: boolean }
   | { readonly type: "code"; readonly app: string; readonly version: string }
   | { readonly type: "restore"; readonly app: string; readonly version: string }
@@ -37,8 +45,9 @@ export type ToUi =
       readonly type: "state";
       readonly apps: readonly AppView[];
       readonly owner: string;
-      readonly model: ModelChoice;
-      readonly hasApiKey: boolean;
+      readonly models: readonly ModelView[];
+      /** The model new apps use. */
+      readonly defaultModel: string;
       readonly spent: Usage;
       readonly working: Progress | null;
       /** Whether to show the code and each step of making an app. */

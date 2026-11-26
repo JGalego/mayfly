@@ -4,24 +4,26 @@ import type { AppView, Engine } from "../../engine/engine.ts";
 import type { Step, Watcher } from "../../engine/step.ts";
 import { createController } from "./controller.ts";
 import type { ToUi } from "./messages.ts";
-import type { ModelChoice } from "./settings.ts";
+import type { Models, ModelSetting } from "./settings.ts";
 
 const lunch: AppView = {
   name: "lunch-split",
   url: "http://localhost:18100/",
-  conversation: [{ from: "person", text: "split lunch bills" }],
+  conversation: [{ from: "person", text: "split lunch bills", at: 0 }],
+  model: "openai",
   head: "v1",
   versions: [],
   spent: { input: 100, output: 20 },
 };
 const owner = { email: "owner@mayfly.local", username: "owner", password: "s3cret-pass" };
-const openai: ModelChoice = { provider: "openai", baseUrl: "", model: "gpt-6.2-sol" };
+const openai: ModelSetting = { id: "openai", provider: "openai", baseUrl: "", model: "gpt-6.2-sol" };
+const local: ModelSetting = { id: "", provider: "openai-compatible", baseUrl: "http://localhost:11434/v1", model: "qwen3" };
 const OPENAI_ENDPOINT = "https://api.openai.com/v1";
 const writing: Step = { kind: "writing", attempt: 1 };
 const draft = (text: string): Step => ({ kind: "draft", text });
 
 describe("the Mayfly panel's controller", () => {
-  it("shows the apps, who signs in, the model, whether it has a key, and the tokens spent", async () => {
+  it("shows the apps, who signs in, the models and whether their keys are saved, and the tokens spent", async () => {
     const { handle, posted } = setUp({ apps: [lunch] });
 
     await handle({ type: "ready" });
@@ -30,8 +32,8 @@ describe("the Mayfly panel's controller", () => {
       type: "state",
       apps: [lunch],
       owner: owner.email,
-      model: openai,
-      hasApiKey: true,
+      models: [{ ...openai, label: "OpenAI · gpt-6.2-sol", hasApiKey: true }],
+      defaultModel: "openai",
       spent: { input: 500, output: 80 },
       working: null,
       peek: false,
@@ -43,7 +45,7 @@ describe("the Mayfly panel's controller", () => {
 
     await handle({ type: "send", app: null, request: " split lunch bills " });
 
-    assert.deepEqual(calls, ["create split lunch bills"]);
+    assert.deepEqual(calls, ["create split lunch bills with openai"]);
     assert.partialDeepStrictEqual(stateOf(posted[0])?.working, { app: null, request: "split lunch bills", kind: "create", steps: [] });
     assert.equal(stateOf(posted[1])?.working, null);
     assert.deepEqual(posted[2], { type: "created", name: "lunch-split" });
@@ -147,7 +149,7 @@ describe("the Mayfly panel's controller", () => {
     finish();
     await first;
 
-    assert.deepEqual(calls, ["create split lunch bills"]);
+    assert.deepEqual(calls, ["create split lunch bills with openai"]);
     assert.equal(posted.filter((m) => m.type === "error").length, 2);
   });
 
@@ -200,23 +202,55 @@ describe("the Mayfly panel's controller", () => {
 
   it("keeps an API key in secret storage for the endpoint it was given for, and never sends it to the page", async () => {
     const { handle, posted, savedKeys } = setUp({ apps: [], keyFor: [] });
-    const local: ModelChoice = { provider: "openai-compatible", baseUrl: "http://localhost:11434/v1", model: "qwen3" };
 
-    await handle({ type: "save-settings", choice: openai, apiKey: "  sk-proj-abc  " });
-    await handle({ type: "save-settings", choice: local, apiKey: "" });
+    await handle({ type: "save-model", model: openai, apiKey: "  sk-proj-abc  " });
+    await handle({ type: "save-model", model: local, apiKey: "" });
 
     assert.deepEqual(savedKeys, [[OPENAI_ENDPOINT, "sk-proj-abc"]]);
     assert.ok(!JSON.stringify(posted).includes("sk-proj-abc"));
-    assert.equal(stateOf(posted.at(-1))?.hasApiKey, false);
+    assert.deepEqual(
+      stateOf(posted.at(-1))?.models.map((model) => [model.label, model.hasApiKey]),
+      [
+        ["OpenAI · gpt-6.2-sol", true],
+        ["localhost:11434 · qwen3", false],
+      ],
+    );
+  });
+
+  it("adds a model, makes it the default, and will not remove the default", async () => {
+    const { handle, posted, models } = setUp({ apps: [] });
+
+    await handle({ type: "save-model", model: local, apiKey: "" });
+    const added = models().models[1]?.id ?? "";
+    await handle({ type: "default-model", id: added });
+    await handle({ type: "remove-model", id: added });
+    await handle({ type: "remove-model", id: "openai" });
+
+    assert.deepEqual(
+      models().models.map((model) => model.id),
+      [added],
+    );
+    assert.equal(models().default, added);
+    assert.ok(posted.some((m) => m.type === "error" && m.text.includes("another model the default")));
+  });
+
+  it("writes a new app with the model picked for it, and switches an app to another model", async () => {
+    const { handle, calls } = setUp({ apps: [lunch] });
+
+    await handle({ type: "send", app: null, request: "keep notes", model: "openai" });
+    await handle({ type: "use-model", app: "lunch-split", model: "openai" });
+    await handle({ type: "use-model", app: "lunch-split", model: "gone" });
+
+    assert.deepEqual(calls, ["create keep notes with openai", "use lunch-split openai"]);
   });
 
   it("refuses an OpenAI-compatible provider without a web URL, or a model without a name", async () => {
-    const { handle, posted, savedChoices } = setUp({ apps: [] });
+    const { handle, posted, models } = setUp({ apps: [] });
 
-    await handle({ type: "save-settings", choice: { provider: "openai-compatible", baseUrl: "file:///etc", model: "m" }, apiKey: "" });
-    await handle({ type: "save-settings", choice: { ...openai, model: " " }, apiKey: "" });
+    await handle({ type: "save-model", model: { ...local, baseUrl: "file:///etc" }, apiKey: "" });
+    await handle({ type: "save-model", model: { ...openai, model: " " }, apiKey: "" });
 
-    assert.deepEqual(savedChoices, []);
+    assert.equal(models().models.length, 1);
     assert.deepEqual(
       posted.map((m) => m.type),
       ["error", "error"],
@@ -227,7 +261,7 @@ describe("the Mayfly panel's controller", () => {
     const { handle, posted } = setUp({ apps: [] });
 
     await handle({ type: "format-disk" });
-    await handle({ type: "save-settings", choice: { provider: "elsewhere", baseUrl: "", model: "m" }, apiKey: "" });
+    await handle({ type: "save-model", model: { id: "", provider: "elsewhere", baseUrl: "", model: "m" }, apiKey: "" });
     await handle("hello");
     await handle(null);
 
@@ -255,15 +289,14 @@ function setUp({ apps, created: made = lunch, steps = [], peek: peeking = false,
   const copied: string[] = [];
   const calls: string[] = [];
   const savedKeys: [string, string][] = [];
-  const savedChoices: ModelChoice[] = [];
   const keys = new Set(keyFor);
-  let choice = openai;
+  let models: Models = { models: [openai], default: "openai" };
   let peek = peeking;
   let finish = (): void => {};
   const created = new Promise<void>((resolve) => (finish = resolve));
   const engine: Engine = {
-    create: async (description, watch: Watcher = () => {}) => {
-      calls.push(`create ${description}`);
+    create: async (description, { model, watch = () => {} }: { model?: string | null; watch?: Watcher } = {}) => {
+      calls.push(`create ${description} with ${model}`);
       steps.forEach((step) => watch(step));
       if (waitForCreate) await created;
       if (createFails) throw new Error(createFails);
@@ -277,6 +310,10 @@ function setUp({ apps, created: made = lunch, steps = [], peek: peeking = false,
     },
     restore: async (name, version) => {
       calls.push(`restore ${name} ${version}`);
+      return lunch;
+    },
+    useModel: async (name, model) => {
+      calls.push(`use ${name} ${model}`);
       return lunch;
     },
     change: async (name, request) => {
@@ -294,8 +331,8 @@ function setUp({ apps, created: made = lunch, steps = [], peek: peeking = false,
     openExternal: async (url) => void opened.push(url),
     copy: async (text) => void copied.push(text),
     settings: {
-      model: () => choice,
-      saveModel: async (next) => void (savedChoices.push(next), (choice = next)),
+      models: () => models,
+      saveModels: async (next) => void (models = next),
       peek: () => peek,
       savePeek: async (on) => void (peek = on),
     },
@@ -304,5 +341,5 @@ function setUp({ apps, created: made = lunch, steps = [], peek: peeking = false,
       save: async (endpoint, key) => void (savedKeys.push([endpoint, key]), keys.add(endpoint)),
     },
   });
-  return { handle, posted, opened, copied, calls, savedKeys, savedChoices, finish };
+  return { handle, posted, opened, copied, calls, savedKeys, models: () => models, finish };
 }

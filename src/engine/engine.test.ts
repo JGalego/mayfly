@@ -52,7 +52,7 @@ describe("the engine", () => {
 
     const app = await engine.create("split lunch bills");
 
-    assert.deepEqual(app.conversation[0], { from: "person", text: "split lunch bills" });
+    assert.partialDeepStrictEqual(app.conversation[0], { from: "person", text: "split lunch bills" });
     assert.partialDeepStrictEqual(app.conversation[1], { from: "mayfly", text: "Splits bills and shows who owes whom.", versions: [app.head] });
   });
 
@@ -151,6 +151,19 @@ describe("the engine", () => {
     await assert.rejects(engine.restore("lunch", app.versions[0]?.id ?? ""), /no version .* that passed/);
   });
 
+  it("writes each app with its own model, and keeps switching models in the conversation", async () => {
+    const { engine } = setUp([reply("lunch"), reply("lunch")], [], (id) => (id === "fast" ? "Fast model" : "Careful model"));
+
+    const made = await engine.create("split lunch bills", { model: "fast" });
+    const switched = await engine.useModel("lunch", "careful");
+    const changed = await engine.change("lunch", "add totals");
+
+    assert.equal(made.model, "fast");
+    assert.equal(made.versions[0]?.by.name, "Fast model");
+    assert.match(switched.conversation.at(-1)?.text ?? "", /Careful model writes the changes/);
+    assert.equal(changed.versions.at(-1)?.by.name, "Careful model");
+  });
+
   it("refuses to change an app it does not know", async () => {
     const { engine } = setUp([]);
 
@@ -172,7 +185,7 @@ describe("the engine", () => {
     const { engine } = setUp([reply("lunch")]);
     const steps: string[] = [];
 
-    await engine.create("split lunch bills", (step) => steps.push(step.kind));
+    await engine.create("split lunch bills", { watch: (step) => steps.push(step.kind) });
 
     assert.deepEqual(steps, ["writing", "wrote", "building", "trying", "deploying"]);
   });
@@ -224,7 +237,7 @@ function reply(name: string, summary = "", code = "export default 1;"): string {
   return `name: ${name}\n\`\`\`ts\n${code}\n\`\`\`\n${summary}`;
 }
 
-function setUp(replies: string[], trials: Trial[] = []) {
+function setUp(replies: string[], trials: Trial[] = [], named: (id: string | null) => string = () => "the test model") {
   const log: string[] = [];
   const asked: string[] = [];
   const deployed: (readonly KubeObject[])[] = [];
@@ -243,19 +256,19 @@ function setUp(replies: string[], trials: Trial[] = []) {
     sync: async (next) => void (log.push("sync"), synced.push(next)),
     settingsFor: () => ({ OAUTH2_PROXY_CLIENT_ID: "fake" }),
   };
-  const model: ModelProvider = {
-    name: "the test model",
+  const models = (id: string | null): ModelProvider => ({
+    name: named(id),
     complete: async (_system, messages: readonly Message[]) => {
       asked.push(messages[0]?.content ?? "");
       return { text: replies.shift() ?? "", usage: COST };
     },
-  };
+  });
   let builds = 0;
   const builder: Builder = {
     build: async (name) => `localhost/mayfly-app-${name}:${++builds}`,
     trial: async () => trials.shift() ?? { ok: true },
   };
-  const engine = createEngine({ store, deployer, identity, model, builder });
+  const engine = createEngine({ store, deployer, identity, models, builder });
   return { engine, deployed, removed, synced, log, asked };
 }
 

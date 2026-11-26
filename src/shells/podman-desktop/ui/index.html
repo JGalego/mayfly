@@ -76,27 +76,38 @@
       </div>
       <form id="composer">
         <textarea id="request" rows="2" maxlength="2000" aria-label="Your request"></textarea>
-        <button id="send" class="primary" type="submit">Send</button>
+        <div class="composer-actions">
+          <select id="composer-model" aria-label="The model that writes this app" title="The model that writes this app"></select>
+          <button id="send" class="primary" type="submit">Send</button>
+        </div>
       </form>
     </main>
 
     <main id="settings" hidden>
       <div class="settings-page">
         <h1>Settings</h1>
-        <form id="settings-form">
-          <h2>Model</h2>
-          <p class="quiet">The model writes and changes your apps.</p>
-          <label for="provider">Provider</label>
-          <select id="provider"></select>
-          <label for="endpoint" class="compatible-only">Endpoint</label>
-          <input id="endpoint" class="compatible-only" type="url" placeholder="http://localhost:11434/v1">
-          <label for="model-name">Model</label>
-          <input id="model-name" type="text" maxlength="200" required>
-          <label for="api-key">API key</label>
-          <input id="api-key" type="password" autocomplete="off">
-          <p class="quiet">Podman Desktop keeps the key in its secret storage. Mayfly sends it only to the endpoint it was saved for.</p>
-          <button class="primary" type="submit">Save</button>
-        </form>
+        <section>
+          <h2>Models</h2>
+          <p class="quiet">They write and change your apps. Each app can use a different one, and every version remembers which one wrote it.</p>
+          <ul id="model-list" class="model-list"></ul>
+          <button id="add-model" class="quiet-button add-model" type="button">+ Add a model</button>
+          <form id="model-form" hidden>
+            <h3 id="model-form-title">Add a model</h3>
+            <label for="provider">Provider</label>
+            <select id="provider"></select>
+            <label for="endpoint" class="compatible-only">Endpoint</label>
+            <input id="endpoint" class="compatible-only" type="url" placeholder="http://localhost:11434/v1">
+            <label for="model-name">Model</label>
+            <input id="model-name" type="text" maxlength="200" required placeholder="gpt-6.2-sol">
+            <label for="api-key">API key</label>
+            <input id="api-key" type="password" autocomplete="off">
+            <p class="quiet">Podman Desktop keeps the key in its secret storage. Mayfly sends it only to the endpoint it was saved for.</p>
+            <div class="editor-actions">
+              <button id="cancel-model" class="quiet-button" type="button">Cancel</button>
+              <button class="primary" type="submit">Save</button>
+            </div>
+          </form>
+        </section>
         <section>
           <h2>Code</h2>
           <label class="check"><input id="peek" type="checkbox"> Peek behind the curtain</label>

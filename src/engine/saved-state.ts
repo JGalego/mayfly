@@ -24,8 +24,8 @@ function versioned(app: UnversionedApp): App {
   const turns = app.conversation ?? [];
   const lastReply = turns.findLastIndex((turn) => turn.from === "mayfly");
   const conversation = turns.map((turn, index): Turn => {
-    if (turn.from === "person") return { from: "person", text: turn.text };
-    return { from: "mayfly", text: turn.text, versions: index === lastReply ? [id] : [], took: 0 };
+    if (turn.from === "person") return { from: "person", text: turn.text, at: 0 };
+    return { from: "mayfly", text: turn.text, versions: index === lastReply ? [id] : [], took: 0, at: 0 };
   });
   const version = {
     id,
@@ -41,5 +41,6 @@ function versioned(app: UnversionedApp): App {
     at: 0,
   };
   const { name } = app.manifest;
-  return { name, hostPort: app.hostPort, clientSecret: app.clientSecret, cookieSecret: app.cookieSecret, versions: [version], head: id, conversation, spent: version.spent };
+  const kept = { hostPort: app.hostPort, clientSecret: app.clientSecret, cookieSecret: app.cookieSecret };
+  return { name, ...kept, model: null, versions: [version], head: id, conversation, spent: version.spent };
 }

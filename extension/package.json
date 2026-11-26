@@ -20,25 +20,6 @@
     "configuration": {
       "title": "Mayfly",
       "properties": {
-        "mayfly.model.provider": {
-          "type": "string",
-          "enum": [
-            "openai",
-            "openai-compatible"
-          ],
-          "default": "openai",
-          "description": "Who writes the apps: OpenAI, or another service that speaks OpenAI's API"
-        },
-        "mayfly.model.baseUrl": {
-          "type": "string",
-          "default": "",
-          "description": "For an OpenAI-compatible provider: its endpoint, such as http://localhost:11434/v1"
-        },
-        "mayfly.model.name": {
-          "type": "string",
-          "default": "gpt-6.2-sol",
-          "description": "The model that writes the apps"
-        },
         "mayfly.peek": {
           "type": "boolean",
           "default": false,

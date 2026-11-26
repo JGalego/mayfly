@@ -1,10 +1,10 @@
 import type { AppView, Engine } from "../../engine/engine.ts";
 import type { Step, Watcher } from "../../engine/step.ts";
 import type { FromUi, Progress, ToUi, Work } from "./messages.ts";
-import { endpointOf, isProvider, type ModelChoice } from "./settings.ts";
+import { makeDefault, modelViews, readModel, removeModel, saveModel } from "./model-settings.ts";
+import type { Models, ModelSetting } from "./settings.ts";
 
 const MAX_REQUEST = 2000;
-const MAX_MODEL_NAME = 200;
 // Far more than any app Mayfly writes, and a bound on what the page can make the extension build.
 const MAX_ROUTES = 200_000;
 const MAX_MESSAGE = 200;
@@ -18,8 +18,8 @@ export interface ControllerPorts {
   readonly openExternal: (url: string) => Promise<unknown>;
   readonly copy: (text: string) => Promise<unknown>;
   readonly settings: {
-    model(): ModelChoice;
-    saveModel(choice: ModelChoice): Promise<void>;
+    models(): Models;
+    saveModels(models: Models): Promise<void>;
     peek(): boolean;
     savePeek(on: boolean): Promise<void>;
   };
@@ -50,15 +50,21 @@ function handle(request: FromUi, session: Session): Promise<unknown> {
     case "ready":
       return showState(session);
     case "send":
-      return send({ app: request.app, request: request.request.trim() }, session);
+      return send({ ...request, request: request.request.trim() }, session);
     case "open":
       return open(request.name, session);
     case "remove":
       return remove(request.name, session);
     case "copy":
       return copySignIn(request.what, session);
-    case "save-settings":
-      return saveSettings(request.choice, request.apiKey.trim(), session);
+    case "save-model":
+      return settle(saveModel(request.model, request.apiKey.trim(), session), session, "Saved.");
+    case "remove-model":
+      return settle(removeModel(request.id, session), session);
+    case "default-model":
+      return settle(makeDefault(request.id, session), session);
+    case "use-model":
+      return useModel(request.app, request.model, session);
     case "peek":
       return savePeek(request.on, session);
     case "code":
@@ -75,10 +81,27 @@ async function send(work: Work, session: Session): Promise<void> {
   if (problem !== undefined) return void (await session.post({ type: "error", text: problem }));
   const { engine } = session;
   const kind = work.app === null ? "create" : "change";
-  const app = await run({ ...work, kind }, session, (watch) => (work.app === null ? engine.create(work.request, watch) : engine.change(work.app, work.request, watch)));
+  const model = work.model ?? session.settings.models().default;
+  const job = (watch: Watcher): Promise<AppView> => (work.app === null ? engine.create(work.request, { model, watch }) : engine.change(work.app, work.request, watch));
+  const app = await run({ ...work, kind }, session, job);
   if (work.app !== null) return;
   await session.post({ type: "created", name: app.name });
   if (app.head !== null) await session.openExternal(app.url);
+}
+
+async function useModel(app: string, model: string, session: Session): Promise<void> {
+  if (session.working !== null) return void (await session.post({ type: "error", text: BUSY }));
+  if (!session.settings.models().models.some((setting) => setting.id === model)) return;
+  await session.engine.useModel(app, model);
+  await showState(session);
+}
+
+/** Shows the outcome of a settings change: what is wrong with it, or the new state. */
+async function settle(change: Promise<string | undefined | void>, session: Session, done?: string): Promise<void> {
+  const problem = await change;
+  if (typeof problem === "string") return void (await session.post({ type: "error", text: problem }));
+  if (done !== undefined) await session.post({ type: "notice", text: done });
+  await showState(session);
 }
 
 async function restore(app: string, version: string, session: Session): Promise<void> {
@@ -158,16 +181,6 @@ async function copySignIn(what: "email" | "password", session: Session): Promise
   await session.copy((await session.engine.owner())[what]);
 }
 
-async function saveSettings(choice: ModelChoice, apiKey: string, session: Session): Promise<void> {
-  const cleaned = { ...choice, baseUrl: choice.baseUrl.trim(), model: choice.model.trim() };
-  const problem = problemWithChoice(cleaned);
-  if (problem !== undefined) return void (await session.post({ type: "error", text: problem }));
-  await session.settings.saveModel(cleaned);
-  if (apiKey !== "") await session.keys.save(endpointOf(cleaned), apiKey);
-  await session.post({ type: "notice", text: "Saved." });
-  await showState(session);
-}
-
 async function sendCode(app: string, version: string, session: Session): Promise<void> {
   await session.post({ type: "code", app, version, routes: await session.engine.code(app, version) });
 }
@@ -177,25 +190,13 @@ async function savePeek(on: boolean, session: Session): Promise<void> {
   await showState(session);
 }
 
-function problemWithChoice({ provider, baseUrl, model }: ModelChoice): string | undefined {
-  if (provider === "openai-compatible" && !isWebUrl(baseUrl)) return "Give the endpoint as a URL, such as http://localhost:11434/v1.";
-  if (model === "") return "Name the model to use.";
-  if (model.length > MAX_MODEL_NAME) return `Keep the model's name under ${MAX_MODEL_NAME} characters.`;
-  return undefined;
-}
-
-function isWebUrl(text: string): boolean {
-  return URL.canParse(text) && ["http:", "https:"].includes(new URL(text).protocol);
-}
-
 async function showState(session: Session): Promise<void> {
-  const model = session.settings.model();
   await session.post({
     type: "state",
     apps: await session.engine.list(),
     owner: (await session.engine.owner()).email,
-    model,
-    hasApiKey: await session.keys.has(endpointOf(model)),
+    models: await modelViews(session),
+    defaultModel: session.settings.models().default,
     spent: await session.engine.spent(),
     working: session.working,
     peek: session.settings.peek(),
@@ -205,14 +206,21 @@ async function showState(session: Session): Promise<void> {
 // Messages come from the page, so each is checked for its shape before anything acts on it.
 function readRequest(message: unknown): FromUi | undefined {
   if (typeof message !== "object" || message === null) return undefined;
-  const { type, app, request, name, choice, apiKey, on, version, what, routes, message: note } = message as Record<string, unknown>;
+  const { type, app, request, name, apiKey, on, version, what, routes, message: note, model, id } = message as Record<string, unknown>;
   switch (type) {
     case "ready":
       return { type };
     case "copy":
       return what === "email" || what === "password" ? { type, what } : undefined;
-    case "send":
-      return (typeof app === "string" || app === null) && typeof request === "string" ? { type, app, request } : undefined;
+    case "send": {
+      const valid = (typeof app === "string" || app === null) && typeof request === "string" && (model === undefined || typeof model === "string");
+      return valid ? { type, app, request, ...(model === undefined ? {} : { model }) } : undefined;
+    }
+    case "use-model":
+      return typeof app === "string" && typeof model === "string" ? { type, app, model } : undefined;
+    case "remove-model":
+    case "default-model":
+      return typeof id === "string" ? { type, id } : undefined;
     case "open":
     case "remove":
       return typeof name === "string" ? { type, name } : undefined;
@@ -223,17 +231,11 @@ function readRequest(message: unknown): FromUi | undefined {
     case "code":
     case "restore":
       return typeof app === "string" && typeof version === "string" ? { type, app, version } : undefined;
-    case "save-settings": {
-      const model = readChoice(choice);
-      return model !== undefined && typeof apiKey === "string" ? { type, choice: model, apiKey } : undefined;
+    case "save-model": {
+      const setting: ModelSetting | undefined = readModel(model);
+      return setting !== undefined && typeof apiKey === "string" ? { type, model: setting, apiKey } : undefined;
     }
     default:
       return undefined;
   }
-}
-
-function readChoice(value: unknown): ModelChoice | undefined {
-  if (typeof value !== "object" || value === null) return undefined;
-  const { provider, baseUrl, model } = value as Record<string, unknown>;
-  return isProvider(provider) && typeof baseUrl === "string" && typeof model === "string" ? { provider, baseUrl, model } : undefined;
 }

@@ -40,8 +40,8 @@ export interface Author {
 
 /** One message in an app's conversation. Mayfly's replies name the versions made for the request before them. */
 export type Turn =
-  | { readonly from: "person"; readonly text: string }
-  | { readonly from: "mayfly"; readonly text: string; readonly versions: readonly string[]; readonly took: number };
+  | { readonly from: "person"; readonly text: string; readonly at: number }
+  | { readonly from: "mayfly"; readonly text: string; readonly versions: readonly string[]; readonly took: number; readonly at: number };
 
 /** An app, everything it has been, and what it keeps across deploys: its port and its secrets. */
 export interface App {
@@ -49,6 +49,8 @@ export interface App {
   readonly hostPort: number;
   readonly clientSecret: string;
   readonly cookieSecret: string;
+  /** The model that writes its changes, or null for the default one. */
+  readonly model: string | null;
   /** Every attempt at its code, oldest first, failed ones included. */
   readonly versions: readonly Version[];
   /** The version running now, or null while no attempt has passed. */
