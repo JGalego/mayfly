@@ -269,13 +269,12 @@ function avatar(): HTMLImageElement {
 
 function renderStatusbar({ model, hasApiKey, spent }: State, app: AppView | undefined): void {
   element("model-info").textContent = [PROVIDERS[model.provider], model.model, ...(hasApiKey ? [] : ["no API key"])].join(" · ");
-  const tokens = element("tokens");
-  tokens.textContent = app === undefined ? `${count(spent)} tokens in all` : `${count(app.spent)} tokens on ${app.name} · ${count(spent)} in all`;
-  tokens.title = `In all: ${spent.input.toLocaleString()} input, ${spent.output.toLocaleString()} output`;
+  const all = `All apps: ${tokens(spent)}`;
+  element("tokens").textContent = app === undefined ? all : `${app.name}: ${tokens(app.spent)} · ${all}`;
 }
 
-function count(usage: Usage): string {
-  return (usage.input + usage.output).toLocaleString();
+function tokens({ input, output }: Usage): string {
+  return `${input.toLocaleString()} tokens in, ${output.toLocaleString()} out`;
 }
 
 function showError(text: string): void {

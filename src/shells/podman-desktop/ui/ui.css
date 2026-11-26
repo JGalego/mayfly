@@ -157,6 +157,14 @@ select {
   line-height: 1;
 }
 
+.icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+}
+
 .nav-item .spinner.small {
   margin: 0 0 0 auto;
 }
