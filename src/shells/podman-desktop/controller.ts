@@ -93,6 +93,8 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       return sendCode(request.app, request.version, session);
     case "health":
       return session.post({ type: "health", services: await session.engine.health() });
+    case "ledger":
+      return session.post({ type: "ledger", calls: await session.engine.ledger() });
     case "activity":
       return session.post({ type: "activity", entries: session.activity });
     case "doctor":
@@ -261,6 +263,7 @@ function readRequest(message: unknown): FromUi | undefined {
     case "ready":
     case "new-password":
     case "health":
+    case "ledger":
     case "doctor":
     case "activity":
       return { type };

@@ -120,6 +120,7 @@ describe("generateApp", () => {
   it("shows a watcher the model's thinking and reply as they arrive, and keeps the thinking with the attempt", async () => {
     const model: ModelProvider = {
       name: "the test model",
+      provider: "the test provider",
       complete: async (_system, _messages, listener) => {
         for (const piece of ["Notes need ", "one route."]) listener?.thinking?.(piece);
         for (const piece of ["name: notes\n", "```ts\nexport default 1;\n```"]) listener?.text?.(piece);
@@ -170,6 +171,7 @@ function fakes(replies: string[], trials: Trial[]) {
   const built: { name: string; routes: string }[] = [];
   const model: ModelProvider = {
     name: "the test model",
+    provider: "the test provider",
     complete: async (system, messages) => {
       conversations.push({ system, messages: [...messages] });
       return { text: replies.shift() ?? "", thinking: "", usage: { input: 10, output: 5, thinking: 0 } };

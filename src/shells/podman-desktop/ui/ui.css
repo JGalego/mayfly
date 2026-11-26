@@ -1356,12 +1356,13 @@ dialog .editor-actions {
   color: light-dark(#1d4ed8, #93c5fd);
 }
 
+/* Readable steps of the chart's three hues, so tokens look the same everywhere. */
 .token-out {
-  color: light-dark(#7c3aed, #c4b5fd);
+  color: light-dark(#0f766e, #5eead4);
 }
 
 .token-thinking {
-  color: light-dark(#b45309, #fcd34d);
+  color: light-dark(#c2410c, #fdba74);
 }
 
 .popover {
@@ -1401,6 +1402,184 @@ dialog .editor-actions {
 
 .token-table .total td {
   border-top: 1px solid var(--line);
+  font-weight: 600;
+}
+
+/* The token ledger. The three hues pass the colour-blind and contrast checks in both themes. */
+.series-input {
+  background: light-dark(#257de0, #338ced);
+}
+
+.series-output {
+  background: light-dark(#00b894, #00a888);
+}
+
+.series-thinking {
+  background: light-dark(#f47230, #e76624);
+}
+
+.usage-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.2rem;
+  align-items: center;
+  margin-top: 0.8rem;
+}
+
+.legend-item {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.usage-chart {
+  position: relative;
+  margin-top: 0.8rem;
+}
+
+.usage-plot {
+  position: relative;
+  height: 160px;
+  margin: 0 0 1.6rem 2.6rem;
+}
+
+.usage-grid {
+  position: absolute;
+  right: 0;
+  left: 0;
+  border-top: 1px solid var(--line);
+}
+
+.usage-tick {
+  position: absolute;
+  right: calc(100% + 0.5rem);
+  transform: translateY(-50%);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.usage-columns {
+  position: absolute;
+  inset: 0;
+  display: flex;
+}
+
+.usage-slot {
+  position: relative;
+  display: flex;
+  flex: 1 1 0;
+  justify-content: center;
+  min-width: 0;
+  border-radius: 4px;
+  outline: none;
+}
+
+.usage-slot:hover,
+.usage-slot:focus-visible {
+  background: var(--hover);
+}
+
+.usage-bar {
+  display: flex;
+  align-items: flex-end;
+  width: min(24px, 70%);
+  height: 100%;
+}
+
+.usage-column {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 4px 4px 0 0;
+}
+
+.usage-segment {
+  flex-basis: 0;
+  min-height: 1px;
+}
+
+.usage-label {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  font-size: 0.75rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.usage-readout {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  min-width: 10rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  background: var(--bg);
+  box-shadow: 0 6px 18px light-dark(#0002, #0008);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.readout-title {
+  color: var(--muted);
+}
+
+.readout-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.line-key {
+  width: 12px;
+  height: 2px;
+  border-radius: 1px;
+}
+
+.usage-table {
+  width: 100%;
+  margin-top: 0.8rem;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.usage-table th {
+  padding: 0.3rem 0;
+  font-weight: 600;
+  text-align: right;
+  color: var(--muted);
+}
+
+.usage-table th:first-child {
+  text-align: left;
+}
+
+.usage-table th + th {
+  padding-left: 1rem;
+}
+
+.usage-table td {
+  padding: 0.3rem 0;
+  border-top: 1px solid var(--line);
+}
+
+.usage-table td.number {
+  padding-left: 1rem;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.usage-table .total td {
   font-weight: 600;
 }
 

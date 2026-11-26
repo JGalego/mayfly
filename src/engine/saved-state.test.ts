@@ -39,6 +39,19 @@ describe("upgradeState", () => {
     assert.deepEqual([state.spent, state.apps[0]?.spent, state.apps[0]?.versions[0]?.spent], [counted, counted, counted]);
   });
 
+  it("starts the ledger with the calls that made the versions it has, oldest first", () => {
+    const version = { parent: null, request: "r", attempt: 1, routes: "", summary: "", problem: "boom", image: null, spent: counted };
+    const app = upgradeState({ owner, apps: [unversioned] }).apps[0];
+    const lunch = { ...app, versions: [
+      { ...version, id: "a", at: 5, by: { kind: "model", name: "OpenAI · gpt-6.2-sol" } },
+      { ...version, id: "b", at: 9, by: { kind: "person", name: "o@mayfly.local" } },
+    ] };
+
+    const { calls } = upgradeState({ owner, apps: [lunch] });
+
+    assert.deepEqual(calls, [{ at: 5, app: "lunch", provider: "OpenAI", model: "OpenAI · gpt-6.2-sol", spent: counted }]);
+  });
+
   it("leaves a state saved with versions as it is", () => {
     const state = upgradeState({ owner, apps: [unversioned] });
 

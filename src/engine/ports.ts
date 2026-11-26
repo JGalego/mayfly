@@ -67,6 +67,8 @@ export interface Listener {
 export interface ModelProvider {
   /** The model as people know it, such as "OpenAI · gpt-6.2-sol". Every version it writes keeps it. */
   readonly name: string;
+  /** Who provides it, such as "OpenAI" or "localhost:11434". */
+  readonly provider: string;
   /** The model's reply to a conversation, under a system prompt, and what it cost. */
   complete(system: string, messages: readonly Message[], listener?: Listener): Promise<Completion>;
 }

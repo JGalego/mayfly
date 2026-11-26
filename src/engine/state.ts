@@ -63,14 +63,28 @@ export interface App {
   readonly spent: Usage;
 }
 
+/** One call to a model: when it ended, for which app, to which model, and what it spent. Kept when the app is removed. */
+export interface ModelCall {
+  readonly at: number;
+  /** The app it was for, or null for a new app that never got a name. */
+  readonly app: string | null;
+  /** Who provides the model, such as "OpenAI" or "localhost:11434". */
+  readonly provider: string;
+  /** The model as people know it, such as "OpenAI · gpt-6.2-sol". */
+  readonly model: string;
+  readonly spent: Usage;
+}
+
 export interface State {
   readonly owner: Owner | null;
   readonly apps: readonly App[];
   /** Everything the model has spent, including on removed apps and on attempts that failed. */
   readonly spent: Usage;
+  /** Every call to a model, oldest first: the ledger the spending is broken down from. */
+  readonly calls: readonly ModelCall[];
 }
 
-export const EMPTY_STATE: State = { owner: null, apps: [], spent: NO_USAGE };
+export const EMPTY_STATE: State = { owner: null, apps: [], spent: NO_USAGE, calls: [] };
 
 /** The role the owner holds, and the only one a new app lets in. */
 export const OWNER_ROLE = "owner";

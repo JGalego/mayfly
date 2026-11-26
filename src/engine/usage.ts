@@ -13,18 +13,24 @@ export function addUsage(a: Usage, b: Usage): Usage {
   return { input: a.input + b.input, output: a.output + b.output, thinking: a.thinking + b.thinking };
 }
 
-/** Wraps a model to count what it spends. */
-export function metered(model: ModelProvider): { readonly model: ModelProvider; spent(): Usage } {
-  let spent = NO_USAGE;
+/** What one call to a model spent, and when it ended. */
+export interface Spending {
+  readonly at: number;
+  readonly spent: Usage;
+}
+
+/** Wraps a model to note what each call to it spends. */
+export function metered(model: ModelProvider): { readonly model: ModelProvider; spending(): readonly Spending[] } {
+  const spending: Spending[] = [];
   return {
     model: {
-      name: model.name,
+      ...model,
       async complete(system, messages, listener) {
         const completion = await model.complete(system, messages, listener);
-        spent = addUsage(spent, completion.usage);
+        spending.push({ at: Date.now(), spent: completion.usage });
         return completion;
       },
     },
-    spent: () => spent,
+    spending: () => spending,
   };
 }

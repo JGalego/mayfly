@@ -1,4 +1,4 @@
-import { EMPTY_STATE, type App, type State, type Turn, type Version } from "./state.ts";
+import { EMPTY_STATE, type App, type ModelCall, type State, type Turn, type Version } from "./state.ts";
 import { NO_USAGE, type Usage } from "./usage.ts";
 
 /** An app as Mayfly saved it before it kept versions: its running image and code, and a conversation. */
@@ -15,8 +15,21 @@ interface UnversionedApp {
 /** Reads a state saved by this or an earlier version of Mayfly, so nobody loses their apps on an update. */
 export function upgradeState(saved: unknown): State {
   const state = { ...EMPTY_STATE, ...(saved as Partial<State>) };
-  const apps = state.apps.map((app) => ("versions" in app ? app : versioned(app as unknown as UnversionedApp)));
-  return { ...state, spent: counted(state.spent), apps: apps.map(withThinkingCounted) };
+  const apps = state.apps.map((app) => ("versions" in app ? app : versioned(app as unknown as UnversionedApp))).map(withThinkingCounted);
+  const calls = (saved as Partial<State>).calls ?? apps.flatMap(callsOf);
+  return { ...state, spent: counted(state.spent), apps, calls };
+}
+
+// The ledger starts with the calls that made the versions kept before it. Removed apps' calls were not kept.
+function callsOf(app: App): ModelCall[] {
+  const made = app.versions.filter((version) => version.by.kind === "model");
+  return made.map(({ at, by, spent }) => ({ at, app: app.name, provider: providerIn(by.name), model: by.name, spent }));
+}
+
+// Versions name their model as people know it, its provider first: "OpenAI · gpt-6.2-sol".
+function providerIn(model: string): string {
+  const end = model.indexOf(" · ");
+  return end === -1 ? "Unknown" : model.slice(0, end);
 }
 
 // Tokens saved before thinking was counted apart are all in the reply's.

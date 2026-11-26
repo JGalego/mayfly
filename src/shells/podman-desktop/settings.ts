@@ -31,9 +31,14 @@ export function endpointOf(setting: ModelSetting): string {
 }
 
 /** The model as people know it: "OpenAI · gpt-6.2-sol", or with the server for another provider. */
-export function labelOf({ provider, baseUrl, model }: ModelSetting): string {
-  if (provider === "openai") return `${PROVIDERS.openai} · ${model}`;
-  return `${URL.canParse(baseUrl) ? new URL(baseUrl).host : baseUrl} · ${model}`;
+export function labelOf(setting: ModelSetting): string {
+  return `${providerOf(setting)} · ${setting.model}`;
+}
+
+/** Who provides a model: OpenAI, or the server another provider runs on. */
+export function providerOf({ provider, baseUrl }: Pick<ModelSetting, "provider" | "baseUrl">): string {
+  if (provider === "openai") return PROVIDERS.openai;
+  return URL.canParse(baseUrl) ? new URL(baseUrl).host : baseUrl;
 }
 
 /** The model with this id, or the default one. */

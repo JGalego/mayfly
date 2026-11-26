@@ -17,6 +17,7 @@ export function openAiCompatibleModel({ baseUrl, apiKey, model }: ModelSettings)
   const client = new OpenAI({ baseURL: baseUrl, apiKey });
   return {
     name: model,
+    provider: URL.canParse(baseUrl) ? new URL(baseUrl).host : baseUrl,
     // Streamed, so people can watch the code being written, and the thinking where the provider shares it.
     async complete(system, messages, listener = {}) {
       const stream = await client.chat.completions.create({

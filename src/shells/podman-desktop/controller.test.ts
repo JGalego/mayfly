@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { AppView, Engine } from "../../engine/engine.ts";
+import type { ModelCall } from "../../engine/state.ts";
 import type { Step, Watcher } from "../../engine/step.ts";
 import { createController } from "./controller.ts";
 import type { ToUi } from "./messages.ts";
@@ -22,6 +23,7 @@ const local: ModelSetting = { id: "", provider: "openai-compatible", baseUrl: "h
 const OPENAI_ENDPOINT = "https://api.openai.com/v1";
 const writing: Step = { kind: "writing", attempt: 1 };
 const draft = (text: string): Step => ({ kind: "draft", text });
+const call: ModelCall = { at: 1, app: "lunch-split", provider: "OpenAI", model: "OpenAI · gpt-6.2-sol", spent: { input: 500, output: 80, thinking: 0 } };
 const thinking = (text: string): Step => ({ kind: "thinking", text });
 
 describe("the Mayfly panel's controller", () => {
@@ -186,6 +188,14 @@ describe("the Mayfly panel's controller", () => {
     await handle({ type: "code", app: "lunch-split", version: "v1" });
 
     assert.deepEqual(posted, [{ type: "code", app: "lunch-split", version: "v1", routes: "export default 1;\n", thinking: "One route will do." }]);
+  });
+
+  it("sends the ledger of model calls when the page asks for it", async () => {
+    const { handle, posted } = setUp({ apps: [] });
+
+    await handle({ type: "ledger" });
+
+    assert.deepEqual(posted, [{ type: "ledger", calls: [call] }]);
   });
 
   it("remembers whether developer mode is on", async () => {
@@ -403,6 +413,7 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
     changeEmail: async (email) => (calls.push(`email ${email}`), { ...owner, email }),
     newPassword: async () => ({ ...owner, password: "brand-new-pass" }),
     spent: async () => ({ input: 500, output: 80, thinking: 0 }),
+    ledger: async () => [call],
     logs: async (pod, container) => [`2026-11-26T15:04:05Z ${pod} ${container}`],
     health: async () => [{ name: "lunch-split", kind: "app", pod: "mayfly-lunch-split", containers: [] }],
   };

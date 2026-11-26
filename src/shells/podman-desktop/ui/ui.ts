@@ -1,5 +1,5 @@
 import type { AppView, ServiceHealth, Written } from "../../../engine/engine.ts";
-import type { Turn } from "../../../engine/state.ts";
+import type { ModelCall, Turn } from "../../../engine/state.ts";
 import type { FromUi, Progress, ToUi, Work } from "../messages.ts";
 import type { Check } from "../doctor.ts";
 import type { ModelView } from "../messages.ts";
@@ -8,6 +8,7 @@ import { codeView } from "./code.ts";
 import { doctorView } from "./doctor-view.ts";
 import { healthView } from "./health.ts";
 import { lightFor, type Light } from "./lights.ts";
+import { ledgerView } from "./ledger-view.ts";
 import { logViewer } from "./logs.ts";
 import { historyView } from "./history.ts";
 import { renderStatusbar, setUpStatusbar } from "./statusbar.ts";
@@ -64,6 +65,8 @@ const asked = new Set<string>();
 let bannerTimer: number | undefined;
 /** What the doctor found when last asked. */
 let checks: readonly Check[] | undefined;
+/** Every call to a model, when last asked. */
+let calls: readonly ModelCall[] | undefined;
 /** How the apps and the sign-in service were doing when Podman was last asked. */
 let health: readonly ServiceHealth[] | undefined;
 /** The model the person picked for the next new app, if not the default. */
@@ -73,8 +76,10 @@ setUpModels(post, () => render());
 setUpStatusbar(() => go({ kind: "settings" }));
 // One log reader in Settings for everything, Mayfly's activity included, and one for the app on screen.
 const settingsLogs = logViewer(post, { activity: true });
+const ledger = ledgerView();
 const appLogs = logViewer(post, { activity: false });
 element("settings-logs").append(settingsLogs.element);
+element("ledger").append(ledger.element);
 element("app-logs").append(appLogs.element);
 element("examples").replaceChildren(...EXAMPLES.map(exampleItem));
 
@@ -139,6 +144,9 @@ function receive(message: ToUi): void {
     case "code":
       written.set(`${message.app}:${message.version}`, { routes: message.routes, thinking: message.thinking });
       return render();
+    case "ledger":
+      calls = message.calls;
+      return render();
     case "health":
       health = message.services;
       settingsLogs.offer(message.services);
@@ -169,6 +177,8 @@ function receiveState(next: State): void {
   // Whatever the outcome, an error for it came before this.
   if (previous !== undefined && previous.working !== null && next.working === null) lastSent = undefined;
   if (view.kind === "app" && shownApp() === undefined) view = { kind: "new" };
+  // The ledger grows when work ends, which sends the state.
+  if (view.kind === "settings") post({ type: "ledger" });
   // On first use, Settings opens on the default model, so the person can paste its key.
   if (previous === undefined && !canWrite(next, undefined)) return askForKey(next, undefined);
   render();
@@ -184,6 +194,7 @@ function go(next: View): void {
     element<HTMLInputElement>("owner-email").value = state?.owner ?? "";
     askDoctor();
     askHealth();
+    post({ type: "ledger" });
     return settingsLogs.ask();
   }
   request.focus();
@@ -388,6 +399,7 @@ function render(): void {
     renderModels(state, post, () => render());
     element("health").replaceChildren(...healthView(health));
     element("doctor").replaceChildren(...doctorView(checks));
+    ledger.show(calls, { spent: state.spent, apps: state.apps.map((app) => app.name) });
   }
   else renderChat(state, app);
   renderStatusbar(state, app, activeModel(state, app), health);

@@ -12,7 +12,7 @@ import type { ModelProvider } from "../../engine/ports.ts";
 import { createController, type ControllerPorts } from "./controller.ts";
 import { examine, type ModelProbe } from "./doctor.ts";
 import type { ModelPorts } from "./model-settings.ts";
-import { endpointOf, FIRST_MODELS, isProvider, labelOf, modelFor, type Models, type ModelSetting } from "./settings.ts";
+import { endpointOf, FIRST_MODELS, isProvider, labelOf, modelFor, providerOf, type Models, type ModelSetting } from "./settings.ts";
 
 // The published, signed runtime this version builds apps on. The README shows how to verify it.
 const RUNTIME_IMAGE = "ghcr.io/jgalego/mayfly-runtime@sha256:1d30bd9e46727f4f116861a24851c84c267bd79803f75b040c9d223846bebd05";
@@ -99,11 +99,12 @@ function configuredModel(setting: ModelSetting, keys: KeyStore): ModelProvider {
   const name = labelOf(setting);
   return {
     name,
-    async complete(system, messages, onText) {
+    provider: providerOf(setting),
+    async complete(system, messages, listener) {
       const baseUrl = endpointOf(setting);
       const apiKey = await keys.get(baseUrl);
       if (!apiKey) throw new Error(`Add the API key for ${name} in Settings first.`);
-      return openAiCompatibleModel({ baseUrl, apiKey, model: setting.model }).complete(system, messages, onText);
+      return openAiCompatibleModel({ baseUrl, apiKey, model: setting.model }).complete(system, messages, listener);
     },
   };
 }

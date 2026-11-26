@@ -1,4 +1,5 @@
 import type { AppView, ServiceHealth } from "../../engine/engine.ts";
+import type { ModelCall } from "../../engine/state.ts";
 import type { Step } from "../../engine/step.ts";
 import type { Usage } from "../../engine/usage.ts";
 import type { Check } from "./doctor.ts";
@@ -48,6 +49,7 @@ export type FromUi =
   | { readonly type: "new-password" }
   | { readonly type: "developer"; readonly on: boolean }
   | { readonly type: "health" }
+  | { readonly type: "ledger" }
   | { readonly type: "doctor" }
   | { readonly type: "activity" }
   | { readonly type: "logs"; readonly pod: string; readonly container: string }
@@ -72,6 +74,7 @@ export type ToUi =
   | { readonly type: "progress"; readonly working: Progress }
   | { readonly type: "created"; readonly name: string }
   | { readonly type: "health"; readonly services: readonly ServiceHealth[] }
+  | { readonly type: "ledger"; readonly calls: readonly ModelCall[] }
   | { readonly type: "doctor"; readonly checks: readonly Check[] }
   | { readonly type: "activity"; readonly entries: readonly Activity[] }
   | { readonly type: "logs"; readonly pod: string; readonly container: string; readonly lines: readonly string[] }

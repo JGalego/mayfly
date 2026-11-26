@@ -5,7 +5,7 @@ import { generateApp, type Ask, type Attempt, type Generation } from "./generate
 import { mayflyName } from "../core/names.ts";
 import type { ContainerHealth, ModelProvider, Ports } from "./ports.ts";
 import { newPassword, newSecret } from "./secrets.ts";
-import { findApp, findVersion, runningVersion, withApp, withoutApp, type App, type Author, type Owner, type State, type Turn, type Version } from "./state.ts";
+import { findApp, findVersion, runningVersion, withApp, withoutApp, type App, type Author, type ModelCall, type Owner, type State, type Turn, type Version } from "./state.ts";
 import { UNWATCHED, type Watcher } from "./step.ts";
 import { addUsage, metered, NO_USAGE, type Usage } from "./usage.ts";
 
@@ -74,6 +74,8 @@ export interface Engine {
   newPassword(): Promise<Owner>;
   /** What the model has spent on every app, including removed ones and attempts that failed. */
   spent(): Promise<Usage>;
+  /** Every call to a model, oldest first, removed apps' included. */
+  ledger(): Promise<readonly ModelCall[]>;
   /** How each app that should be running, and the sign-in service, is doing. */
   health(): Promise<ServiceHealth[]>;
   /** The last lines one container of an app's pod, or the sign-in service's, wrote. No other pod's. */
@@ -81,41 +83,41 @@ export interface Engine {
 }
 
 export function createEngine({ store, deployer, observer, identity, models, builder }: Ports): Engine {
-  async function generate(ask: Ask, model: ModelProvider, watch: Watcher): Promise<Generation> {
+  async function generate(ask: Ask, model: ModelProvider, watch: Watcher): Promise<Generated> {
     const meter = metered(model);
+    const callsFor = (app: string | null): ModelCall[] => meter.spending().map(({ at, spent }) => ({ at, app, provider: model.provider, model: model.name, spent }));
     try {
-      return await generateApp(ask, { model: meter.model, builder, watch });
+      const generation = await generateApp(ask, { model: meter.model, builder, watch });
+      return { ...generation, calls: callsFor(generation.name) };
     } catch (error) {
-      // Cut short by the model's service or by Podman, the attempts still cost what the model wrote.
-      await store.save(spend(await store.load(), meter.spent(), "change" in ask ? ask.app.name : undefined));
+      // Cut short by the model's service or by Podman, the calls still cost what the model wrote.
+      await store.save(charge(await store.load(), callsFor("change" in ask ? ask.app.name : null)));
       throw error;
     }
   }
 
-  /** Keeps every attempt as a version and the exchange in the conversation, then runs the attempt that passed. */
-  async function record(request: string, { name, attempts }: Generation, made: Made, watch: Watcher): Promise<AppView> {
+  /** Keeps every attempt as a version and the exchange in the conversation, charges the calls, then runs the attempt that passed. */
+  async function record(request: string, { name, attempts, calls }: Generated, made: Made, watch: Watcher): Promise<AppView> {
     const state = withOwner(await store.load());
     const app = findApp(state, name) ?? newApp(state, name, made.model);
     const versions = chain(attempts, request, made);
     const last = versions.at(-1);
     const passed = last?.problem === null ? last : undefined;
-    const spent = attempts.reduce((sum, attempt) => addUsage(sum, attempt.spent), NO_USAGE);
     const reply: Turn = { from: "mayfly", text: replyFor(app, versions), versions: versions.map((version) => version.id), took: Date.now() - made.started, at: Date.now() };
     const next: App = {
       ...app,
       versions: [...app.versions, ...versions],
       head: passed?.id ?? app.head,
       conversation: [...app.conversation, { from: "person", text: request, at: made.started }, reply],
-      spent: addUsage(app.spent, spent),
     };
-    const nextState = spend(withApp(state, next), spent);
+    const nextState = charge(withApp(state, next), calls);
     if (passed !== undefined) {
       watch({ kind: "deploying" });
       await identity.sync(nextState);
       await deployer.deploy(appObjects(next, passed.image, identity.settingsFor(next)));
     }
     await store.save(nextState);
-    return appView(next);
+    return appView(existingApp(nextState, name));
   }
 
   /** Changes the owner, and tells the sign-in service when it is running for some app. */
@@ -175,7 +177,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       if (!trial.ok) watch({ kind: "failed", problem: trial.problem });
       const outcome = trial.ok ? { problem: null, image } : { problem: trial.problem, image: null };
       const attempt: Attempt = { routes, summary: trial.ok ? "Your edit is running." : "", spent: NO_USAGE, at: Date.now(), ...outcome };
-      return record(message || "Edit the code by hand", { name, attempts: [attempt] }, { base: base?.id ?? null, by: { kind: "person", name: state.owner.email }, model: null, started }, watch);
+      return record(message || "Edit the code by hand", { name, attempts: [attempt], calls: [] }, { base: base?.id ?? null, by: { kind: "person", name: state.owner.email }, model: null, started }, watch);
     },
 
     async restore(name, id, watch = UNWATCHED) {
@@ -233,6 +235,10 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       return (await store.load()).spent;
     },
 
+    async ledger() {
+      return (await store.load()).calls;
+    },
+
     async changeEmail(email) {
       const address = email.trim();
       if (!EMAIL.test(address)) throw new Error("That does not look like an email address.");
@@ -260,6 +266,9 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     },
   };
 }
+
+/** A generation, and the calls to the model it took. */
+type Generated = Generation & { readonly calls: readonly ModelCall[] };
 
 /** Who made a request's versions, what they started from, and when; and for a new app, the model it was made with. */
 interface Made {
@@ -315,11 +324,13 @@ function replyFor(app: App, versions: readonly Version[]): string {
   return `${failed}${unchanged} The ${versions.length === 1 ? "" : "last "}problem was:\n\n${last?.problem ?? ""}`;
 }
 
-/** Counts tokens against the total and, when it names one, against an app. */
-function spend(state: State, spent: Usage, name?: string): State {
-  const app = name === undefined ? undefined : findApp(state, name);
-  const charged = app === undefined ? state : withApp(state, { ...app, spent: addUsage(app.spent, spent) });
-  return { ...charged, spent: addUsage(state.spent, spent) };
+/** Enters the calls in the ledger, and counts what each spent against the total and its app. */
+function charge(state: State, calls: readonly ModelCall[]): State {
+  return calls.reduce((charged, call) => {
+    const app = call.app === null ? undefined : findApp(charged, call.app);
+    const counted = app === undefined ? charged : withApp(charged, { ...app, spent: addUsage(app.spent, call.spent) });
+    return { ...counted, spent: addUsage(counted.spent, call.spent), calls: [...counted.calls, call] };
+  }, state);
 }
 
 function appView(app: App): AppView {
