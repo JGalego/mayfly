@@ -6,6 +6,8 @@ Read `README.md` for the product, the contract and the scope.
 
 A sense of taste is non-negotiable in everything we do: code, docs, design, names and commit messages. Working is not the same as done.
 
+Avoid AI slop, fluff and filler. Saying more with less is an art and a mark of taste.
+
 ## Git
 
 - Commits are by the repo owner only, using this repo's local git identity. Never change it.
