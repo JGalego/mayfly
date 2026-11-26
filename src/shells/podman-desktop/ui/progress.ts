@@ -36,11 +36,18 @@ export function tickClocks(): void {
 function stageItem(stage: Stage, status: "active" | "done" | "failed", options: { peek: boolean; isNew: boolean; codeOpen: boolean }): HTMLLIElement {
   const [icon, label] = STAGES[stage.kind](stage.attempt);
   const heading = h("p", "stage-label", label);
-  if (stage.live === true && stage.code !== undefined) heading.append(h("span", "quiet", ` · ${lineCount(stage.code)} lines`));
+  if (status === "active") heading.append(h("span", "quiet", liveNote(stage)));
   if (status !== "active") heading.append(h("span", `stage-mark ${status}`, status === "done" ? "✓" : "✗"));
   const item = h("li", `stage ${status}`, keepTime(h("span", "stage-icon", icon)), h("div", "stage-body", heading, ...details(stage, options)));
   item.classList.toggle("new", options.isNew);
   return item;
+}
+
+// Reasoning models think before they write, and that thinking is not streamed. Saying so explains the wait.
+function liveNote({ kind, code }: Stage): string {
+  if (kind !== "writing") return "";
+  if (code === undefined) return " · the model is thinking";
+  return code === "" ? " · starting to write" : ` · ${lineCount(code)} lines`;
 }
 
 function details(stage: Stage, { peek, codeOpen }: { peek: boolean; codeOpen: boolean }): Node[] {
