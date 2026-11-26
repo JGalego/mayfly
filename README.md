@@ -55,7 +55,7 @@ Every app runs on one image: Node 24 on [Wolfi](https://github.com/wolfi-dev), b
 |---|---|
 | Containerfile best practices | [hadolint](https://github.com/hadolint/hadolint), on every commit |
 | Containerfile: base pinned by digest, no `RUN` or `ADD`, numeric non-root user, exec-form entrypoint, no secrets, labels | [OPA](https://www.openpolicyagent.org/) via [conftest](https://www.conftest.dev/): [`containerfile.rego`](policy/containerfile.rego) |
-| The same commit always builds the same image | two clean builds, same digest |
+| The same commit always builds the same image | two clean builds, same digest. With Podman's default `overlay` storage it is also the same digest as on CI; `vfs` writes layer entries in a different order |
 | Image: no shell, package manager or download tool, no setuid files, nothing writable by anyone, root-owned read-only code, no tests, under 160 MB, no secrets in the environment, labels | OPA via conftest: [`image.rego`](policy/image.rego), on the built image's config and every file in it |
 | No known high or critical vulnerabilities | [Grype](https://github.com/anchore/grype) |
 | The policies themselves | Rego tests, `conftest verify` |
