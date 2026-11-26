@@ -153,7 +153,7 @@ async function ask(app: string, question: string, session: Session): Promise<voi
 
 // The page hears the new name before the state that no longer has the old one, so it stays on the app.
 async function rename(app: string, to: string, session: Session): Promise<void> {
-  await runAlone({ app, request: `Rename to ${to}`, kind: "rename" }, session, async (watch) => {
+  await runAlone({ app, request: `Rename to \`${to}\``, kind: "rename" }, session, async (watch) => {
     const renamed = await session.engine.rename(app, to, watch);
     await session.post({ type: "renamed", from: app, to: renamed.name });
     return renamed;

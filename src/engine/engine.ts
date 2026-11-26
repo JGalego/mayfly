@@ -211,8 +211,9 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       const state = await store.load();
       const app = existingApp(state, name);
       const newName = usableName(state, name, to);
-      const note = `Renamed ${name} to ${newName}. It is at the same address, and anyone signed in to it has to sign in again.`;
-      const conversation: Turn[] = [...app.conversation, { from: "person", text: `Rename to ${newName}`, at: started }, { from: "mayfly", text: note, versions: [], took: Date.now() - started, at: Date.now() }];
+      // Names go in backticks, which shells show as names rather than words.
+      const note = `Renamed \`${name}\` to \`${newName}\`. It is at the same address, and anyone signed in to it has to sign in again.`;
+      const conversation: Turn[] = [...app.conversation, { from: "person", text: `Rename to \`${newName}\``, at: started }, { from: "mayfly", text: note, versions: [], took: Date.now() - started, at: Date.now() }];
       const renamed: App = { ...app, name: newName, conversation };
       const next: State = {
         ...state,

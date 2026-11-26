@@ -1589,7 +1589,7 @@ dialog .editor-actions {
   margin-top: 1.25rem;
 }
 
-/* App names and versions in a dialog stand apart from its words, in the same monospace as the code. */
+/* App names in a dialog or the conversation, and versions in a dialog, stand apart from the words, in the same monospace as the code. */
 .name-chip {
   padding: 0.05em 0.4em;
   border-radius: 4px;

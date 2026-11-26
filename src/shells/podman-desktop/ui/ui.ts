@@ -8,6 +8,7 @@ import { changes, codeView } from "./code.ts";
 import { codeEditor } from "./editor.ts";
 import { commandMenu } from "./command-menu.ts";
 import { parse, suggestions, type Command } from "./commands.ts";
+import { nameChip, withChips } from "./chips.ts";
 import { doctorView } from "./doctor-view.ts";
 import { healthView } from "./health.ts";
 import { lightFor, type Light } from "./lights.ts";
@@ -730,7 +731,7 @@ function renderHistory(app: AppView | undefined, showing: Showing, idle: boolean
 }
 
 function turnItem({ from, text, at }: Turn, extras: readonly Node[] = []): HTMLLIElement {
-  const words = h("p", "", text);
+  const words = h("p", "", ...withChips(text));
   // When it was said, for anyone who wants to know.
   if (at !== 0) words.title = new Date(at).toLocaleString();
   return turn(from, h("div", "", words, ...extras));
@@ -744,18 +745,13 @@ function turn(from: Turn["from"], body: HTMLElement): HTMLLIElement {
   return item;
 }
 
-/** An app's name, set apart from the words around it wherever a dialog names it. */
-function nameChip(name: string): HTMLElement {
-  return h("code", "name-chip", name);
-}
-
 function versionChip(id: string): HTMLElement {
   return h("code", "version-id", id);
 }
 
 /** The work under way, as Mayfly's next turn in the conversation: an answer as it is written, or the stages of the work. */
 function pendingView(working: Progress, showing: Showing): HTMLElement {
-  if (working.kind === "remove") return h("p", "", spinner(), `Stopping and removing ${working.app ?? ""}…`);
+  if (working.kind === "remove") return h("p", "", spinner(), " Stopping and removing ", nameChip(working.app ?? ""), "…");
   if (working.kind !== "ask") return progressView(working, TITLES[working.kind], showing);
   const draft = working.steps.findLast((step) => step.kind === "draft");
   return draft?.kind === "draft" ? h("p", "", draft.text) : h("p", "", spinner(), " Thinking about your question…");

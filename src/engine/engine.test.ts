@@ -209,6 +209,7 @@ describe("the engine", () => {
     assert.deepEqual(names(removed.at(-1)), names(deployed.at(-2)));
     assert.ok(names(deployed.at(-1)).every((name) => name.includes("mayfly-bills")));
     assert.deepEqual((await engine.ledger()).map((call) => call.app), ["bills"]);
+    assert.deepEqual(after.conversation.slice(-2).map((turn) => turn.text.split(".")[0]), ["Rename to `bills`", "Renamed `lunch` to `bills`"]);
     assert.match(after.conversation.at(-1)?.text ?? "", /sign in again/);
   });
 
