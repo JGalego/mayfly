@@ -34,4 +34,5 @@ await build({
 
 await mkdir(`${out}media`, { recursive: true });
 for (const file of ["index.html", "ui.css"]) await copyFile(`${here}ui/${file}`, `${out}media/${file}`);
+await copyFile(`${out}../assets/logo.svg`, `${out}media/logo.svg`);
 await copyFile(`${out}../LICENSE`, `${out}dist/LICENSE`);

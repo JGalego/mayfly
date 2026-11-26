@@ -31,10 +31,26 @@ export const SYSTEM_PROMPT = [
   "```ts",
   "<the whole of routes.ts>",
   "```",
+  "<one or two short sentences for the person: what the app does, or what you changed. Plain words, no code.>",
 ].join("\n");
 
 export function requestFor(description: string): string {
   return `Write the app for this request:\n\n${description}`;
+}
+
+/** Asks for a change to an app that is already in use, so its stored data has to survive the change. */
+export function changeFor(app: { readonly name: string; readonly routes: string }, change: string): string {
+  return [
+    `This is routes.ts of the app ${app.name} now:`,
+    "",
+    "```ts",
+    `${app.routes}\`\`\``,
+    "",
+    `Change the app for this request:\n\n${change}`,
+    "",
+    "Keep everything else as it is, including what the app keeps in localStorage and under which keys, so people keep their data.",
+    `Reply with the whole new routes.ts, in the same format, keeping the name ${app.name}.`,
+  ].join("\n");
 }
 
 export function repairFor(problem: string): string {

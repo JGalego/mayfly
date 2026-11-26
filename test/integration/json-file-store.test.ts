@@ -1,12 +1,13 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { jsonFileStore } from "../../src/adapters/json-file/json-file-store.ts";
 import { EMPTY_STATE, type State } from "../../src/engine/state.ts";
 
-const state: State = { owner: { email: "o@mayfly.local", username: "o", password: "p" }, apps: [] };
+const owner = { email: "o@mayfly.local", username: "o", password: "p" };
+const state: State = { owner, apps: [], spent: { input: 1, output: 2 } };
 
 describe("the JSON file store", () => {
   it("starts empty when there is no file yet", async () => {
@@ -19,6 +20,14 @@ describe("the JSON file store", () => {
     await store.save(state);
 
     assert.deepEqual(await store.load(), state);
+  });
+
+  it("reads a file saved before tokens were counted", async () => {
+    const path = await newPath();
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, JSON.stringify({ owner, apps: [] }));
+
+    assert.deepEqual(await jsonFileStore(path).load(), { ...EMPTY_STATE, owner });
   });
 
   it("keeps the file readable by its owner only, since it holds secrets", async () => {

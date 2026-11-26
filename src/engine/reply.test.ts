@@ -8,13 +8,19 @@ describe("parseReply", () => {
   it("reads the app's name and its routes.ts", () => {
     const reply = `name: expense-splitter\n\`\`\`ts\n${code}\n\`\`\``;
 
-    assert.deepEqual(parseReply(reply), { ok: true, name: "expense-splitter", routes: `${code}\n` });
+    assert.deepEqual(parseReply(reply), { ok: true, name: "expense-splitter", routes: `${code}\n`, summary: "" });
   });
 
-  it("ignores text around the name and the code, which models add despite being asked not to", () => {
+  it("reads what the model tells the person after the code", () => {
+    const reply = `name: notes\n\`\`\`ts\n${code}\n\`\`\`\n\nKeeps your notes in this browser.\n`;
+
+    assert.deepEqual(parseReply(reply), { ok: true, name: "notes", routes: `${code}\n`, summary: "Keeps your notes in this browser." });
+  });
+
+  it("ignores text before the code, which models add despite being asked not to", () => {
     const reply = `Here you go!\n\nname: notes\n\nSome words.\n\`\`\`typescript\n${code}\n\`\`\`\nEnjoy.`;
 
-    assert.deepEqual(parseReply(reply), { ok: true, name: "notes", routes: `${code}\n` });
+    assert.deepEqual(parseReply(reply), { ok: true, name: "notes", routes: `${code}\n`, summary: "Enjoy." });
   });
 
   it("explains a missing or invalid name, so the model can fix it", () => {

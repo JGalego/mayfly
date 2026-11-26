@@ -20,10 +20,19 @@
     "configuration": {
       "title": "Mayfly",
       "properties": {
+        "mayfly.model.provider": {
+          "type": "string",
+          "enum": [
+            "openai",
+            "openai-compatible"
+          ],
+          "default": "openai",
+          "description": "Who writes the apps: OpenAI, or another service that speaks OpenAI's API"
+        },
         "mayfly.model.baseUrl": {
           "type": "string",
-          "default": "https://api.openai.com/v1",
-          "description": "The OpenAI-compatible endpoint that writes the apps"
+          "default": "",
+          "description": "For an OpenAI-compatible provider: its endpoint, such as http://localhost:11434/v1"
         },
         "mayfly.model.name": {
           "type": "string",

@@ -28,13 +28,14 @@ Describe a small app for a short or routine task. Mayfly builds it and runs it o
 
 ## Use it
 
-You need [Podman Desktop](https://podman-desktop.io/) with a Podman 5 machine running, and an [OpenAI API key](https://platform.openai.com/api-keys).
+You need [Podman Desktop](https://podman-desktop.io/) with a Podman 5 machine running, and an API key for [OpenAI](https://platform.openai.com/api-keys) or another service that speaks OpenAI's API.
 
 1. In Podman Desktop, open **Extensions**, choose **Install custom…**, and enter `ghcr.io/jgalego/mayfly-extension:main`.
-2. Open **Mayfly** in the navigation bar and paste your API key. Podman Desktop keeps it in its secret storage.
-3. Describe what you need and choose **Make it**. About a minute later the app opens in your browser. Sign in as the owner shown on the page; **Copy password** puts the password on your clipboard.
+2. Open **Mayfly** in the navigation bar. In **Settings**, pick the provider and model and paste your API key. The default is OpenAI with `gpt-6.2-sol`. Podman Desktop keeps the key in its secret storage, and Mayfly sends it only to the endpoint it was saved for.
+3. Choose **New app** and say what you need. About a minute later the app opens in your browser. Sign in as the owner shown above the conversation; **Copy password** puts the password on your clipboard.
+4. Each app is a conversation. Ask for a change there, and the new version replaces the old one at the same address.
 
-The model and endpoint are in Podman Desktop's settings under Mayfly. The default is OpenAI with `gpt-6.2-sol`.
+The status bar shows the model and the tokens it has spent, on the app you're looking at and in all.
 
 ## Why not Dyad?
 
@@ -96,11 +97,11 @@ flowchart LR
   model["OpenAI-compatible model provider<br/>your own key"] -. implements .-> ports
 ```
 
-An app is made from a description. The model writes `routes.ts`, Mayfly builds it on the runtime image and tries it out with no network and no privileges, and any failure goes back to the model, up to three times. Only an app that starts, passes its health check and serves an HTML home page gets deployed.
+An app is made from a description and changed by later requests in its conversation, for which the model starts from the app's current code. The model writes `routes.ts`, Mayfly builds it on the runtime image and tries it out with no network and no privileges, and any failure goes back to the model, up to three times. Only an app that starts, passes its health check and serves an HTML home page gets deployed.
 
 ```mermaid
 flowchart LR
-  d["Description"] --> m["Model<br/>OpenAI-compatible"]
+  d["Description<br/>or change request"] --> m["Model<br/>OpenAI-compatible"]
   m -->|"name + routes.ts"| b["Build<br/>runtime image + routes.ts"]
   b --> t["Trial run<br/>no network, no privileges"]
   t -->|"fails: its logs"| m

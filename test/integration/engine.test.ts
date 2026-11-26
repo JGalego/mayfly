@@ -14,7 +14,7 @@ import { Browser } from "./browser.ts";
 import { removeImages, replyWith, RUNTIME_IMAGE, waitUntilUp } from "./support.ts";
 
 // A scripted model, so this test needs no API key: it always writes the hello app.
-const model: ModelProvider = { complete: async () => replyWith("hello", "hello-app") };
+const model: ModelProvider = { complete: async () => ({ text: replyWith("hello", "hello-app"), usage: { input: 0, output: 0 } }) };
 const store = jsonFileStore(join(await mkdtemp(join(tmpdir(), "mayfly-")), "state.json"));
 const engine = createEngine({ store, deployer: podmanDeployer, identity: dexIdentity, model, builder: podmanBuilder(RUNTIME_IMAGE) });
 const images: string[] = [];

@@ -2,81 +2,112 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ConfigMap, KubeObject } from "../core/kube.ts";
 import { createEngine } from "./engine.ts";
-import type { Builder, Deployer, IdentitySource, ModelProvider, StateStore } from "./ports.ts";
+import type { Builder, Deployer, IdentitySource, Message, ModelProvider, StateStore, Trial } from "./ports.ts";
 import { EMPTY_STATE, type State } from "./state.ts";
 
-const expenses = { name: "expenses", image: "localhost/mayfly-expenses:1" };
-const notes = { name: "notes", image: "localhost/mayfly-notes:1" };
+const COST = { input: 100, output: 20 };
 
 describe("the engine", () => {
-  it("deploys an app behind sign-in and returns its loopback URL", async () => {
-    const { engine, deployed } = setUp();
+  it("creates an app from a description and deploys it behind sign-in at a loopback URL", async () => {
+    const { engine, deployed } = setUp([reply("lunch")]);
 
-    const app = await engine.deploy(expenses);
+    const app = await engine.create("split the team's lunch bills");
 
-    assert.deepEqual(app, { name: "expenses", url: "http://localhost:18100/" });
-    assert.deepEqual(names(deployed[0]), [
-      "ConfigMap/mayfly-expenses-auth",
-      "Secret/mayfly-expenses-auth",
-      "Pod/mayfly-expenses",
-    ]);
+    assert.equal(app.name, "lunch");
+    assert.equal(app.url, "http://localhost:18100/");
+    assert.deepEqual(names(deployed[0]), ["ConfigMap/mayfly-lunch-auth", "Secret/mayfly-lunch-auth", "Pod/mayfly-lunch"]);
   });
 
   it("lets only the owner into a new app", async () => {
-    const { engine, deployed } = setUp();
+    const { engine, deployed } = setUp([reply("lunch")]);
 
-    await engine.deploy(expenses);
+    await engine.create("split lunch bills");
 
     const configMap = deployed[0]?.find((o): o is ConfigMap => o.kind === "ConfigMap");
     assert.equal(configMap?.data.OAUTH2_PROXY_ALLOWED_GROUPS, "owner");
   });
 
   it("registers the app with the identity provider before starting it", async () => {
-    const { engine, log, synced } = setUp();
+    const { engine, log, synced } = setUp([reply("lunch")]);
 
-    await engine.deploy(expenses);
+    await engine.create("split lunch bills");
 
     assert.deepEqual(log, ["sync", "deploy"]);
-    assert.deepEqual(synced[0]?.apps.map((app) => app.manifest.name), ["expenses"]);
+    assert.deepEqual(synced[0]?.apps.map((app) => app.manifest.name), ["lunch"]);
   });
 
-  it("gives each app its own port", async () => {
-    const { engine } = setUp();
+  it("gives each app its own port, even when the model picks a name already in use", async () => {
+    const { engine } = setUp([reply("notes"), reply("notes")]);
 
-    const first = await engine.deploy(expenses);
-    const second = await engine.deploy(notes);
+    const first = await engine.create("keep notes");
+    const second = await engine.create("keep other notes");
 
+    assert.equal(second.name, "notes-2");
     assert.notEqual(first.url, second.url);
   });
 
-  it("keeps an app's URL and secrets when it is deployed again", async () => {
-    const { engine, deployed } = setUp();
+  it("keeps the conversation: what the person asked and what the model said", async () => {
+    const { engine } = setUp([reply("lunch", "Splits bills and shows who owes whom.")]);
 
-    const before = await engine.deploy(expenses);
-    const after = await engine.deploy({ ...expenses, image: "localhost/mayfly-expenses:2" });
+    const app = await engine.create("split lunch bills");
 
-    assert.equal(after.url, before.url);
-    assert.deepEqual(secretOf(deployed[1]), secretOf(deployed[0]));
+    assert.deepEqual(app.conversation, [
+      { from: "person", text: "split lunch bills" },
+      { from: "mayfly", text: "Splits bills and shows who owes whom." },
+    ]);
   });
 
-  it("remembers the apps it deployed", async () => {
-    const { engine } = setUp();
+  it("changes an app from its current code, at the same URL and with the same secrets", async () => {
+    const { engine, deployed, asked } = setUp([reply("lunch", "Made it.", "v1"), reply("whatever", "Added totals.", "v2")]);
+    const before = await engine.create("split lunch bills");
 
-    await engine.deploy(expenses);
-    await engine.deploy(notes);
+    const after = await engine.change("lunch", "add a monthly total");
+
+    assert.match(asked.at(-1) ?? "", /v1/);
+    assert.equal(after.url, before.url);
+    assert.deepEqual(secretOf(deployed[1]), secretOf(deployed[0]));
+    assert.deepEqual(after.conversation.slice(2), [
+      { from: "person", text: "add a monthly total" },
+      { from: "mayfly", text: "Added totals." },
+    ]);
+  });
+
+  it("refuses to change an app it does not know", async () => {
+    const { engine } = setUp([]);
+
+    await assert.rejects(engine.change("ghost", "make it blue"), /no app named ghost/);
+  });
+
+  it("counts the tokens each app spent, and all of them, including failed attempts and removed apps", async () => {
+    const failing: Trial = { ok: false, problem: "crashed" };
+    const { engine } = setUp([reply("lunch"), reply("lunch"), reply("lunch"), reply("lunch")], [{ ok: true }, failing, failing, failing]);
+    await engine.create("split lunch bills");
+
+    await assert.rejects(engine.change("lunch", "break it"));
+
+    assert.deepEqual((await engine.list())[0]?.spent, { input: 400, output: 80 });
+    await engine.remove("lunch");
+    assert.deepEqual(await engine.spent(), { input: 400, output: 80 });
+  });
+
+  it("remembers the apps it created", async () => {
+    const { engine } = setUp([reply("lunch"), reply("notes")]);
+
+    await engine.create("split lunch bills");
+    await engine.create("keep notes");
 
     assert.deepEqual(
       (await engine.list()).map((app) => app.name),
-      ["expenses", "notes"],
+      ["lunch", "notes"],
     );
   });
 
   it("stops, unregisters and forgets an app it removes", async () => {
-    const { engine, deployed, removed, synced } = setUp();
-    await engine.deploy(expenses);
-    await engine.deploy(notes);
+    const { engine, deployed, removed, synced } = setUp([reply("lunch"), reply("notes")]);
+    await engine.create("split lunch bills");
+    await engine.create("keep notes");
 
-    await engine.remove("expenses");
+    await engine.remove("lunch");
 
     assert.deepEqual(names(removed[0]), names(deployed[0]));
     assert.deepEqual(synced.at(-1)?.apps.map((app) => app.manifest.name), ["notes"]);
@@ -87,22 +118,13 @@ describe("the engine", () => {
   });
 
   it("refuses to remove an app it does not know", async () => {
-    const { engine } = setUp();
+    const { engine } = setUp([]);
 
     await assert.rejects(engine.remove("ghost"), /no app named ghost/);
   });
 
-  it("creates an app from a description and deploys it behind sign-in", async () => {
-    const { engine, deployed } = setUp();
-
-    const app = await engine.create("split the team's lunch bills");
-
-    assert.equal(app.name, "lunch");
-    assert.ok(names(deployed[0]).includes("Pod/mayfly-lunch"));
-  });
-
   it("creates the owner once, with a long random password", async () => {
-    const { engine } = setUp();
+    const { engine } = setUp([]);
 
     const owner = await engine.owner();
 
@@ -111,8 +133,13 @@ describe("the engine", () => {
   });
 });
 
-function setUp() {
+function reply(name: string, summary = "", code = "export default 1;"): string {
+  return `name: ${name}\n\`\`\`ts\n${code}\n\`\`\`\n${summary}`;
+}
+
+function setUp(replies: string[], trials: Trial[] = []) {
   const log: string[] = [];
+  const asked: string[] = [];
   const deployed: (readonly KubeObject[])[] = [];
   const removed: (readonly KubeObject[])[] = [];
   const synced: State[] = [];
@@ -129,10 +156,19 @@ function setUp() {
     sync: async (next) => void (log.push("sync"), synced.push(next)),
     settingsFor: () => ({ OAUTH2_PROXY_CLIENT_ID: "fake" }),
   };
-  const model: ModelProvider = { complete: async () => 'name: lunch\n```ts\nexport default 1;\n```' };
-  const builder: Builder = { build: async (name) => `localhost/mayfly-app-${name}:1`, trial: async () => ({ ok: true }) };
+  const model: ModelProvider = {
+    complete: async (_system, messages: readonly Message[]) => {
+      asked.push(messages[0]?.content ?? "");
+      return { text: replies.shift() ?? "", usage: COST };
+    },
+  };
+  let builds = 0;
+  const builder: Builder = {
+    build: async (name) => `localhost/mayfly-app-${name}:${++builds}`,
+    trial: async () => trials.shift() ?? { ok: true },
+  };
   const engine = createEngine({ store, deployer, identity, model, builder });
-  return { engine, deployed, removed, synced, log };
+  return { engine, deployed, removed, synced, log, asked };
 }
 
 function names(objects: readonly KubeObject[] | undefined): string[] {

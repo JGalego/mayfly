@@ -22,9 +22,10 @@ export function openAiCompatibleModel({ baseUrl, apiKey, model }: ModelSettings)
       });
       const choice = response.choices[0];
       if (choice?.finish_reason === "length") throw new Error(`The model's reply was cut off at ${MAX_REPLY_TOKENS} tokens.`);
-      const content = choice?.message.content;
-      if (!content) throw new Error("The model sent an empty reply.");
-      return content;
+      const text = choice?.message.content;
+      if (!text) throw new Error("The model sent an empty reply.");
+      // Some compatible servers leave usage out. Their replies count as free rather than failing.
+      return { text, usage: { input: response.usage?.prompt_tokens ?? 0, output: response.usage?.completion_tokens ?? 0 } };
     },
   };
 }

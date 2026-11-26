@@ -2,43 +2,68 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src {{cspSource}}; style-src {{cspSource}}">
+    <!-- Podman Desktop gives the page its theme's colours in an inline style element, so inline styles are allowed. Scripts are not. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src {{cspSource}}; script-src {{cspSource}}; style-src {{cspSource}} 'unsafe-inline'">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="ui.css">
     <title>Mayfly</title>
   </head>
   <body>
-    <main>
-      <h1>Mayfly</h1>
+    <nav id="sidebar" aria-label="Mayfly">
+      <div class="brand"><img id="logo" src="logo.svg" alt=""><span>Mayfly</span></div>
+      <button id="new-app" class="nav-item" type="button"><span class="plus" aria-hidden="true">+</span>New app</button>
+      <h2 id="apps-heading" class="label">Your apps</h2>
+      <ul id="apps" aria-labelledby="apps-heading"></ul>
+      <button id="show-settings" class="nav-item" type="button">Settings</button>
+    </nav>
 
-      <section id="key" hidden>
-        <h2>First, your OpenAI API key</h2>
-        <p>Mayfly uses it to write your apps. Podman Desktop keeps it in its secret storage.</p>
-        <form id="key-form">
-          <input id="key-input" type="password" autocomplete="off" placeholder="sk-..." aria-label="OpenAI API key" required>
-          <button type="submit">Save</button>
-        </form>
-      </section>
-
-      <form id="create-form">
-        <label for="description">What do you need?</label>
-        <textarea id="description" rows="3" maxlength="2000" placeholder="For example: split our team's lunch bills and show who owes whom"></textarea>
-        <button id="create" type="submit">Make it</button>
+    <main id="chat">
+      <header id="app-header" hidden>
+        <div class="app-title">
+          <h1 id="app-name"></h1>
+          <p class="quiet">Sign in as <span id="owner"></span> · <button id="copy-password" class="link" type="button">Copy password</button></p>
+        </div>
+        <button id="remove-app" class="quiet-button" type="button">Remove</button>
+        <button id="open-app" class="primary" type="button">Open app</button>
+      </header>
+      <div id="thread">
+        <section id="welcome">
+          <img src="logo.svg" alt="" class="hero">
+          <h1>What do you need?</h1>
+          <p class="quiet">Describe a small app in your own words. Mayfly writes it, tries it, and runs it on this computer, behind sign-in.</p>
+          <p id="needs-key" hidden><button id="add-key" class="primary" type="button">Add your API key</button></p>
+        </section>
+        <ol id="turns"></ol>
+      </div>
+      <form id="composer">
+        <textarea id="request" rows="2" maxlength="2000" aria-label="Your request"></textarea>
+        <button id="send" class="primary" type="submit">Send</button>
       </form>
-      <p id="status" role="status"></p>
-
-      <section>
-        <h2>Your apps</h2>
-        <p id="no-apps">None yet.</p>
-        <ul id="apps"></ul>
-      </section>
-
-      <p id="sign-in" hidden>
-        Your apps ask you to sign in as <strong id="owner"></strong>.
-        <button id="copy-password" type="button">Copy password</button>
-      </p>
-      <p id="model" class="quiet"></p>
     </main>
+
+    <main id="settings" hidden>
+      <form id="settings-form">
+        <h1>Settings</h1>
+        <h2>Model</h2>
+        <p class="quiet">The model writes and changes your apps.</p>
+        <label for="provider">Provider</label>
+        <select id="provider"></select>
+        <label for="endpoint" class="compatible-only">Endpoint</label>
+        <input id="endpoint" class="compatible-only" type="url" placeholder="http://localhost:11434/v1">
+        <label for="model-name">Model</label>
+        <input id="model-name" type="text" maxlength="200" required>
+        <label for="api-key">API key</label>
+        <input id="api-key" type="password" autocomplete="off">
+        <p class="quiet">Podman Desktop keeps the key in its secret storage. Mayfly sends it only to the endpoint it was saved for.</p>
+        <button class="primary" type="submit">Save</button>
+      </form>
+    </main>
+
+    <p id="banner" role="status" hidden></p>
+    <footer id="statusbar">
+      <span id="model-info"></span>
+      <span id="tokens"></span>
+    </footer>
     <script src="ui.js"></script>
   </body>
 </html>

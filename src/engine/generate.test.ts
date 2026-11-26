@@ -1,37 +1,58 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { generateApp } from "./generate.ts";
+import { generateApp, type Ask } from "./generate.ts";
 import type { Builder, Message, ModelProvider, Trial } from "./ports.ts";
 import { SYSTEM_PROMPT } from "./prompt.ts";
 
-const good = 'name: notes\n```ts\nexport default 1;\n```';
+const good = 'name: notes\n```ts\nexport default 1;\n```\nKeeps your notes.';
 const broken = 'name: notes\n```ts\nthrow new Error("boom");\n```';
+const newNotes: Ask = { description: "keep notes", taken: [] };
 
 describe("generateApp", () => {
-  it("builds and trials the app the model wrote, and returns its manifest", async () => {
+  it("builds and trials the app the model wrote, and returns it with what the model said", async () => {
     const { model, builder, built } = fakes([good], [{ ok: true }]);
 
-    const manifest = await generateApp("keep notes", { model, builder });
+    const generated = await generateApp(newNotes, { model, builder });
 
-    assert.deepEqual(manifest, { name: "notes", image: "image-1" });
+    assert.deepEqual(generated, { name: "notes", image: "image-1", routes: "export default 1;\n", summary: "Keeps your notes." });
     assert.deepEqual(built, [{ name: "notes", routes: "export default 1;\n" }]);
   });
 
   it("asks in the person's words, under the system prompt's rules", async () => {
     const { model, builder, conversations } = fakes([good], [{ ok: true }]);
 
-    await generateApp("keep notes", { model, builder });
+    await generateApp(newNotes, { model, builder });
 
     assert.equal(conversations[0]?.system, SYSTEM_PROMPT);
     assert.match(conversations[0]?.messages[0]?.content ?? "", /keep notes/);
   });
 
+  it("names a new app so it never replaces one that exists", async () => {
+    const { model, builder } = fakes([good], [{ ok: true }]);
+
+    const generated = await generateApp({ description: "keep notes", taken: ["notes", "notes-2"] }, { model, builder });
+
+    assert.equal(generated.name, "notes-3");
+  });
+
+  it("changes an app from its current code, keeping its name whatever the model calls it", async () => {
+    const { model, builder, conversations } = fakes([good], [{ ok: true }]);
+    const app = { name: "my-notes", routes: "export default 0;\n" };
+
+    const generated = await generateApp({ change: "add a search box", app }, { model, builder });
+
+    const request = conversations[0]?.messages[0]?.content ?? "";
+    assert.match(request, /export default 0;/);
+    assert.match(request, /add a search box/);
+    assert.equal(generated.name, "my-notes");
+  });
+
   it("sends a failed trial's problem back to the model and tries again", async () => {
     const { model, builder, conversations } = fakes([broken, good], [{ ok: false, problem: "boom at start" }, { ok: true }]);
 
-    const manifest = await generateApp("keep notes", { model, builder });
+    const generated = await generateApp(newNotes, { model, builder });
 
-    assert.equal(manifest.image, "image-2");
+    assert.equal(generated.image, "image-2");
     const repair = conversations[1]?.messages;
     assert.equal(repair?.[1]?.content, broken);
     assert.match(repair?.[2]?.content ?? "", /boom at start/);
@@ -40,7 +61,7 @@ describe("generateApp", () => {
   it("tells the model when its reply is not in the expected format", async () => {
     const { model, builder, conversations, built } = fakes(["Sure! Here is an app.", good], [{ ok: true }]);
 
-    await generateApp("keep notes", { model, builder });
+    await generateApp(newNotes, { model, builder });
 
     assert.equal(built.length, 1);
     assert.match(conversations[1]?.messages[2]?.content ?? "", /name/);
@@ -50,7 +71,7 @@ describe("generateApp", () => {
     const trials: Trial[] = [1, 2, 3].map((n) => ({ ok: false, problem: `failure ${n}` }));
     const { model, builder } = fakes([broken, broken, broken], trials);
 
-    await assert.rejects(generateApp("keep notes", { model, builder }), /3 attempts.*failure 3/s);
+    await assert.rejects(generateApp(newNotes, { model, builder }), /3 attempts.*failure 3/s);
   });
 });
 
@@ -60,7 +81,7 @@ function fakes(replies: string[], trials: Trial[]) {
   const model: ModelProvider = {
     complete: async (system, messages) => {
       conversations.push({ system, messages: [...messages] });
-      return replies.shift() ?? "";
+      return { text: replies.shift() ?? "", usage: { input: 10, output: 5 } };
     },
   };
   const builder: Builder = {

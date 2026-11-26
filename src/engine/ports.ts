@@ -1,6 +1,7 @@
 import type { IdpSettings } from "../core/auth-config-map.ts";
 import type { KubeObject } from "../core/kube.ts";
 import type { App, State } from "./state.ts";
+import type { Usage } from "./usage.ts";
 
 export interface StateStore {
   load(): Promise<State>;
@@ -25,9 +26,14 @@ export interface Message {
   readonly content: string;
 }
 
+export interface Completion {
+  readonly text: string;
+  readonly usage: Usage;
+}
+
 export interface ModelProvider {
-  /** The model's reply to a conversation, under a system prompt. */
-  complete(system: string, messages: readonly Message[]): Promise<string>;
+  /** The model's reply to a conversation, under a system prompt, and what it cost. */
+  complete(system: string, messages: readonly Message[]): Promise<Completion>;
 }
 
 export type Trial = { readonly ok: true } | { readonly ok: false; readonly problem: string };

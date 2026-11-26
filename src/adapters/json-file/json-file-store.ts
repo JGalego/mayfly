@@ -8,7 +8,8 @@ export function jsonFileStore(path: string): StateStore {
   return {
     async load() {
       try {
-        return JSON.parse(await readFile(path, "utf8")) as State;
+        // Fills in what a file saved by an earlier version lacks.
+        return { ...EMPTY_STATE, ...(JSON.parse(await readFile(path, "utf8")) as Partial<State>) };
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === "ENOENT") return EMPTY_STATE;
         throw error;
