@@ -1,9 +1,11 @@
 import type { AppView } from "../../../engine/engine.ts";
 import type { Turn } from "../../../engine/state.ts";
-import type { Step } from "../../../engine/step.ts";
 import type { Usage } from "../../../engine/usage.ts";
-import type { FromUi, Progress, ToUi, Work } from "../messages.ts";
+import type { FromUi, ToUi, Work } from "../messages.ts";
 import { isProvider, PROVIDERS } from "../settings.ts";
+import { codeDetails } from "./code.ts";
+import { h, keepTime } from "./dom.ts";
+import { progressView, tickClocks } from "./progress.ts";
 
 // Podman Desktop puts this function on every webview page, to send messages to the extension.
 declare function acquirePodmanDesktopApi(): { postMessage(message: FromUi): void };
@@ -14,6 +16,8 @@ type View = { readonly kind: "new" } | { readonly kind: "app"; readonly name: st
 
 const NOTICE_MS = 4000;
 const CONFIRM_MS = 4000;
+// How close to the bottom of a conversation counts as following it.
+const FOLLOW_PX = 48;
 // Apps that work for one person in one browser, since an app keeps its data in the browser.
 const EXAMPLES = [
   "Split our team's lunch bills and show who owes whom",
@@ -65,6 +69,7 @@ element("settings-form").addEventListener("submit", (event) => {
 provider.addEventListener("change", showEndpointField);
 peek.addEventListener("change", () => post({ type: "peek", on: peek.checked }));
 
+window.setInterval(tickClocks, 1000);
 post({ type: "ready" });
 
 function receive(message: ToUi): void {
@@ -103,7 +108,9 @@ function go(next: View): void {
   hideBanner();
   if (view.kind === "settings") fillSettings();
   render();
-  if (view.kind !== "settings") request.focus();
+  if (view.kind === "settings") return;
+  request.focus();
+  scrollToEnd(element("thread"));
 }
 
 function send(): void {
@@ -182,8 +189,10 @@ function render(): void {
 function renderSidebar({ apps, working }: State): void {
   element("apps").replaceChildren(...apps.map((app) => appItem(app, working?.app === app.name)));
   element("apps-heading").hidden = apps.length === 0;
-  markCurrent(element("new-app"), view.kind === "new");
-  element("new-app").classList.toggle("working", working?.app === null);
+  const newApp = element("new-app");
+  markCurrent(newApp, view.kind === "new");
+  newApp.querySelector(".spinner")?.remove();
+  if (working?.app === null) newApp.append(spinner());
   markCurrent(element("show-settings"), view.kind === "settings");
 }
 
@@ -193,7 +202,7 @@ function appItem(app: AppView, working: boolean): HTMLLIElement {
   control.type = "button";
   control.className = "nav-item";
   control.textContent = app.name;
-  control.classList.toggle("working", working);
+  if (working) control.append(spinner());
   markCurrent(control, view.kind === "app" && view.name === app.name);
   control.addEventListener("click", () => go({ kind: "app", name: app.name }));
   const item = document.createElement("li");
@@ -214,14 +223,16 @@ function renderChat(state: State, app: AppView | undefined): void {
   const turns = [...(app?.conversation ?? []), ...(working === null ? [] : [{ from: "person", text: working.request } as const])];
   // Behind the curtain, the last reply shows the code running now.
   const lastReply = turns.findLastIndex((turn) => turn.from === "mayfly");
-  const items = turns.map((turn, index) => turnItem(turn, app !== undefined && state.peek && index === lastReply ? [codeBlock(app.routes, false)] : []));
-  const pending = working === null ? [] : [thinking(working, app === undefined ? "Writing your app" : "Changing your app", state)];
+  const items = turns.map((turn, index) => turnItem(turn, app !== undefined && state.peek && index === lastReply ? [codeDetails(app.routes, false)] : []));
+  const pending = working === null ? [] : [turn("mayfly", progressView(working, app === undefined ? "Writing your app" : "Changing your app", state.peek))];
+  const thread = element("thread");
+  const following = thread.scrollHeight - thread.scrollTop - thread.clientHeight < FOLLOW_PX;
   element("turns").replaceChildren(...items, ...pending);
+  if (following) scrollToEnd(thread);
+  for (const live of document.querySelectorAll<HTMLElement>(".live")) scrollToEnd(live);
   request.placeholder = app === undefined ? "Describe the app you need" : `Ask for a change to ${app.name}`;
   request.disabled = !state.hasApiKey;
   element<HTMLButtonElement>("send").disabled = !state.hasApiKey || state.working !== null;
-  const thread = element("thread");
-  thread.scrollTop = thread.scrollHeight;
 }
 
 function turnItem({ from, text }: Turn, extras: readonly Node[] = []): HTMLLIElement {
@@ -230,65 +241,6 @@ function turnItem({ from, text }: Turn, extras: readonly Node[] = []): HTMLLIEle
   const body = document.createElement("div");
   body.append(words, ...extras);
   return turn(from, body);
-}
-
-function thinking({ steps }: Progress, text: string, { peek, model }: State): HTMLLIElement {
-  const words = document.createElement("p");
-  words.append(spinner(), text);
-  const note = document.createElement("p");
-  note.className = "quiet";
-  note.textContent = "This takes about a minute.";
-  const body = document.createElement("div");
-  body.append(words, note);
-  if (peek) body.append(stepList(steps, model.model));
-  return turn("mayfly", body);
-}
-
-function stepList(steps: readonly Step[], model: string): HTMLOListElement {
-  const list = document.createElement("ol");
-  list.className = "steps";
-  const lastCode = steps.findLastIndex((step) => step.kind === "wrote");
-  list.append(...steps.map((step, index) => stepItem(step, model, index === lastCode)));
-  return list;
-}
-
-function stepItem(step: Step, model: string, latestCode: boolean): HTMLLIElement {
-  const item = document.createElement("li");
-  switch (step.kind) {
-    case "writing":
-      item.textContent = step.attempt === 1 ? `${model} is writing routes.ts.` : `${model} is fixing it. Attempt ${step.attempt}.`;
-      break;
-    case "wrote":
-      item.append(codeBlock(step.routes, latestCode));
-      break;
-    case "trying":
-      item.textContent = "Building it and trying it, cut off from the network.";
-      break;
-    case "failed":
-      item.append("It failed:", preformatted(step.problem, "problem"));
-      break;
-    case "deploying":
-      item.textContent = "It passed. Starting it behind sign-in.";
-      break;
-  }
-  return item;
-}
-
-function codeBlock(routes: string, open: boolean): HTMLDetailsElement {
-  const details = document.createElement("details");
-  details.className = "code";
-  details.open = open;
-  const summary = document.createElement("summary");
-  summary.textContent = `routes.ts · ${routes.split("\n").length - 1} lines`;
-  details.append(summary, preformatted(routes, "listing"));
-  return details;
-}
-
-function preformatted(text: string, className: string): HTMLPreElement {
-  const block = document.createElement("pre");
-  block.className = className;
-  block.textContent = text;
-  return block;
 }
 
 function turn(from: Turn["from"], body: HTMLElement): HTMLLIElement {
@@ -300,9 +252,11 @@ function turn(from: Turn["from"], body: HTMLElement): HTMLLIElement {
 }
 
 function spinner(): HTMLSpanElement {
-  const shape = document.createElement("span");
-  shape.className = "spinner small";
-  return shape;
+  return keepTime(h("span", "spinner small"));
+}
+
+function scrollToEnd(box: HTMLElement): void {
+  box.scrollTop = box.scrollHeight;
 }
 
 function avatar(): HTMLImageElement {

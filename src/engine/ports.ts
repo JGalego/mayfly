@@ -32,8 +32,8 @@ export interface Completion {
 }
 
 export interface ModelProvider {
-  /** The model's reply to a conversation, under a system prompt, and what it cost. */
-  complete(system: string, messages: readonly Message[]): Promise<Completion>;
+  /** The model's reply to a conversation, under a system prompt, and what it cost. Each piece of text goes to `onText` as it arrives. */
+  complete(system: string, messages: readonly Message[], onText?: (text: string) => void): Promise<Completion>;
 }
 
 export type Trial = { readonly ok: true } | { readonly ok: false; readonly problem: string };

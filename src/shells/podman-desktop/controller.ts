@@ -5,6 +5,8 @@ import { endpointOf, isProvider, type ModelChoice } from "./settings.ts";
 
 const MAX_REQUEST = 2000;
 const MAX_MODEL_NAME = 200;
+// The model's draft changes many times a second. The page gets the latest at most this often.
+const DRAFT_MS = 150;
 
 export interface ControllerPorts {
   readonly engine: Engine;
@@ -22,11 +24,11 @@ export interface ControllerPorts {
 }
 
 // One request at a time: each one reads and writes the whole state.
-type Session = ControllerPorts & { working: Progress | null };
+type Session = ControllerPorts & { working: Progress | null; draftDue: boolean };
 
 /** Handles what the page asks for. The page is trusted with nothing: it names apps, never URLs, and never sees a secret. */
 export function createController(ports: ControllerPorts): (message: unknown) => Promise<void> {
-  const session: Session = { ...ports, working: null };
+  const session: Session = { ...ports, working: null, draftDue: false };
   return async (message) => {
     const request = readRequest(message);
     if (request === undefined) return;
@@ -61,7 +63,7 @@ function handle(request: FromUi, session: Session): Promise<unknown> {
 async function send(work: Work, session: Session): Promise<void> {
   const problem = problemWithWork(work, session);
   if (problem !== undefined) return void (await session.post({ type: "error", text: problem }));
-  session.working = { ...work, steps: [] };
+  session.working = { ...work, since: Date.now(), steps: [] };
   await showState(session);
   const { engine } = session;
   const watch = (step: Step): void => showProgress(step, session);
@@ -76,7 +78,24 @@ async function send(work: Work, session: Session): Promise<void> {
 
 function showProgress(step: Step, session: Session): void {
   if (session.working === null) return;
-  session.working = { ...session.working, steps: [...session.working.steps, step] };
+  session.working = { ...session.working, steps: withStep(session.working.steps, step) };
+  if (step.kind !== "draft") return postProgress(session);
+  // Only someone peeking sees the draft, and they see it a few times a second rather than on every word.
+  if (session.draftDue || !session.settings.peek()) return;
+  session.draftDue = true;
+  setTimeout(() => {
+    session.draftDue = false;
+    postProgress(session);
+  }, DRAFT_MS);
+}
+
+/** A draft replaces the draft before it, and whatever comes next replaces the last draft. */
+function withStep(steps: readonly Step[], step: Step): readonly Step[] {
+  return steps.at(-1)?.kind === "draft" ? [...steps.slice(0, -1), step] : [...steps, step];
+}
+
+function postProgress(session: Session): void {
+  if (session.working === null) return;
   // The page may have closed. When it opens again, the state it asks for brings it up to date.
   session.post({ type: "progress", working: session.working }).catch(() => undefined);
 }

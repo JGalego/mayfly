@@ -68,7 +68,7 @@ describe("generateApp", () => {
     assert.match(conversations[1]?.messages[2]?.content ?? "", /name/);
   });
 
-  it("tells a watcher each step: writing, the code, trying it, and why it failed", async () => {
+  it("tells a watcher each step: writing, the code, building, trying it, and why it failed", async () => {
     const { model, builder } = fakes([broken, good], [{ ok: false, problem: "boom at start" }, { ok: true }]);
     const steps: Step[] = [];
 
@@ -77,12 +77,29 @@ describe("generateApp", () => {
     assert.deepEqual(steps, [
       { kind: "writing", attempt: 1 },
       { kind: "wrote", routes: 'throw new Error("boom");\n' },
+      { kind: "building" },
       { kind: "trying" },
       { kind: "failed", problem: "boom at start" },
       { kind: "writing", attempt: 2 },
       { kind: "wrote", routes: "export default 1;\n" },
+      { kind: "building" },
       { kind: "trying" },
     ]);
+  });
+
+  it("shows a watcher the model's reply as it arrives", async () => {
+    const model: ModelProvider = {
+      complete: async (_system, _messages, onText) => {
+        for (const piece of ["name: notes\n", "```ts\nexport default 1;\n```"]) onText?.(piece);
+        return { text: good, usage: { input: 1, output: 1 } };
+      },
+    };
+    const { builder } = fakes([], [{ ok: true }]);
+    const drafts: string[] = [];
+
+    await generateApp(newNotes, { model, builder, watch: (step) => step.kind === "draft" && drafts.push(step.text) });
+
+    assert.deepEqual(drafts, ["name: notes\n", "name: notes\n```ts\nexport default 1;\n```"]);
   });
 
   it("gives up after three attempts, saying what went wrong last", async () => {

@@ -17,8 +17,8 @@ export function metered(model: ModelProvider): { readonly model: ModelProvider; 
   let spent = NO_USAGE;
   return {
     model: {
-      async complete(system, messages) {
-        const completion = await model.complete(system, messages);
+      async complete(system, messages, onText) {
+        const completion = await model.complete(system, messages, onText);
         spent = addUsage(spent, completion.usage);
         return completion;
       },

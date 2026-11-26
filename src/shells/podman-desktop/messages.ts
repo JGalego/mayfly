@@ -11,6 +11,8 @@ export interface Work {
 
 /** A request Mayfly is working on, and what it has done so far. */
 export interface Progress extends Work {
+  /** When Mayfly started on it, in milliseconds since the epoch. */
+  readonly since: number;
   readonly steps: readonly Step[];
 }
 

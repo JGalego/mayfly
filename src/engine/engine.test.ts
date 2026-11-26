@@ -78,7 +78,7 @@ describe("the engine", () => {
 
     await engine.create("split lunch bills", (step) => steps.push(step.kind));
 
-    assert.deepEqual(steps, ["writing", "wrote", "trying", "deploying"]);
+    assert.deepEqual(steps, ["writing", "wrote", "building", "trying", "deploying"]);
   });
 
   it("refuses to change an app it does not know", async () => {

@@ -14,6 +14,7 @@
   --field: var(--pd-input-field-focused-bg, light-dark(#ffffff, #0f0f11));
   --field-line: var(--pd-input-field-stroke, light-dark(#aaabac, #4a4b4f));
   --error: var(--pd-state-error, light-dark(#b1380b, #f0561d));
+  --success: var(--pd-state-success, light-dark(#15803d, #4ade80));
   --column: 46rem;
   font: 14px/1.5 system-ui, sans-serif;
   color: var(--text);
@@ -156,16 +157,8 @@ select {
   line-height: 1;
 }
 
-.nav-item.working::after {
-  content: "";
-  flex: none;
-  width: 0.7rem;
-  height: 0.7rem;
-  margin-left: auto;
-  border: 2px solid var(--line);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+.nav-item .spinner.small {
+  margin: 0 0 0 auto;
 }
 
 .label {
@@ -309,15 +302,93 @@ main {
   padding-top: 0.2rem;
 }
 
-.steps {
+/* Progress: a row for each stage, joined by a line. */
+
+.progress-title {
+  font-weight: 600;
+}
+
+.stages {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  margin: 0.75rem 0 0;
-  padding: 0 0 0 0.9rem;
-  border-left: 2px solid var(--line);
+  gap: 0.9rem;
+  margin: 1rem 0 0;
+  padding: 0;
   list-style: none;
+}
+
+.stages::before {
+  content: "";
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: 13px;
+  border-left: 2px solid var(--line);
+}
+
+.stage {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.stage.new {
+  animation: arrive 0.3s ease-out;
+}
+
+.stage-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 14px;
+  background: var(--hover);
+}
+
+.stage.active .stage-icon::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border: 2px solid transparent;
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  animation-delay: var(--spin-delay, 0s);
+}
+
+.stage.failed .stage-icon {
+  box-shadow: 0 0 0 2px var(--error);
+}
+
+.stage-body {
+  flex: 1;
+  min-width: 0;
+  padding-top: 0.2rem;
+}
+
+.stage.done .stage-label {
   color: var(--muted);
+}
+
+.stage.active .stage-label {
+  font-weight: 600;
+}
+
+.stage-mark {
+  margin-left: 0.4rem;
+  font-weight: 700;
+}
+
+.stage-mark.done {
+  color: var(--success);
+}
+
+.stage-mark.failed {
+  color: var(--error);
 }
 
 .code {
@@ -337,9 +408,67 @@ pre {
   border: 1px solid var(--line);
   border-radius: 8px;
   font: 12px/1.45 ui-monospace, "Cascadia Code", Consolas, monospace;
+  /* Code shows what was typed: => stays =>, not an arrow. */
+  font-variant-ligatures: none;
   color: var(--text);
   background: var(--field);
   white-space: pre;
+}
+
+pre.live::after {
+  content: "▍";
+  color: var(--accent);
+  animation: blink 1s steps(1) infinite;
+}
+
+/* Highlighted code: TypeScript, and the HTML and CSS in its templates. */
+.hljs-comment,
+.hljs-meta {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-literal,
+.hljs-variable.language_ {
+  color: light-dark(#7c3aed, #c4b5fd);
+}
+
+.hljs-string,
+.hljs-regexp {
+  color: light-dark(#15803d, #86efac);
+}
+
+.hljs-number {
+  color: light-dark(#b45309, #fbbf24);
+}
+
+.hljs-title,
+.hljs-selector-tag,
+.hljs-selector-class,
+.hljs-selector-id {
+  color: light-dark(#1d4ed8, #93c5fd);
+}
+
+.hljs-title.class_,
+.hljs-type,
+.hljs-built_in {
+  color: light-dark(#0e7490, #67e8f9);
+}
+
+.hljs-tag,
+.hljs-name {
+  color: light-dark(#be123c, #fda4af);
+}
+
+.hljs-attr,
+.hljs-attribute,
+.hljs-property {
+  color: light-dark(#a16207, #fcd34d);
+}
+
+.hljs-subst {
+  color: var(--text);
 }
 
 pre.problem {
@@ -354,21 +483,23 @@ pre.problem {
   height: 28px;
 }
 
+/* In whole pixels: a spinner with a fractional size wobbles as it turns. */
 .spinner {
   display: inline-block;
   flex: none;
-  width: 1.75rem;
-  height: 1.75rem;
+  width: 28px;
+  height: 28px;
   box-sizing: border-box;
   border: 3px solid var(--line);
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
+  animation-delay: var(--spin-delay, 0s);
 }
 
 .spinner.small {
-  width: 0.9rem;
-  height: 0.9rem;
+  width: 14px;
+  height: 14px;
   margin-right: 0.5rem;
   border-width: 2px;
   vertical-align: -0.1em;
@@ -503,10 +634,15 @@ pre.problem {
   }
 }
 
-/* A spinner still has to show that something is happening, so it only slows down. */
-@media (prefers-reduced-motion: reduce) {
-  .spinner,
-  .nav-item.working::after {
-    animation-duration: 3s;
+@keyframes arrive {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
   }
 }

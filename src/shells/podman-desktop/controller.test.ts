@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { AppView, Engine } from "../../engine/engine.ts";
-import type { Watcher } from "../../engine/step.ts";
+import type { Step, Watcher } from "../../engine/step.ts";
 import { createController } from "./controller.ts";
 import type { ToUi } from "./messages.ts";
 import type { ModelChoice } from "./settings.ts";
@@ -16,6 +16,8 @@ const lunch: AppView = {
 const owner = { email: "owner@mayfly.local", username: "owner", password: "s3cret-pass" };
 const openai: ModelChoice = { provider: "openai", baseUrl: "", model: "gpt-6.2-sol" };
 const OPENAI_ENDPOINT = "https://api.openai.com/v1";
+const writing: Step = { kind: "writing", attempt: 1 };
+const draft = (text: string): Step => ({ kind: "draft", text });
 
 describe("the Mayfly panel's controller", () => {
   it("shows the apps, who signs in, the model, whether it has a key, and the tokens spent", async () => {
@@ -41,19 +43,43 @@ describe("the Mayfly panel's controller", () => {
     await handle({ type: "send", app: null, request: " split lunch bills " });
 
     assert.deepEqual(calls, ["create split lunch bills"]);
-    assert.deepEqual(stateOf(posted[0])?.working, { app: null, request: "split lunch bills", steps: [] });
+    assert.partialDeepStrictEqual(stateOf(posted[0])?.working, { app: null, request: "split lunch bills", steps: [] });
     assert.equal(stateOf(posted[1])?.working, null);
     assert.deepEqual(posted[2], { type: "created", name: "lunch-split" });
     assert.deepEqual(opened, [lunch.url]);
   });
 
   it("shows each step of the work as it happens", async () => {
-    const { handle, posted } = setUp({ apps: [], steps: true });
+    const { handle, posted } = setUp({ apps: [], steps: [writing, { kind: "wrote", routes: "x" }] });
 
     await handle({ type: "send", app: null, request: "split lunch bills" });
 
     const progress = posted.flatMap((m) => (m.type === "progress" ? [m.working.steps.map((s) => s.kind)] : []));
     assert.deepEqual(progress, [["writing"], ["writing", "wrote"]]);
+  });
+
+  it("passes on the model's latest draft a few times a second to someone peeking", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const { handle, posted, finish } = setUp({ apps: [], steps: [writing, draft("a"), draft("ab"), draft("abc")], peek: true, waitForCreate: true });
+
+    const sending = handle({ type: "send", app: null, request: "split lunch bills" });
+    await new Promise((resolve) => setImmediate(resolve));
+    t.mock.timers.tick(150);
+    finish();
+    await sending;
+
+    const progress = posted.flatMap((m) => (m.type === "progress" ? [m.working.steps] : []));
+    assert.deepEqual(progress, [[writing], [writing, draft("abc")]]);
+  });
+
+  it("keeps the draft to itself when nobody is peeking", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const { handle, posted } = setUp({ apps: [], steps: [writing, draft("a")] });
+
+    await handle({ type: "send", app: null, request: "split lunch bills" });
+    t.mock.timers.tick(150);
+
+    assert.equal(posted.filter((m) => m.type === "progress").length, 1);
   });
 
   it("remembers whether to peek behind the curtain", async () => {
@@ -174,13 +200,14 @@ function stateOf(message: ToUi | undefined) {
 
 interface Options {
   apps: AppView[];
-  steps?: boolean;
+  steps?: Step[];
+  peek?: boolean;
   keyFor?: string[];
   createFails?: string;
   waitForCreate?: boolean;
 }
 
-function setUp({ apps, steps = false, keyFor = [OPENAI_ENDPOINT], createFails, waitForCreate = false }: Options) {
+function setUp({ apps, steps = [], peek: peeking = false, keyFor = [OPENAI_ENDPOINT], createFails, waitForCreate = false }: Options) {
   const posted: ToUi[] = [];
   const opened: string[] = [];
   const copied: string[] = [];
@@ -189,13 +216,13 @@ function setUp({ apps, steps = false, keyFor = [OPENAI_ENDPOINT], createFails, w
   const savedChoices: ModelChoice[] = [];
   const keys = new Set(keyFor);
   let choice = openai;
-  let peek = false;
+  let peek = peeking;
   let finish = (): void => {};
   const created = new Promise<void>((resolve) => (finish = resolve));
   const engine: Engine = {
     create: async (description, watch: Watcher = () => {}) => {
       calls.push(`create ${description}`);
-      if (steps) [{ kind: "writing", attempt: 1 } as const, { kind: "wrote", routes: "x" } as const].forEach(watch);
+      steps.forEach((step) => watch(step));
       if (waitForCreate) await created;
       if (createFails) throw new Error(createFails);
       apps.push(lunch);

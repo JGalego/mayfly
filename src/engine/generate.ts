@@ -31,7 +31,8 @@ export async function generateApp(
   let problem = "";
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
     watch({ kind: "writing", attempt });
-    const reply = (await model.complete(SYSTEM_PROMPT, messages)).text;
+    let draft = "";
+    const reply = (await model.complete(SYSTEM_PROMPT, messages, (text) => watch({ kind: "draft", text: (draft += text) }))).text;
     const outcome = await tryReply(reply, ask, builder, watch);
     if (outcome.ok) return outcome.generated;
     problem = outcome.problem;
@@ -45,9 +46,10 @@ async function tryReply(reply: string, ask: Ask, builder: Builder, watch: Watche
   const parsed = parseReply(reply);
   if (!parsed.ok) return parsed;
   watch({ kind: "wrote", routes: parsed.routes });
-  watch({ kind: "trying" });
   const name = "change" in ask ? ask.app.name : unusedName(parsed.name, ask.taken);
+  watch({ kind: "building" });
   const image = await builder.build(name, parsed.routes);
+  watch({ kind: "trying" });
   const trial = await builder.trial(image);
   return trial.ok ? { ok: true, generated: { name, image, routes: parsed.routes, summary: parsed.summary } } : trial;
 }
