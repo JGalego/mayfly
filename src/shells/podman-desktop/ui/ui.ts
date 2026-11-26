@@ -14,6 +14,7 @@ import { historyView, versionPanel } from "./history.ts";
 import { addIcons, icon } from "./icons.ts";
 import { renderStatusbar, setUpStatusbar } from "./statusbar.ts";
 import { openForm, renderModels, savedModel, setUpModels } from "./models.ts";
+import { popover } from "./popover.ts";
 import { makingOf, progressView, tickClocks, whatChanged, type Showing } from "./progress.ts";
 
 // Podman Desktop puts this function on every webview page, to send messages to the extension.
@@ -79,6 +80,7 @@ let newAppModel: string | undefined;
 
 setUpModels(post, () => render());
 setUpStatusbar(() => go({ kind: "settings" }));
+popover(element("show-sign-in"), element("sign-in-popover"));
 // One log reader in Settings for everything, Mayfly's activity included, and one for the app on screen.
 const settingsLogs = logViewer(post, { activity: true });
 const ledger = ledgerView();

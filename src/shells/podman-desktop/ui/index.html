@@ -24,14 +24,19 @@
 
     <main id="chat" hidden>
       <header id="app-header" hidden>
-        <div class="app-title">
-          <h1 id="app-name"></h1>
-          <div class="sign-in">
-            <span class="quiet" data-icon="key">Sign in with</span>
-            <button id="copy-email" class="chip" type="button" title="Copy the email"><span id="owner"></span><span class="chip-note"><span class="to-copy" data-icon="copy">Copy</span><span class="copied-note" data-icon="check">Copied</span></span></button>
-            <button id="copy-password" class="chip" type="button" title="Copy the password"><span class="dots" aria-label="password">••••••••</span><span class="chip-note"><span class="to-copy" data-icon="copy">Copy</span><span class="copied-note" data-icon="check">Copied</span></span></button>
-            <button id="sign-out" class="link" type="button" title="Opens the app's sign-out page in your browser" data-icon="sign-out">Sign out</button>
+        <h1 id="app-name"></h1>
+        <div class="app-actions">
+          <button id="remove-app" class="quiet-button" type="button">Remove</button>
+          <div class="popover-anchor">
+            <button id="show-sign-in" class="secondary" type="button" aria-expanded="false" aria-controls="sign-in-popover" data-icon="key">Sign-in details</button>
+            <div id="sign-in-popover" class="popover sign-in" hidden>
+              <p class="popover-title">Sign in to your apps as</p>
+              <button id="copy-email" class="chip" type="button" title="Copy the email"><span id="owner"></span><span class="chip-note"><span class="to-copy" data-icon="copy">Copy</span><span class="copied-note" data-icon="check">Copied</span></span></button>
+              <button id="copy-password" class="chip" type="button" title="Copy the password"><span class="dots" aria-label="password">••••••••</span><span class="chip-note"><span class="to-copy" data-icon="copy">Copy</span><span class="copied-note" data-icon="check">Copied</span></span></button>
+              <button id="sign-out" class="link" type="button" title="Opens the app's sign-out page in your browser" data-icon="sign-out">Sign out of this app</button>
+            </div>
           </div>
+          <button id="open-app" class="primary" type="button" title="Opens in your browser" data-icon-after="external">Open app</button>
         </div>
         <div id="app-tabs" class="tabs" role="tablist" aria-label="App">
           <button id="tab-chat" role="tab" type="button" data-icon="conversation">Conversation</button>
@@ -39,8 +44,6 @@
           <button id="tab-code" role="tab" type="button" data-icon="code">Code</button>
           <button id="tab-logs" role="tab" type="button" data-icon="logs">Logs</button>
         </div>
-        <button id="remove-app" class="quiet-button" type="button">Remove</button>
-        <button id="open-app" class="primary" type="button" title="Opens in your browser" data-icon-after="external">Open app</button>
       </header>
       <div id="workspace">
         <div id="thread">

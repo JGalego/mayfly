@@ -5,6 +5,7 @@ import { h } from "./dom.ts";
 import { compact } from "./format.ts";
 import { icon } from "./icons.ts";
 import { lightFor, type Colour } from "./lights.ts";
+import { popover } from "./popover.ts";
 
 type State = Extract<ToUi, { type: "state" }>;
 
@@ -20,13 +21,7 @@ const COUNTED: readonly [Colour, string][] = [
 export function setUpStatusbar(openSettings: () => void): void {
   element("status-model").addEventListener("click", openSettings);
   element("status-apps").addEventListener("click", openSettings);
-  const popover = element("token-popover");
-  element("status-tokens").addEventListener("click", () => setOpen(popover.hidden === true));
-  document.addEventListener("keydown", (event) => event.key === "Escape" && setOpen(false));
-  document.addEventListener("click", (event) => {
-    const target = event.target as Node;
-    if (!popover.contains(target) && !element("status-tokens").contains(target)) setOpen(false);
-  });
+  popover(element("status-tokens"), element("token-popover"));
 }
 
 export function renderStatusbar(state: State, app: AppView | undefined, model: ModelView | undefined, health: readonly ServiceHealth[] | undefined): void {
@@ -84,11 +79,6 @@ function tokenRow(name: string, usage: Usage, className: string, thinking: boole
 
 function total({ input, output, thinking }: Usage): number {
   return input + output + thinking;
-}
-
-function setOpen(open: boolean): void {
-  element("token-popover").hidden = !open;
-  element("status-tokens").setAttribute("aria-expanded", String(open));
 }
 
 function element<T extends HTMLElement = HTMLElement>(id: string): T {
