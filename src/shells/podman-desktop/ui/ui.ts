@@ -10,7 +10,7 @@ import { healthView } from "./health.ts";
 import { lightFor, type Light } from "./lights.ts";
 import { ledgerView } from "./ledger-view.ts";
 import { logViewer } from "./logs.ts";
-import { historyView } from "./history.ts";
+import { historyView, versionPanel } from "./history.ts";
 import { renderStatusbar, setUpStatusbar } from "./statusbar.ts";
 import { openForm, renderModels, savedModel, setUpModels } from "./models.ts";
 import { makingOf, progressView, tickClocks, whatChanged, type Showing } from "./progress.ts";
@@ -57,6 +57,8 @@ let editing: string | undefined;
 let appLogsShown: string | undefined;
 /** Which version the Code tab shows, so a redraw leaves it alone. */
 let codeShown = "";
+/** The version shown in full beside the history, if any. */
+let picked: { readonly app: string; readonly version: string } | undefined;
 /** Folds the person opened or closed, so a redraw leaves them as they were. */
 const folds = new Map<string, boolean>();
 /** Versions' code and thinking fetched from the extension, and the ones already asked for. */
@@ -103,6 +105,7 @@ element("code-editor").addEventListener("submit", (event) => {
   saveEdit();
 });
 element("code-text").addEventListener("keydown", indentWithTab);
+document.addEventListener("keydown", (event) => event.key === "Escape" && picked !== undefined && pick(undefined));
 element("remove-app").addEventListener("click", removeApp);
 for (const what of ["email", "password"] as const) element(`copy-${what}`).addEventListener("click", () => copySignIn(what));
 element("composer").addEventListener("submit", (event) => {
@@ -301,8 +304,16 @@ function indentWithTab(event: KeyboardEvent): void {
 
 // Going back rebuilds and restarts the app, which the conversation shows as it happens.
 function goBack(app: string, version: string): void {
+  pick(undefined);
   post({ type: "restore", app, version });
   go({ kind: "app", name: app, tab: "chat" });
+}
+
+/** Shows a version in full beside the history, or closes the panel for none. */
+function pick(next: typeof picked): void {
+  picked = next;
+  render();
+  document.querySelector(".history-row.picked")?.scrollIntoView({ block: "nearest" });
 }
 
 function showTab(tab: Tab): void {
@@ -466,7 +477,7 @@ function renderChat(state: State, app: AppView | undefined): void {
   element("turns").hidden = tab !== "chat";
   element("turns").replaceChildren(...(tab === "chat" ? [...items, ...pending] : []));
   element("history").hidden = tab !== "history";
-  element("history").replaceChildren(...(tab === "history" && app !== undefined ? [historyView(app, showing, { restore: (version) => goBack(app.name, version), busy: state.working !== null })] : []));
+  renderHistory(tab === "history" ? app : undefined, showing, state.working === null);
   for (const name of ["chat", "history", "code", "logs"] as const) element(`tab-${name}`).setAttribute("aria-selected", String(tab === name));
   element("logs-tab").hidden = tab !== "logs";
   if (tab === "logs" && app !== undefined) renderAppLogs(app);
@@ -516,6 +527,19 @@ function fetchWritten(app: string, version: string): Written | undefined {
     post({ type: "code", app, version });
   }
   return written.get(key);
+}
+
+/** The history, one line per version, and beside it the version picked, if it is this app's. */
+function renderHistory(app: AppView | undefined, showing: Showing, idle: boolean): void {
+  const version = app?.versions.find((kept) => picked?.app === app.name && kept.id === picked.version);
+  // Picking the version shown again closes it.
+  const toggle = (name: string, id: string): void => pick(version?.id === id ? undefined : { app: name, version: id });
+  element("history").replaceChildren(...(app === undefined ? [] : [historyView(app, version?.id, (id) => toggle(app.name, id))]));
+  const panel = element("version-panel");
+  panel.hidden = version === undefined;
+  if (app === undefined || version === undefined) return panel.replaceChildren();
+  const restore = idle ? { restore: (id: string) => goBack(app.name, id) } : {};
+  panel.replaceChildren(...versionPanel(app, version, showing, { pick: (id) => pick({ app: app.name, version: id }), close: () => pick(undefined), ...restore }));
 }
 
 function turnItem({ from, text, at }: Turn, extras: readonly Node[] = []): HTMLLIElement {

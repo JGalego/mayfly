@@ -48,37 +48,40 @@
         <button id="remove-app" class="quiet-button" type="button">Remove</button>
         <button id="open-app" class="primary" type="button" title="Opens in your browser">Open app <span aria-hidden="true">↗</span></button>
       </header>
-      <div id="thread">
-        <section id="welcome">
-          <img src="logo.svg" alt="" class="hero">
-          <h1>What do you need?</h1>
-          <p class="quiet">Describe a small app in your own words. Mayfly writes it, tries it, and runs it on this computer, behind sign-in.</p>
-          <ul id="examples" aria-label="Examples"></ul>
-          <p id="needs-key" hidden><button id="add-key" class="primary" type="button">Add your API key</button></p>
-        </section>
-        <ol id="turns"></ol>
-        <div id="history" hidden></div>
-        <div id="logs-tab" hidden>
-          <ul id="app-health" class="health-list"></ul>
-          <div id="app-logs"></div>
-        </div>
-        <div id="code-tab" hidden>
-          <div id="code-reading">
-            <div class="code-head">
-              <p id="code-caption" class="quiet"></p>
-              <button id="edit-code" class="primary" type="button">Edit</button>
-            </div>
-            <div id="code-current"></div>
+      <div id="workspace">
+        <div id="thread">
+          <section id="welcome">
+            <img src="logo.svg" alt="" class="hero">
+            <h1>What do you need?</h1>
+            <p class="quiet">Describe a small app in your own words. Mayfly writes it, tries it, and runs it on this computer, behind sign-in.</p>
+            <ul id="examples" aria-label="Examples"></ul>
+            <p id="needs-key" hidden><button id="add-key" class="primary" type="button">Add your API key</button></p>
+          </section>
+          <ol id="turns"></ol>
+          <div id="history" hidden></div>
+          <div id="logs-tab" hidden>
+            <ul id="app-health" class="health-list"></ul>
+            <div id="app-logs"></div>
           </div>
-          <form id="code-editor" hidden>
-            <textarea id="code-text" spellcheck="false" aria-label="routes.ts"></textarea>
-            <input id="code-message" type="text" maxlength="200" placeholder="What did you change? (optional)" aria-label="What you changed">
-            <div class="editor-actions">
-              <button id="cancel-edit" class="quiet-button" type="button">Cancel</button>
-              <button class="primary" type="submit">Save and deploy</button>
+          <div id="code-tab" hidden>
+            <div id="code-reading">
+              <div class="code-head">
+                <p id="code-caption" class="quiet"></p>
+                <button id="edit-code" class="primary" type="button">Edit</button>
+              </div>
+              <div id="code-current"></div>
             </div>
-          </form>
+            <form id="code-editor" hidden>
+              <textarea id="code-text" spellcheck="false" aria-label="routes.ts"></textarea>
+              <input id="code-message" type="text" maxlength="200" placeholder="What did you change? (optional)" aria-label="What you changed">
+              <div class="editor-actions">
+                <button id="cancel-edit" class="quiet-button" type="button">Cancel</button>
+                <button class="primary" type="submit">Save and deploy</button>
+              </div>
+            </form>
+          </div>
         </div>
+        <aside id="version-panel" aria-label="The version picked in the history" hidden></aside>
       </div>
       <form id="composer">
         <textarea id="request" rows="2" maxlength="2000" aria-label="Your request"></textarea>
