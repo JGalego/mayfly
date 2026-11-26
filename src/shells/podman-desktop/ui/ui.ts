@@ -15,6 +15,7 @@ type View = { readonly kind: "new" } | { readonly kind: "app"; readonly name: st
 
 const NOTICE_MS = 4000;
 const CONFIRM_MS = 4000;
+const COPIED_MS = 1500;
 // How close to the bottom of a conversation counts as following it.
 const FOLLOW_PX = 48;
 // Apps that work for one person in one browser, since an app keeps its data in the browser.
@@ -56,7 +57,7 @@ element("show-settings").addEventListener("click", () => go({ kind: "settings" }
 element("add-key").addEventListener("click", () => go({ kind: "settings" }));
 element("open-app").addEventListener("click", openApp);
 element("remove-app").addEventListener("click", removeApp);
-element("copy-password").addEventListener("click", () => post({ type: "copy-password" }));
+for (const what of ["email", "password"] as const) element(`copy-${what}`).addEventListener("click", () => copySignIn(what));
 element("composer").addEventListener("submit", (event) => {
   event.preventDefault();
   send();
@@ -141,6 +142,14 @@ function exampleItem(text: string): HTMLLIElement {
   const item = document.createElement("li");
   item.append(control);
   return item;
+}
+
+// The chip says it copied, briefly, so the person knows without looking anywhere else.
+function copySignIn(what: "email" | "password"): void {
+  post({ type: "copy", what });
+  const chip = element(`copy-${what}`);
+  chip.classList.add("copied");
+  window.setTimeout(() => chip.classList.remove("copied"), COPIED_MS);
 }
 
 function openApp(): void {

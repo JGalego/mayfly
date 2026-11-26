@@ -32,7 +32,11 @@
       <header id="app-header" hidden>
         <div class="app-title">
           <h1 id="app-name"></h1>
-          <p class="quiet">Sign in as <span id="owner"></span> · <button id="copy-password" class="link" type="button">Copy password</button></p>
+          <div class="sign-in">
+            <span class="quiet">🔑 Sign in with</span>
+            <button id="copy-email" class="chip" type="button" title="Copy the email"><span id="owner"></span><span class="chip-note">Copy</span></button>
+            <button id="copy-password" class="chip" type="button" title="Copy the password"><span class="dots" aria-label="password">••••••••</span><span class="chip-note">Copy</span></button>
+          </div>
         </div>
         <button id="remove-app" class="quiet-button" type="button">Remove</button>
         <button id="open-app" class="primary" type="button">Open app</button>

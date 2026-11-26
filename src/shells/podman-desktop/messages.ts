@@ -22,7 +22,7 @@ export type FromUi =
   | ({ readonly type: "send" } & Work)
   | { readonly type: "open"; readonly name: string }
   | { readonly type: "remove"; readonly name: string }
-  | { readonly type: "copy-password" }
+  | { readonly type: "copy"; readonly what: "email" | "password" }
   | { readonly type: "save-settings"; readonly choice: ModelChoice; readonly apiKey: string }
   | { readonly type: "peek"; readonly on: boolean }
   | { readonly type: "code"; readonly app: string; readonly version: string };

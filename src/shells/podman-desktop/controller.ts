@@ -51,8 +51,8 @@ function handle(request: FromUi, session: Session): Promise<unknown> {
       return open(request.name, session);
     case "remove":
       return remove(request.name, session);
-    case "copy-password":
-      return copyPassword(session);
+    case "copy":
+      return copySignIn(request.what, session);
     case "save-settings":
       return saveSettings(request.choice, request.apiKey.trim(), session);
     case "peek":
@@ -120,9 +120,9 @@ async function remove(name: string, session: Session): Promise<void> {
   await showState(session);
 }
 
-async function copyPassword(session: Session): Promise<void> {
-  await session.copy((await session.engine.owner()).password);
-  await session.post({ type: "notice", text: "Password copied. Paste it when your app asks you to sign in." });
+// The page shows that it copied. The password itself never goes to the page.
+async function copySignIn(what: "email" | "password", session: Session): Promise<void> {
+  await session.copy((await session.engine.owner())[what]);
 }
 
 async function saveSettings(choice: ModelChoice, apiKey: string, session: Session): Promise<void> {
@@ -172,11 +172,12 @@ async function showState(session: Session): Promise<void> {
 // Messages come from the page, so each is checked for its shape before anything acts on it.
 function readRequest(message: unknown): FromUi | undefined {
   if (typeof message !== "object" || message === null) return undefined;
-  const { type, app, request, name, choice, apiKey, on, version } = message as Record<string, unknown>;
+  const { type, app, request, name, choice, apiKey, on, version, what } = message as Record<string, unknown>;
   switch (type) {
     case "ready":
-    case "copy-password":
       return { type };
+    case "copy":
+      return what === "email" || what === "password" ? { type, what } : undefined;
     case "send":
       return (typeof app === "string" || app === null) && typeof request === "string" ? { type, app, request } : undefined;
     case "open":

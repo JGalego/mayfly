@@ -166,12 +166,14 @@ describe("the Mayfly panel's controller", () => {
     assert.equal(posted.at(-1)?.type, "state");
   });
 
-  it("copies the owner's password to the clipboard without ever sending it to the page", async () => {
+  it("copies the owner's email and password to the clipboard, never sending the password to the page", async () => {
     const { handle, posted, copied } = setUp({ apps: [] });
 
-    await handle({ type: "copy-password" });
+    await handle({ type: "copy", what: "email" });
+    await handle({ type: "copy", what: "password" });
+    await handle({ type: "copy", what: "username" });
 
-    assert.deepEqual(copied, [owner.password]);
+    assert.deepEqual(copied, [owner.email, owner.password]);
     assert.ok(!JSON.stringify(posted).includes(owner.password));
   });
 

@@ -212,6 +212,71 @@ main {
   min-width: 0;
 }
 
+.sign-in {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.2rem 0.35rem 0.2rem 0.7rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.9em;
+  background: var(--panel);
+}
+
+.chip:hover {
+  border-color: var(--accent);
+}
+
+.chip .dots {
+  letter-spacing: 0.1em;
+}
+
+.chip-note {
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.85em;
+  color: var(--muted);
+  background: var(--hover);
+}
+
+.chip-note::before {
+  content: "⧉ ";
+}
+
+.chip.copied {
+  border-color: var(--success);
+}
+
+.chip.copied .chip-note {
+  color: var(--on-accent);
+  background: var(--success);
+}
+
+.chip.copied .chip-note::before {
+  content: "✓ ";
+}
+
+.chip.copied .chip-note {
+  font-size: 0;
+}
+
+.chip.copied .chip-note::before {
+  font-size: 0.8rem;
+}
+
+.chip.copied .chip-note::after {
+  content: "Copied";
+  font-size: 0.8rem;
+}
+
 #app-name {
   font-size: 1.15rem;
 }
