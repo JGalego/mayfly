@@ -55,6 +55,9 @@ export type FromUi =
   | { readonly type: "code"; readonly app: string; readonly version: string }
   | { readonly type: "ask"; readonly app: string; readonly question: string }
   | { readonly type: "fix" | "retry" | "undo" | "start"; readonly app: string }
+  | { readonly type: "autostart"; readonly on: boolean }
+  /** Sent by the extension, not the page, when Podman Desktop starts and the person wants stopped apps started. */
+  | { readonly type: "start-stopped" }
   | { readonly type: "rename"; readonly app: string; readonly name: string }
   | { readonly type: "deploy"; readonly app: string; readonly version: string }
   | { readonly type: "save"; readonly app: string; readonly from: string; readonly routes: string; readonly message: string };
@@ -72,6 +75,8 @@ export type ToUi =
       readonly working: Progress | null;
       /** Whether to show what developers want: code, versions, history, health and logs. */
       readonly developer: boolean;
+      /** Whether to start the apps Podman is not running when Podman Desktop starts. */
+      readonly autostart: boolean;
     }
   | { readonly type: "progress"; readonly working: Progress }
   | { readonly type: "created"; readonly name: string }

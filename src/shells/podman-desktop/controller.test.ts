@@ -43,6 +43,7 @@ describe("the Mayfly panel's controller", () => {
       spent: { input: 500, output: 80, thinking: 0 },
       working: null,
       developer: false,
+      autostart: false,
     });
   });
 
@@ -250,6 +251,24 @@ describe("the Mayfly panel's controller", () => {
     assert.equal(stateOf(posted.at(-1))?.developer, true);
   });
 
+  it("remembers whether to start stopped apps when Podman Desktop starts, off at first", async () => {
+    const { handle, posted } = setUp({ apps: [] });
+
+    await handle({ type: "ready" });
+    await handle({ type: "autostart", on: true });
+
+    assert.deepEqual([stateOf(posted.at(-2))?.autostart, stateOf(posted.at(-1))?.autostart], [false, true]);
+  });
+
+  it("starts each stopped app in turn, as work it shows", async () => {
+    const { handle, posted, calls } = setUp({ apps: [lunch], stopped: ["lunch-split", "notes"] });
+
+    await handle({ type: "start-stopped" });
+
+    assert.deepEqual(calls, ["start lunch-split", "start notes"]);
+    assert.deepEqual(posted.flatMap((m) => stateOf(m)?.working?.app ?? []), ["lunch-split", "notes"]);
+  });
+
   it("opens a new app only once an attempt at it passed", async () => {
     const { handle, opened, posted } = setUp({ apps: [], created: { ...lunch, head: null } });
 
@@ -410,9 +429,11 @@ interface Options {
   keyFor?: string[];
   createFails?: string;
   waitForCreate?: boolean;
+  /** The apps Podman is not running. */
+  stopped?: string[];
 }
 
-function setUp({ apps, created: made = lunch, steps = [], developer: developing = false, keyFor = [OPENAI_ENDPOINT], createFails, waitForCreate = false }: Options) {
+function setUp({ apps, created: made = lunch, steps = [], developer: developing = false, keyFor = [OPENAI_ENDPOINT], createFails, waitForCreate = false, stopped: stoppedApps = [] }: Options) {
   const posted: ToUi[] = [];
   const opened: string[] = [];
   const copied: string[] = [];
@@ -421,6 +442,7 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
   const keys = new Set(keyFor);
   let models: Models = { models: [openai], default: "openai" };
   let developer = developing;
+  let autostart = false;
   let finish = (): void => {};
   const created = new Promise<void>((resolve) => (finish = resolve));
   const engine: Engine = {
@@ -487,6 +509,7 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
     ledger: async () => [call],
     logs: async (pod, container) => [`2026-11-26T15:04:05Z ${pod} ${container}`],
     health: async () => [{ name: "lunch-split", kind: "app", pod: "mayfly-lunch-split", containers: [] }],
+    stopped: async () => stoppedApps,
   };
   const handle = createController({
     engine,
@@ -499,6 +522,8 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
       saveModels: async (next) => void (models = next),
       developer: () => developer,
       saveDeveloper: async (on) => void (developer = on),
+      autostart: () => autostart,
+      saveAutostart: async (on) => void (autostart = on),
     },
     keys: {
       has: async (endpoint) => keys.has(endpoint),

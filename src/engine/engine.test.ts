@@ -234,6 +234,15 @@ describe("the engine", () => {
     assert.equal(synced.length, 2);
   });
 
+  it("names the apps that have a version to run but that Podman is not running", async () => {
+    const { engine } = setUp([reply("lunch"), reply("gone"), reply("never"), reply("never"), reply("never")], [{ ok: true }, { ok: true }, crashed, crashed, crashed]);
+    await engine.create("split lunch bills");
+    await engine.create("an app Podman has lost");
+    await engine.create("an app that never ran");
+
+    assert.deepEqual(await engine.stopped(), ["gone"]);
+  });
+
   it("refuses to start an app that has never run", async () => {
     const { engine } = setUp([reply("lunch"), reply("lunch"), reply("lunch")], [crashed, crashed, crashed]);
     await engine.create("split lunch bills");

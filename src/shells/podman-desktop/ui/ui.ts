@@ -163,6 +163,7 @@ element("settings-copy-password").addEventListener("click", (event) => {
 });
 element("new-password").addEventListener("click", makeNewPassword);
 developer.addEventListener("change", () => post({ type: "developer", on: developer.checked }));
+element<HTMLInputElement>("autostart").addEventListener("change", (event) => post({ type: "autostart", on: (event.target as HTMLInputElement).checked }));
 
 window.setInterval(tickClocks, 1000);
 // The lights beside the apps follow what Podman says, asked again every little while the page is in view.
@@ -584,6 +585,7 @@ function render(): void {
   element("chat").hidden = view.kind === "settings";
   element("settings").hidden = view.kind !== "settings";
   developer.checked = state.developer;
+  element<HTMLInputElement>("autostart").checked = state.autostart;
   if (view.kind === "settings") renderSettings(state, view.tab);
   else renderChat(state, app);
   renderStatusbar(state, app, activeModel(state, app), health);

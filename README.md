@@ -146,7 +146,7 @@ Asking for a change turns any light orange, until a new version is deployed or t
 | 🟢 Running | The app is up and its health check passes. | |
 | 🟡 Restarted | Running, after Podman restarted it at least once since its last deploy. | Read its logs, or `/fix` |
 | ⭕ Unhealthy | Running, but its health check fails. After three failures in a row Podman restarts it, and it starts again. | Read its logs, or `/fix` |
-| 🔴 Stopped | Not running, for example after the Podman machine stopped. | **Start**, or `/start` |
+| 🔴 Stopped | Not running, for example after the Podman machine stopped. | **Start**, or `/start`. To have Mayfly start them when Podman Desktop starts, turn on **Settings → General → Start the apps that stopped**. |
 
 Each app runs as one pod with two containers: oauth2-proxy and the app. The proxy is the only way in, and you reach it on 127.0.0.1. It signs you in with OIDC, checks your roles against the app's policy and passes the request on with your identity in headers. The app has no port on the host, so it only ever sees people who are signed in and allowed.
 

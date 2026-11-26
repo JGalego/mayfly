@@ -32,16 +32,33 @@ export async function activate(context: api.ExtensionContext): Promise<void> {
     builder: podmanBuilder(RUNTIME_IMAGE),
   });
   let panel: Panel | undefined;
+  let handle: Handler = async () => {};
   const show = async (): Promise<void> => {
     if (panel !== undefined) return panel.reveal();
-    panel = await openPanel(context, engine, keys, models);
+    ({ panel, handle } = await openPanel(context, engine, keys, models));
     panel.onDidDispose(() => (panel = undefined));
   };
   context.subscriptions.push(api.commands.registerCommand("mayfly.open", show));
   await show();
+  if (settings().get<boolean>("autostart") === true) whenPodmanAnswers(context, () => void handle({ type: "start-stopped" }));
 }
 
-async function openPanel(context: api.ExtensionContext, engine: Engine, keys: KeyStore, models: ModelStore): Promise<Panel> {
+type Handler = ReturnType<typeof createController>;
+
+/** Does something once Podman answers: now, or when Podman Desktop next reports a container connection started, as its machine boots. */
+function whenPodmanAnswers(context: api.ExtensionContext, act: () => void): void {
+  void versions().then((found) => {
+    if (found?.server != null) return act();
+    const listening = api.provider.onDidUpdateContainerConnection((event) => {
+      if (event.status !== "started") return;
+      listening.dispose();
+      act();
+    });
+    context.subscriptions.push(listening);
+  });
+}
+
+async function openPanel(context: api.ExtensionContext, engine: Engine, keys: KeyStore, models: ModelStore): Promise<{ panel: Panel; handle: Handler }> {
   const media = api.Uri.joinPath(context.extensionUri, "media");
   const panel = api.window.createWebviewPanel("mayfly", "Mayfly", { localResourceRoots: [media] });
   // The navigation bar shows this file by its path: the same logo as the page, sharp at any size.
@@ -65,11 +82,13 @@ async function openPanel(context: api.ExtensionContext, engine: Engine, keys: Ke
       // Peek behind the curtain was developer mode's first name; whoever turned it on keeps it on.
       developer: () => settings().get<boolean>("developerMode") ?? settings().get<boolean>("peek") ?? false,
       saveDeveloper: (on) => settings().update("developerMode", on),
+      autostart: () => settings().get<boolean>("autostart") ?? false,
+      saveAutostart: (on) => settings().update("autostart", on),
     },
     keys,
   });
   context.subscriptions.push(panel.webview.onDidReceiveMessage(handle));
-  return panel;
+  return { panel, handle };
 }
 
 /** The page from media/, with its files turned into webview URIs and its CSP allowing only them. */

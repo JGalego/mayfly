@@ -27,6 +27,9 @@ export interface ControllerPorts {
     /** Whether the person works with the code too: versions, history, the editor, health and logs. */
     developer(): boolean;
     saveDeveloper(on: boolean): Promise<void>;
+    /** Whether to start the apps Podman is not running when Podman Desktop starts. Off unless the person turns it on. */
+    autostart(): boolean;
+    saveAutostart(on: boolean): Promise<void>;
   };
   /** Checks that Mayfly has everything it needs. */
   readonly doctor: () => Promise<Examination>;
@@ -87,6 +90,11 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       return session.post({ type: "notice", text: "New password made and copied. Paste it when your app asks you to sign in." });
     case "developer":
       return saveDeveloper(request.on, session);
+    case "autostart":
+      await session.settings.saveAutostart(request.on);
+      return showState(session);
+    case "start-stopped":
+      return startStopped(session);
     case "code":
       return sendCode(request.app, request.version, session);
     case "health":
@@ -269,6 +277,18 @@ async function sendCode(app: string, version: string, session: Session): Promise
   await session.post({ type: "code", app, version, ...(await session.engine.written(app, version)) });
 }
 
+/** Starts each app Podman is not running, one at a time, as when Podman Desktop starts. It gives way to anything asked for meanwhile. */
+async function startStopped(session: Session): Promise<void> {
+  for (const app of await session.engine.stopped()) {
+    if (session.working !== null) return;
+    await run({ app, request: "Start the app", kind: "start" }, session, (watch) => session.engine.start(app, watch)).catch(async (error: unknown) => {
+      const text = `Mayfly could not start ${app}: ${error instanceof Error ? error.message : String(error)}`;
+      note(session, "error", text);
+      await session.post({ type: "error", text });
+    });
+  }
+}
+
 async function saveDeveloper(on: boolean, session: Session): Promise<void> {
   await session.settings.saveDeveloper(on);
   await showState(session);
@@ -284,6 +304,7 @@ async function showState(session: Session): Promise<void> {
     spent: await session.engine.spent(),
     working: session.working,
     developer: session.settings.developer(),
+    autostart: session.settings.autostart(),
   });
 }
 
@@ -320,7 +341,10 @@ function readRequest(message: unknown): FromUi | undefined {
     case "remove":
       return typeof name === "string" ? { type, name } : undefined;
     case "developer":
+    case "autostart":
       return typeof on === "boolean" ? { type, on } : undefined;
+    case "start-stopped":
+      return { type };
     case "save":
       return typeof app === "string" && typeof from === "string" && typeof routes === "string" && typeof words === "string" ? { type, app, from, routes, message: words } : undefined;
     case "ask":

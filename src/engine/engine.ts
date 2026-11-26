@@ -64,6 +64,8 @@ export interface Engine {
   retry(name: string, watch?: Watcher): Promise<AppView>;
   /** Runs the version that ran before the one running now again. Undoing twice puts back the one undone. */
   undo(name: string, watch?: Watcher): Promise<AppView>;
+  /** The apps with a version to run that Podman is not running, as after the Podman machine stopped. */
+  stopped(): Promise<string[]>;
   /** Runs the running version again, and the sign-in service, as after Podman stopped them. Nothing about the app changes. */
   start(name: string, watch?: Watcher): Promise<AppView>;
   /** Has the app's model answer a question about it from its code, changing nothing. The exchange joins the conversation. */
@@ -187,6 +189,11 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       const { previous } = existingApp(await store.load(), name);
       if (previous === undefined) throw new Error(`For ${name}, no version ran before this one.`);
       return engine.deploy(name, previous, watch);
+    },
+
+    async stopped() {
+      const services = await engine.health();
+      return services.filter((service) => service.kind === "app" && !runs(service)).map((service) => service.name);
     },
 
     async start(name, watch = UNWATCHED) {
@@ -388,6 +395,11 @@ interface Made {
 /** Where a change starts: the running code, or for an app that never ran, its latest attempt that had any. */
 function startingPoint(app: App): Version | undefined {
   return runningVersion(app) ?? app.versions.findLast((version) => version.routes !== "");
+}
+
+/** Whether every container of a pod runs. A pod with none does not. */
+function runs({ containers }: ServiceHealth): boolean {
+  return containers.length > 0 && containers.every((container) => container.state === "running");
 }
 
 /** A name another app does not have, and that the contract allows. */
