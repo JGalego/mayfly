@@ -114,40 +114,39 @@ flowchart LR
   t -->|"passes"| dep["Deploy behind sign-in"]
 ```
 
-Each app has a light in the sidebar: orange while Mayfly works on it, and otherwise what Podman says about it. While it is up, its health check decides: Podman runs it every 10 seconds and restarts the app after three failures in a row, or when it crashes.
+Each app has a light in the sidebar. It is orange while Mayfly works on the app. Otherwise it shows what Podman says, which Mayfly asks every 10 seconds.
 
 ```mermaid
 stateDiagram-v2
-  direction LR
-  state "⚪ Never ran" as never
   state "🟠 In the works" as working
+  state "⚪ Never ran" as never
+  state "◯ Starting" as starting
+  state "🟢 Running" as running
+  state "⭕ Unhealthy" as unhealthy
   state "🔴 Stopped" as stopped
-  state "Up" as up {
-    direction LR
-    state "◯ Starting" as starting
-    state "🟢 Running, 🟡 once restarted" as running
-    state "⭕ Unhealthy" as unhealthy
-    [*] --> starting
-    starting --> running: its health check passes
-    running --> unhealthy: its health check fails
-    unhealthy --> running: it passes again
-    unhealthy --> starting: three failures, and Podman restarts it
-    running --> starting: it crashes, and Podman restarts it
-  }
 
-  [*] --> working: describe an app
+  [*] --> working: you describe an app
   working --> never: no attempt passed
-  working --> up: an attempt passed, or a version was deployed or started
-  working --> [*]: removed
-  never --> working: a change, or remove
-  up --> working: a change, deploy, undo, rename or remove
-  up --> stopped: it stopped, say with the Podman machine
-  stopped --> working: start, a change, deploy, undo, rename or remove
-  note right of working
-    Writing, building, trying, deploying, starting, renaming or removing.
-    A change that fails leaves the app as it was, and so do questions and saved edits.
-  end note
+  working --> starting: deployed
+  starting --> running: health check passes
+  running --> unhealthy: health check fails
+  unhealthy --> running: passes again
+  unhealthy --> starting: Podman restarts it
+  running --> stopped: it stops
+  stopped --> working: Start
+  running --> working: a change
+  never --> working: a change
 ```
+
+| Light | What it means | What to do |
+|---|---|---|
+| 🟠 In the works | Mayfly is writing, building, trying or deploying a version. The running version serves until the new one passes, and if none does, the app stays as it was. | Wait, or watch the conversation |
+| ⚪ Never ran | No attempt at the app has passed yet. | `/retry`, or ask for it differently |
+| ◯ Starting | Podman started the app, and its health check has not passed yet. | Wait a few seconds |
+| 🟢 Running | The app is up and its health check passes. | |
+| 🟡 Restarted | Running, after Podman restarted it at least once since its last deploy. | Read its logs, or `/fix` |
+| ⭕ Unhealthy | Running, but its health check fails. After three failures in a row Podman restarts it, and it starts again. | Read its logs, or `/fix` |
+| 🔴 Stopped | Not running, for example after the Podman machine stopped. | **Start**, or `/start` |
 
 Each app runs as one pod with two containers: oauth2-proxy and the app. The proxy is the only way in, and you reach it on 127.0.0.1. It signs you in with OIDC, checks your roles against the app's policy and passes the request on with your identity in headers. The app has no port on the host, so it only ever sees people who are signed in and allowed.
 
