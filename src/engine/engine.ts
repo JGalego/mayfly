@@ -1,7 +1,8 @@
 import { randomBytes } from "node:crypto";
 import { appUrl } from "../core/app-url.ts";
 import { appObjects } from "./app-objects.ts";
-import { generateApp, type Ask, type Attempt, type Generation } from "./generate.ts";
+import { generateApp, listenFor, type Ask, type Attempt, type Generation } from "./generate.ts";
+import { ASK_PROMPT, questionFor } from "./prompt.ts";
 import { mayflyName } from "../core/names.ts";
 import type { ContainerHealth, ModelProvider, Ports } from "./ports.ts";
 import { newPassword, newSecret } from "./secrets.ts";
@@ -55,6 +56,8 @@ export interface Engine {
   create(description: string, options?: { readonly model?: string | null; readonly watch?: Watcher }): Promise<AppView>;
   /** Has the app's model change it as asked. An attempt that passes replaces the running one at the same URL. Every attempt is kept. */
   change(name: string, request: string, watch?: Watcher): Promise<AppView>;
+  /** Has the app's model answer a question about it from its code, changing nothing. The exchange joins the conversation. */
+  ask(name: string, question: string, watch?: Watcher): Promise<AppView>;
   /** Marks an app as a favourite, or no longer. */
   star(name: string, starred: boolean): Promise<void>;
   /** Has another model write the app's changes from now on, or the default one for null. */
@@ -152,6 +155,25 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       const model = models(app.model);
       const generation = await generate({ change: request, app: { name, routes: base?.routes ?? "" } }, model, watch);
       return record(request, generation, { base: base?.id ?? null, by: { kind: "model", name: model.name }, model: app.model, started, runs: true }, watch);
+    },
+
+    async ask(name, question, watch = UNWATCHED) {
+      const started = Date.now();
+      const app = existingApp(await store.load(), name);
+      const model = models(app.model);
+      const meter = metered(model);
+      const { text } = await meter.model.complete(ASK_PROMPT, [{ role: "user", content: questionFor({ name, routes: startingPoint(app)?.routes ?? "" }, question) }], listenFor(watch));
+      const calls = meter.spending().map(({ at, took, spent }): ModelCall => ({ at, took, app: name, provider: model.provider, model: model.name, spent, question: true }));
+      // Loaded again, as anything else that changed while the model answered stays.
+      const state = await store.load();
+      const now = existingApp(state, name);
+      const turns: Turn[] = [
+        { from: "person", text: question, at: started },
+        { from: "mayfly", text: text.trim(), versions: [], took: Date.now() - started, at: Date.now() },
+      ];
+      const next = charge(withApp(state, { ...now, conversation: [...now.conversation, ...turns] }), calls);
+      await store.save(next);
+      return appView(existingApp(next, name));
     },
 
     async star(name, starred) {

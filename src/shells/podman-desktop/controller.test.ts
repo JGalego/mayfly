@@ -25,6 +25,8 @@ const writing: Step = { kind: "writing", attempt: 1 };
 const draft = (text: string): Step => ({ kind: "draft", text });
 const call: ModelCall = { at: 1, app: "lunch-split", provider: "OpenAI", model: "OpenAI · gpt-6.2-sol", spent: { input: 500, output: 80, thinking: 0 } };
 const thinking = (text: string): Step => ({ kind: "thinking", text });
+// How long the fake model takes to answer, so the answer is still coming when the page is sent it.
+const ANSWER_MS = 1000;
 
 describe("the Mayfly panel's controller", () => {
   it("shows the apps, who signs in, the models and whether their keys are saved, and the tokens spent", async () => {
@@ -102,6 +104,24 @@ describe("the Mayfly panel's controller", () => {
     t.mock.timers.tick(150);
 
     assert.equal(posted.filter((m) => m.type === "progress").length, 1);
+  });
+
+  it("answers a question about an app, showing the answer as it comes even with developer mode off, and refuses an empty one", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const { handle, posted, calls } = setUp({ apps: [lunch], steps: [draft("It adds")] });
+
+    const asking = handle({ type: "ask", app: "lunch-split", question: " How does it split? " });
+    await new Promise((resolve) => setImmediate(resolve));
+    t.mock.timers.tick(150);
+    const streamed = posted.some((m) => m.type === "progress" && m.working.steps.at(-1)?.kind === "draft");
+    t.mock.timers.tick(ANSWER_MS);
+    await asking;
+    await handle({ type: "ask", app: "lunch-split", question: "  " });
+
+    assert.deepEqual(calls, ["ask lunch-split How does it split?"]);
+    assert.equal(stateOf(posted[0])?.working?.kind, "ask");
+    assert.ok(streamed);
+    assert.equal(posted.at(-1)?.type, "error");
   });
 
   it("deploys a version, showing the work while it runs", async () => {
@@ -407,6 +427,12 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
     },
     change: async (name, request) => {
       calls.push(`change ${name} ${request}`);
+      return lunch;
+    },
+    ask: async (name, question, watch = () => {}) => {
+      calls.push(`ask ${name} ${question}`);
+      steps.forEach((step) => watch(step));
+      await new Promise((resolve) => setTimeout(resolve, ANSWER_MS));
       return lunch;
     },
     list: async () => [...apps],

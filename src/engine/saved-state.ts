@@ -27,10 +27,11 @@ function callsOf(app: App): ModelCall[] {
 }
 
 // A call kept before outcomes were noted takes the outcome of the version its attempt made: the first by its model after the
-// call ended and before the app's next call. A call cut short made none, and a removed app's versions are gone.
+// call ended and before the app's next attempt. A call cut short made none, a removed app's versions are gone, and questions write no code.
 function withOutcomes(calls: readonly ModelCall[], apps: readonly App[]): ModelCall[] {
   const nextCall = new Map<string | null, number>();
   const known = calls.toReversed().map((call) => {
+    if (call.question === true) return call;
     const before = nextCall.get(call.app) ?? Infinity;
     nextCall.set(call.app, call.at);
     if (call.passed !== undefined) return call;

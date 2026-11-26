@@ -14,7 +14,7 @@ const BUSY = "Mayfly is still working on your last request. Wait for it to finis
 const DRAFT_MS = 150;
 // Enough to see the last few hours of work, and small enough to keep in memory.
 const ACTIVITY = 200;
-const DONE: Record<Exclude<Progress["kind"], "remove">, string> = { create: "Made", change: "Changed", deploy: "Deployed a version of", save: "Saved a hand edit to" };
+const DONE: Record<Exclude<Progress["kind"], "remove">, string> = { create: "Made", change: "Changed", ask: "Answered a question about", deploy: "Deployed a version of", save: "Saved a hand edit to" };
 
 export interface ControllerPorts {
   readonly engine: Engine;
@@ -99,6 +99,8 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       return session.post({ type: "doctor", ...(await session.doctor()) });
     case "logs":
       return session.post({ type: "logs", pod: request.pod, container: request.container, lines: await session.engine.logs(request.pod, request.container) });
+    case "ask":
+      return ask(request.app, request.question.trim(), session);
     case "deploy":
       return deploy(request.app, request.version, session);
     case "save":
@@ -135,6 +137,12 @@ async function settle(change: Promise<string | undefined | void>, session: Sessi
   await showState(session);
 }
 
+async function ask(app: string, question: string, session: Session): Promise<void> {
+  const problem = problemWithWork({ app, request: question }, session);
+  if (problem !== undefined) return void (await session.post({ type: "error", text: problem }));
+  await run({ app, request: question, kind: "ask" }, session, (watch) => session.engine.ask(app, question, watch));
+}
+
 async function deploy(app: string, version: string, session: Session): Promise<void> {
   if (session.working !== null) return void (await session.post({ type: "error", text: BUSY }));
   await run({ app, request: `Deploy version ${version}`, kind: "deploy" }, session, (watch) => session.engine.deploy(app, version, watch));
@@ -169,9 +177,9 @@ async function run(work: Omit<Progress, "since" | "steps"> & { kind: keyof typeo
   const app = await job((step) => showProgress(step, session)).finally(() => {
     session.working = null;
   });
-  // Deploying runs a version that passed; anything else passed if its last attempt did.
+  // Deploying runs a version that passed, and answering makes none; anything else passed if its last attempt did.
   const last = app.versions.at(-1);
-  const passed = work.kind === "deploy" || last === undefined || last.problem === null;
+  const passed = work.kind === "deploy" || work.kind === "ask" || last === undefined || last.problem === null;
   note(session, passed ? "info" : "error", `${DONE[work.kind]} ${app.name}${passed ? "" : ", but it did not pass its trial"}`);
   await showState(session);
   return app;
@@ -181,8 +189,8 @@ function showProgress(step: Step, session: Session): void {
   if (session.working === null) return;
   session.working = { ...session.working, steps: withStep(session.working.steps, step) };
   if (step.kind !== "draft" && step.kind !== "thinking") return postProgress(session);
-  // Only a developer sees the draft and the thinking, and a few times a second rather than on every word.
-  if (session.draftDue || !session.settings.developer()) return;
+  // Only a developer sees the draft and the thinking, except of an answer, which is for everyone. A few times a second, not on every word.
+  if (session.draftDue || (!session.settings.developer() && session.working.kind !== "ask")) return;
   session.draftDue = true;
   setTimeout(() => {
     session.draftDue = false;
@@ -258,7 +266,7 @@ async function showState(session: Session): Promise<void> {
 // Messages come from the page, so each is checked for its shape before anything acts on it.
 function readRequest(message: unknown): FromUi | undefined {
   if (typeof message !== "object" || message === null) return undefined;
-  const { type, app, request, name, apiKey, on, version, what, from, routes, message: words, model, id, pod, container, starred, email } = message as Record<string, unknown>;
+  const { type, app, request, question, name, apiKey, on, version, what, from, routes, message: words, model, id, pod, container, starred, email } = message as Record<string, unknown>;
   switch (type) {
     case "ready":
     case "new-password":
@@ -291,6 +299,8 @@ function readRequest(message: unknown): FromUi | undefined {
       return typeof on === "boolean" ? { type, on } : undefined;
     case "save":
       return typeof app === "string" && typeof from === "string" && typeof routes === "string" && typeof words === "string" ? { type, app, from, routes, message: words } : undefined;
+    case "ask":
+      return typeof app === "string" && typeof question === "string" ? { type, app, question } : undefined;
     case "code":
     case "deploy":
       return typeof app === "string" && typeof version === "string" ? { type, app, version } : undefined;

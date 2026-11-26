@@ -77,6 +77,8 @@ export interface ModelCall {
   readonly spent: Usage;
   /** Whether the code it wrote passed its trial. Unknown when the work was cut short, or the version it made is gone. */
   readonly passed?: boolean;
+  /** It answered a question about the app, and wrote no code. */
+  readonly question?: true;
 }
 
 export interface State {

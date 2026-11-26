@@ -49,6 +49,21 @@ export const SYSTEM_PROMPT = [
   "Each SEARCH must match exactly one place in the code. Give just enough lines for that. For a large change, reply with the whole of routes.ts.",
 ].join("\n");
 
+// What the model is told when the person asks about an app rather than for a change to it.
+export const ASK_PROMPT = [
+  "You answer questions about a small web app that runs on Mayfly. You do not change it.",
+  "The app is one TypeScript file, routes.ts, using Hono. Mayfly's runtime handles sign-in, health checks, logging and security headers around it.",
+  "Answer in plain words and briefly, for someone who may not read code. Quote a line or two of the code only when it helps.",
+  "Never write a new version of the code. If the answer is that the app should change, say what to ask for: the person can ask for the change in the conversation.",
+  "Answer in the language of the question.",
+].join("\n");
+
+/** A question about an app, with its code to answer from. */
+export function questionFor(app: { readonly name: string; readonly routes: string }, question: string): string {
+  const code = app.routes === "" ? "It has no code yet." : `Its code, routes.ts:\n\n\`\`\`ts\n${app.routes}\`\`\``;
+  return `The app is called ${app.name}. ${code}\n\nThe question:\n\n${question}`;
+}
+
 export function requestFor(description: string): string {
   return `Write the app for this request:\n\n${description}`;
 }

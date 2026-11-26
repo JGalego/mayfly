@@ -35,7 +35,7 @@ const SETTINGS_TABS: readonly SettingsTab[] = ["general", "models", "logs", "usa
 // Logs and usage are for developers.
 const DEVELOPER_TABS: readonly SettingsTab[] = ["logs", "usage"];
 
-const TITLES: Record<Exclude<Progress["kind"], "remove">, string> = { create: "Writing your app", change: "Changing your app", deploy: "Deploying", save: "Trying your edit" };
+const TITLES: Record<Exclude<Progress["kind"], "remove">, string> = { create: "Writing your app", change: "Changing your app", ask: "Answering", deploy: "Deploying", save: "Trying your edit" };
 
 const NOTICE_MS = 4000;
 const CONFIRM_MS = 4000;
@@ -426,8 +426,20 @@ function runCommand(command: Command, argument: string): void {
   if (command.needsApp && view.kind !== "app") return showError(`/${command.name} works in an app's conversation.`);
   if (command.takes !== undefined && argument === "") return showError(`Type ${command.takes} after /${command.name}.`);
   if (command.name === "model") return useModelNamed(argument);
+  if (command.name === "remove") {
+    request.value = "";
+    return removeApp();
+  }
+  askAbout(argument);
+}
+
+/** Asks the app's model a question; like a request, it needs the model's key, and waits while other work runs. */
+function askAbout(question: string): void {
+  const app = shownApp();
+  if (app === undefined || state?.working !== null || !canWrite(state, app)) return;
   request.value = "";
-  removeApp();
+  hideBanner();
+  post({ type: "ask", app: app.name, question });
 }
 
 function useModelNamed(label: string): void {
@@ -616,7 +628,7 @@ function renderChat(state: State, app: AppView | undefined): void {
   const turns = [...(app?.conversation ?? []), ...(working === null ? [] : [{ from: "person", text: working.request, at: working.since } as const])];
   const showing = showingFor(state);
   const items = turns.map((said) => turnItem(said, app === undefined ? [] : madeOf(said, app, showing)));
-  const pending = working === null ? [] : [turn("mayfly", working.kind === "remove" ? h("p", "", spinner(), `Stopping and removing ${working.app ?? ""}…`) : progressView(working, TITLES[working.kind], showing))];
+  const pending = working === null ? [] : [turn("mayfly", pendingView(working, showing))];
   const thread = element("thread");
   const following = thread.scrollHeight - thread.scrollTop - thread.clientHeight < FOLLOW_PX;
   // The Code tab is behind the curtain.
@@ -636,7 +648,7 @@ function renderChat(state: State, app: AppView | undefined): void {
   element("history-label").textContent = `History · ${app?.versions.length ?? 0}`;
   if (following && tab === "chat") scrollToEnd(thread);
   for (const live of document.querySelectorAll<HTMLElement>(".live")) scrollToEnd(live);
-  request.placeholder = app === undefined ? "Describe the app you need" : `Ask for a change to ${app.name}, or type / for commands`;
+  request.placeholder = app === undefined ? "Describe the app you need" : "Ask for a change, or type / for commands";
   request.disabled = !writes || removing;
   element<HTMLButtonElement>("send").disabled = !writes || state.working !== null;
   composerModel.replaceChildren(...state.models.map((model) => new Option(model.label, model.id)));
@@ -705,6 +717,14 @@ function turn(from: Turn["from"], body: HTMLElement): HTMLLIElement {
   if (from === "mayfly") item.append(avatar());
   item.append(body);
   return item;
+}
+
+/** The work under way, as Mayfly's next turn in the conversation: an answer as it is written, or the stages of the work. */
+function pendingView(working: Progress, showing: Showing): HTMLElement {
+  if (working.kind === "remove") return h("p", "", spinner(), `Stopping and removing ${working.app ?? ""}…`);
+  if (working.kind !== "ask") return progressView(working, TITLES[working.kind], showing);
+  const draft = working.steps.findLast((step) => step.kind === "draft");
+  return draft?.kind === "draft" ? h("p", "", draft.text) : h("p", "", spinner(), " Thinking about your question…");
 }
 
 function spinner(): HTMLSpanElement {

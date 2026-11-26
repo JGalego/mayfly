@@ -1,4 +1,4 @@
-export type CommandName = "model" | "remove";
+export type CommandName = "ask" | "model" | "remove";
 
 /** A command the conversation takes after a slash: what it does, what it takes, and whether it needs an app to act on. */
 export interface Command {
@@ -10,6 +10,7 @@ export interface Command {
 }
 
 export const COMMANDS: readonly Command[] = [
+  { name: "ask", says: "Ask about the app without changing it", takes: "a question", needsApp: true },
   { name: "model", says: "Switch the model that writes the app", takes: "provider · model", needsApp: false },
   { name: "remove", says: "Remove the app for good", needsApp: true },
 ];

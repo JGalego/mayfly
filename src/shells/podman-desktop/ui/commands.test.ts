@@ -9,13 +9,14 @@ describe("commands", () => {
     assert.deepEqual(parse("split lunch bills"), { kind: "request", text: "split lunch bills" });
     assert.partialDeepStrictEqual(parse("/model  OpenAI · gpt-6.2-sol"), { kind: "command", command: { name: "model" }, argument: "OpenAI · gpt-6.2-sol" });
     assert.partialDeepStrictEqual(parse("/REMOVE"), { kind: "command", command: { name: "remove" }, argument: "" });
+    assert.partialDeepStrictEqual(parse("/ask how does it\nsplit?"), { kind: "command", command: { name: "ask" }, argument: "how does it\nsplit?" });
     assert.deepEqual(parse("/deploy v1"), { kind: "unknown", name: "deploy" });
   });
 
   it("offers the commands that start with what is typed, only those that need no app when there is none", () => {
     assert.deepEqual(
       suggestions("/", { app: true, models }).map((s) => s.fill),
-      ["/model ", "/remove "],
+      ["/ask ", "/model ", "/remove "],
     );
     assert.deepEqual(
       suggestions("/", { app: false, models }).map((s) => s.label),

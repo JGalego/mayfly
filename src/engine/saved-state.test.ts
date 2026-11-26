@@ -61,11 +61,12 @@ describe("upgradeState", () => {
     ] };
     const call = { app: "lunch", provider: "p", model: "m", spent: counted };
     // The first call was cut short and made no version; the call for the removed app's version is gone with it.
-    const calls = [{ ...call, at: 5 }, { ...call, at: 10 }, { ...call, at: 30 }, { ...call, at: 40, app: "gone" }, { ...call, at: 50, passed: true }];
+    // A question wrote no code, so it takes no version's outcome either.
+    const calls = [{ ...call, at: 5 }, { ...call, at: 10 }, { ...call, at: 30 }, { ...call, at: 40, app: "gone" }, { ...call, at: 50, passed: true }, { ...call, at: 11, question: true }];
 
-    const upgraded = upgradeState({ owner, apps: [lunch], calls }).calls;
+    const upgraded = upgradeState({ owner, apps: [lunch], calls: calls.toSorted((a, b) => a.at - b.at) }).calls;
 
-    assert.deepEqual(upgraded.map((c) => c.passed), [undefined, false, true, undefined, true]);
+    assert.deepEqual(upgraded.map((c) => c.passed), [undefined, false, undefined, true, undefined, true]);
   });
 
   it("leaves a state saved with versions as it is", () => {

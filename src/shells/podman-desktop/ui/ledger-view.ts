@@ -120,7 +120,8 @@ function attempts(periods: readonly Period[], grain: Grain, calls: readonly Mode
   const { passed, failed } = tallyOf(calls);
   const known = passed + failed;
   if (known === 0) return [h("p", "quiet", "No call in this time has a known outcome.")];
-  const unknown = calls.length - known;
+  // Answers to questions wrote no code, so they have no outcome to miss.
+  const unknown = calls.filter((call) => call.passed === undefined && call.question !== true).length;
   const notes = [`${Math.round((passed / known) * 100)}% passed`, ...(unknown === 0 ? [] : [`${unknown.toLocaleString()} more with no known outcome`])];
   return [legend(OUTCOMES, [passed, failed], notes.join(" · ")), barChart(columnsOf(periods, grain, (period) => [period.passed, period.failed]), OUTCOMES, { counts: true })];
 }

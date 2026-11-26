@@ -149,6 +149,19 @@ describe("the engine", () => {
     assert.match(after.conversation.at(-1)?.text ?? "", /didn't pass its trial\. Your app is as it was/);
   });
 
+  it("answers a question about an app from its code without changing it, keeping the call in the ledger as a question", async () => {
+    const { engine, deployed, asked } = setUp([reply("lunch"), "It adds the bills up and splits them evenly."]);
+    const before = await engine.create("split lunch bills");
+
+    const after = await engine.ask("lunch", "How does it split?");
+
+    assert.deepEqual([after.versions, after.head, deployed.length], [before.versions, before.head, 1]);
+    assert.deepEqual(after.conversation.slice(-2).map((turn) => [turn.from, turn.text]), [["person", "How does it split?"], ["mayfly", "It adds the bills up and splits them evenly."]]);
+    assert.match(asked.at(-1) ?? "", /export default 1;[\s\S]*How does it split\?/);
+    assert.partialDeepStrictEqual((await engine.ledger()).at(-1), { app: "lunch", spent: COST, question: true });
+    assert.deepEqual(after.spent, { input: 200, output: 40, thinking: 0 });
+  });
+
   it("refuses to save from a version it does not have, or to deploy one that failed", async () => {
     const { engine } = setUp([reply("lunch"), reply("lunch")], [crashed, { ok: true }]);
     const app = await engine.create("split lunch bills");

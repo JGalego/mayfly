@@ -57,7 +57,7 @@ export async function generateApp(
 }
 
 /** Shows the watcher the reply, and the thinking, each so far as it grows. */
-function listenFor(watch: Watcher): Listener {
+export function listenFor(watch: Watcher): Listener {
   let draft = "";
   let thought = "";
   return {

@@ -18,8 +18,8 @@ export interface Work {
 
 /** A request Mayfly is working on, and what it has done so far. */
 export interface Progress extends Work {
-  /** Making a new app, changing one, deploying one of its versions, saving a hand edit to it, or removing it. */
-  readonly kind: "create" | "change" | "deploy" | "save" | "remove";
+  /** Making a new app, changing one, answering a question about it, deploying one of its versions, saving a hand edit to it, or removing it. */
+  readonly kind: "create" | "change" | "ask" | "deploy" | "save" | "remove";
   /** When Mayfly started on it, in milliseconds since the epoch. */
   readonly since: number;
   readonly steps: readonly Step[];
@@ -53,6 +53,7 @@ export type FromUi =
   | { readonly type: "activity" }
   | { readonly type: "logs"; readonly pod: string; readonly container: string }
   | { readonly type: "code"; readonly app: string; readonly version: string }
+  | { readonly type: "ask"; readonly app: string; readonly question: string }
   | { readonly type: "deploy"; readonly app: string; readonly version: string }
   | { readonly type: "save"; readonly app: string; readonly from: string; readonly routes: string; readonly message: string };
 
