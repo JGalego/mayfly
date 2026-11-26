@@ -20,6 +20,7 @@ A sense of taste is non-negotiable in everything we do: code, docs, design, name
 - Clean Code: small functions that each do one thing, small files with one responsibility, names that say what they do.
 - Tests first for `src/core`. Adapters get thin integration tests.
 - No speculative code. If it can be deleted, delete it.
+- Prove it's needed before adding it. A dependency, tool, workaround or anything in an image needs evidence first: a failing test, a reproduction, or the source code that settles it.
 - `src/core` imports nothing outside `src/core`.
 - Node runs the TypeScript directly: erasable syntax only, and relative imports end in `.ts`.
 
