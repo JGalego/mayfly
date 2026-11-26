@@ -17,8 +17,8 @@ export interface Work {
 
 /** A request Mayfly is working on, and what it has done so far. */
 export interface Progress extends Work {
-  /** Making a new app, changing one, or going back to an earlier version. */
-  readonly kind: "create" | "change" | "restore" | "edit";
+  /** Making a new app, changing one, going back to an earlier version, editing it by hand, or removing it. */
+  readonly kind: "create" | "change" | "restore" | "edit" | "remove";
   /** When Mayfly started on it, in milliseconds since the epoch. */
   readonly since: number;
   readonly steps: readonly Step[];

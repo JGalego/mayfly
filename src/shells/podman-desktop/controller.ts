@@ -14,7 +14,7 @@ const BUSY = "Mayfly is still working on your last request. Wait for it to finis
 const DRAFT_MS = 150;
 // Enough to see the last few hours of work, and small enough to keep in memory.
 const ACTIVITY = 200;
-const DONE: Record<Progress["kind"], string> = { create: "Made", change: "Changed", restore: "Went back on", edit: "Tried a hand edit on" };
+const DONE: Record<Exclude<Progress["kind"], "remove">, string> = { create: "Made", change: "Changed", restore: "Went back on", edit: "Tried a hand edit on" };
 
 export interface ControllerPorts {
   readonly engine: Engine;
@@ -158,7 +158,7 @@ function note(session: Session, level: Activity["level"], text: string): void {
 }
 
 /** Does one piece of work, showing its progress while it runs. */
-async function run(work: Omit<Progress, "since" | "steps">, session: Session, job: (watch: Watcher) => Promise<AppView>): Promise<AppView> {
+async function run(work: Omit<Progress, "since" | "steps"> & { kind: keyof typeof DONE }, session: Session, job: (watch: Watcher) => Promise<AppView>): Promise<AppView> {
   session.working = { ...work, since: Date.now(), steps: [] };
   note(session, "info", `Started: ${work.request}`);
   await showState(session);
@@ -209,9 +209,14 @@ async function open(name: string, session: Session): Promise<void> {
   if (app !== undefined) await session.openExternal(app.url);
 }
 
+// Removing takes a moment, and while it does the page shows it and leaves the app alone.
 async function remove(name: string, session: Session): Promise<void> {
   if (session.working !== null) return void (await session.post({ type: "error", text: BUSY }));
-  await session.engine.remove(name);
+  session.working = { app: name, request: `Remove ${name}`, kind: "remove", since: Date.now(), steps: [] };
+  await showState(session);
+  await session.engine.remove(name).finally(() => {
+    session.working = null;
+  });
   note(session, "info", `Removed ${name}`);
   await showState(session);
 }

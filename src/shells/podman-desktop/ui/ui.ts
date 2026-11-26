@@ -23,7 +23,7 @@ type View = { readonly kind: "new" } | { readonly kind: "app"; readonly name: st
 /** An app's conversation, or its history. */
 type Tab = "chat" | "history" | "code" | "logs";
 
-const TITLES: Record<Progress["kind"], string> = { create: "Writing your app", change: "Changing your app", restore: "Going back", edit: "Trying your edit" };
+const TITLES: Record<Exclude<Progress["kind"], "remove">, string> = { create: "Writing your app", change: "Changing your app", restore: "Going back", edit: "Trying your edit" };
 
 const NOTICE_MS = 4000;
 const CONFIRM_MS = 4000;
@@ -50,7 +50,6 @@ let view: View = { kind: "new" };
 const drafts = new Map<string, string>();
 /** What the person sent last, to give back if it fails. */
 let lastSent: Work | undefined;
-let removeArmed = false;
 /** The app whose code the person is editing by hand. */
 let editing: string | undefined;
 /** The app whose logs the Logs tab last asked for, so a redraw does not ask again. */
@@ -177,7 +176,6 @@ function go(next: View): void {
   drafts.set(draftKey(view), request.value);
   view = next;
   request.value = drafts.get(draftKey(view)) ?? "";
-  removeArmed = false;
   hideBanner();
   render();
   if (view.kind === "settings") {
@@ -302,16 +300,16 @@ function openApp(): void {
   if (view.kind === "app") post({ type: "open", name: view.name });
 }
 
-// Removing an app loses its conversation, so it takes a second click.
+// Removing an app loses its conversation and versions for good, so a dialog asks first, with keeping it the default.
 function removeApp(): void {
   if (view.kind !== "app") return;
-  if (removeArmed) return post({ type: "remove", name: view.name });
-  removeArmed = true;
-  render();
-  window.setTimeout(() => {
-    removeArmed = false;
-    render();
-  }, CONFIRM_MS);
+  const name = view.name;
+  const dialog = element<HTMLDialogElement>("remove-dialog");
+  element("remove-title").textContent = `Remove ${name}?`;
+  element("confirm-remove").textContent = `Remove ${name}`;
+  dialog.returnValue = "";
+  dialog.addEventListener("close", () => dialog.returnValue === "remove" && post({ type: "remove", name }), { once: true });
+  dialog.showModal();
 }
 
 // A new password stops the old one working, so it takes a second click.
@@ -432,8 +430,12 @@ function renderChat(state: State, app: AppView | undefined): void {
   const openApp = element<HTMLButtonElement>("open-app");
   openApp.disabled = app?.head === null;
   openApp.title = app?.head === null ? "No attempt has passed yet, so nothing is running." : "";
-  element("remove-app").textContent = removeArmed ? "Remove for good?" : "Remove";
-  element("remove-app").classList.toggle("armed", removeArmed);
+  // While Mayfly works on the app, and above all while it removes it, the app is left alone.
+  const busy = state.working !== null && state.working.app === (app?.name ?? null);
+  const removing = busy && state.working?.kind === "remove";
+  element<HTMLButtonElement>("remove-app").disabled = busy;
+  if (removing) openApp.disabled = true;
+  for (const tab of element("app-tabs").querySelectorAll("button")) tab.disabled = removing;
   element("welcome").hidden = app !== undefined || working !== null;
   const writes = canWrite(state, app);
   element("needs-key").hidden = writes;
@@ -441,7 +443,7 @@ function renderChat(state: State, app: AppView | undefined): void {
   const turns = [...(app?.conversation ?? []), ...(working === null ? [] : [{ from: "person", text: working.request, at: working.since } as const])];
   const showing = showingFor(state);
   const items = turns.map((said) => turnItem(said, app === undefined ? [] : madeOf(said, app, showing)));
-  const pending = working === null ? [] : [turn("mayfly", progressView(working, TITLES[working.kind], showing))];
+  const pending = working === null ? [] : [turn("mayfly", working.kind === "remove" ? h("p", "", spinner(), `Stopping and removing ${working.app ?? ""}…`) : progressView(working, TITLES[working.kind], showing))];
   const thread = element("thread");
   const following = thread.scrollHeight - thread.scrollTop - thread.clientHeight < FOLLOW_PX;
   // The Code tab is behind the curtain.
@@ -462,7 +464,7 @@ function renderChat(state: State, app: AppView | undefined): void {
   if (following && tab === "chat") scrollToEnd(thread);
   for (const live of document.querySelectorAll<HTMLElement>(".live")) scrollToEnd(live);
   request.placeholder = app === undefined ? "Describe the app you need" : `Ask for a change to ${app.name}`;
-  request.disabled = !writes;
+  request.disabled = !writes || removing;
   element<HTMLButtonElement>("send").disabled = !writes || state.working !== null;
   composerModel.replaceChildren(...state.models.map((model) => new Option(model.label, model.id)));
   composerModel.value = activeModel(state, app)?.id ?? "";

@@ -1241,6 +1241,39 @@ pre.problem {
   overflow-wrap: anywhere;
 }
 
+/* The dialog that asks before an app is removed. */
+dialog {
+  max-width: 28rem;
+  padding: 1.25rem 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--text);
+  background: var(--bg);
+  box-shadow: 0 12px 40px light-dark(#0003, #000a);
+}
+
+dialog::backdrop {
+  background: light-dark(#0004, #0008);
+}
+
+dialog h2 {
+  margin-bottom: 0.6rem;
+  font-size: 1.1rem;
+}
+
+dialog .editor-actions {
+  margin-top: 1.25rem;
+}
+
+.danger {
+  color: #ffffff;
+  background: var(--error);
+}
+
+.danger:hover {
+  filter: brightness(1.1);
+}
+
 /* Messages and status */
 
 #banner {

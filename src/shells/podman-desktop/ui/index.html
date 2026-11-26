@@ -155,6 +155,16 @@
       <span id="model-info"></span>
       <span id="tokens"></span>
     </footer>
+    <dialog id="remove-dialog" aria-labelledby="remove-title">
+      <form method="dialog">
+        <h2 id="remove-title">Remove this app?</h2>
+        <p>Mayfly stops it and deletes it for good: the app, its conversation and every version. Anything people saved in their own browsers stays there.</p>
+        <div class="editor-actions">
+          <button value="keep" class="quiet-button" autofocus>Keep it</button>
+          <button id="confirm-remove" value="remove" class="danger">Remove</button>
+        </div>
+      </form>
+    </dialog>
     <script src="ui.js"></script>
   </body>
 </html>

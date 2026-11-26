@@ -238,13 +238,14 @@ describe("the Mayfly panel's controller", () => {
     assert.deepEqual(opened, [lunch.url]);
   });
 
-  it("removes an app and shows what is left", async () => {
+  it("removes an app, showing it is being removed until it is gone", async () => {
     const { handle, posted, calls } = setUp({ apps: [lunch] });
 
     await handle({ type: "remove", name: "lunch-split" });
 
     assert.deepEqual(calls, ["remove lunch-split"]);
-    assert.equal(posted.at(-1)?.type, "state");
+    assert.partialDeepStrictEqual(stateOf(posted[0])?.working, { app: "lunch-split", kind: "remove" });
+    assert.equal(stateOf(posted.at(-1))?.working, null);
   });
 
   it("copies the owner's email and password to the clipboard, never sending the password to the page", async () => {
