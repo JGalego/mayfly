@@ -1,12 +1,34 @@
-# Mayfly
+<div align="center">
+
+<img src="assets/logo.svg" alt="Mayfly logo: a mayfly against a setting sun" width="160">
+
+<h1>Mayfly</h1>
+
+<p><em>Here for a day, built to stay.</em></p>
+
+<p>
+<img alt="Status: early" src="https://img.shields.io/badge/status-early-FF9A52?style=flat-square">
+<a href="https://nodejs.org"><img alt="Node 24 or later" src="https://img.shields.io/badge/node-%3E%3D24-5FA04E?style=flat-square&logo=nodedotjs&logoColor=white"></a>
+<a href="https://www.typescriptlang.org"><img alt="TypeScript, strict" src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat-square&logo=typescript&logoColor=white"></a>
+<a href="https://podman.io"><img alt="Runs on Podman" src="https://img.shields.io/badge/runs%20on-Podman-892CA0?style=flat-square&logo=podman&logoColor=white"></a>
+<a href="https://hono.dev"><img alt="Apps: Hono on Node" src="https://img.shields.io/badge/apps-Hono%20on%20Node-E36002?style=flat-square&logo=hono&logoColor=white"></a>
+<a href="https://oauth2-proxy.github.io/oauth2-proxy/"><img alt="Sign-in: OIDC" src="https://img.shields.io/badge/sign--in-OIDC-F78C40?style=flat-square&logo=openid&logoColor=white"></a>
+</p>
+
+<p>
+<a href="https://en.wikipedia.org/wiki/Mayfly"><img alt="Order: Ephemeroptera" src="https://img.shields.io/badge/order-Ephemeroptera-2A1E3F?style=flat-square"></a>
+<img alt="Adult lifespan: about a day" src="https://img.shields.io/badge/adult%20lifespan-~1%20day-E2475E?style=flat-square">
+<img alt="Login code written by the model: 0 lines" src="https://img.shields.io/badge/login%20code%20by%20the%20model-0%20lines-2A1E3F?style=flat-square">
+<img alt="Root: nope" src="https://img.shields.io/badge/root-nope-E2475E?style=flat-square">
+</p>
+
+</div>
 
 Describe a small app for a short or routine task. Mayfly builds it and runs it on your machine, behind sign-in, with health checks and JSON logs. The model writes none of those parts.
 
-**Status:** early. The core contract exists. The Podman deployer and the Podman Desktop extension are next.
-
 ## Why not Dyad?
 
-[Dyad](https://www.dyad.sh/) and Lovable generate the whole app, including login and logging, so those parts are only as good as the model is that day. Mayfly moves them into a fixed contract that the model cannot weaken, and the model writes business logic only. Every app is production-shaped by construction and can be handed to someone else to run.
+[Dyad](https://www.dyad.sh/) and [Lovable](https://lovable.dev/) generate the whole app, including login and logging, so those parts are only as good as the model is that day. Mayfly moves them into a fixed contract that the model cannot weaken, and the model writes business logic only. Every app is production-shaped by construction and can be handed to someone else to run.
 
 ## The contract
 
@@ -24,8 +46,6 @@ A generated app:
 Every container runs as a non-root user with all capabilities dropped, a read-only root filesystem and CPU and memory limits. Only the proxy is published, and only on loopback.
 
 ## Architecture
-
-Dependencies point inward. The core imports nothing else.
 
 ```mermaid
 flowchart LR
@@ -51,11 +71,11 @@ flowchart LR
 
 ## Offerings
 
-**Individual** (being built). Local-first, on your own Podman. Power users can later deploy the same image and manifests to their own cloud.
+💻 **Individual** (being built). Local-first, on your own Podman. Power users can later deploy the same image and manifests to their own cloud.
 
-**Enterprise** (not now). IT configures a deployment target and the company IdP once, and creators get a deploy button. The engine and the contract stay the same. A web control plane holds the target, the IdP configuration and each app's policy, and runs the engine on a server. Apps move from a laptop to the company cluster without rewrites because they were cluster-shaped from the start.
+🏢 **Enterprise** (not now). IT configures a deployment target and the company IdP once, and creators get a deploy button. The engine and the contract stay the same. A web control plane holds the target, the IdP configuration and each app's policy, and runs the engine on a server. Apps move from a laptop to the company cluster without rewrites because they were cluster-shaped from the start.
 
-**SaaS** (later). Mayfly hosts apps for many customers. This is a different security problem: running untrusted, model-written code for many tenants on shared infrastructure needs strong tenant isolation, abuse controls and billing. Out of scope until Individual and Enterprise work.
+☁️ **SaaS** (later). Mayfly hosts apps for many customers. This is a different security problem: running untrusted, model-written code for many tenants on shared infrastructure needs strong tenant isolation, abuse controls and billing. Out of scope until Individual and Enterprise work.
 
 ## Non-goals
 
