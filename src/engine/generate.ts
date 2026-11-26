@@ -1,6 +1,7 @@
 import type { Builder, Message, ModelProvider } from "./ports.ts";
 import { changeFor, repairFor, requestFor, SYSTEM_PROMPT } from "./prompt.ts";
-import { parseReply } from "./reply.ts";
+import { applyEdits, type Applied } from "./edits.ts";
+import { parseReply, type Code } from "./reply.ts";
 import { UNWATCHED, type Watcher } from "./step.ts";
 import type { Usage } from "./usage.ts";
 
@@ -18,7 +19,10 @@ export type Ask =
 type Outcome = { readonly problem: null; readonly image: string } | { readonly problem: string; readonly image: null };
 
 /** One go at the code: what the model wrote, and whether it passed its trial. */
-export type Attempt = { readonly routes: string; readonly summary: string; readonly spent: Usage; readonly at: number } & Outcome;
+export type Attempt = Tried & { readonly spent: Usage; readonly at: number };
+
+/** The code an attempt ended up with, empty when the reply had none that could be used. */
+type Tried = { readonly routes: string; readonly summary: string } & Outcome;
 
 /** The app's name and every attempt at it. The last attempt is the one that passed, if any did. */
 export interface Generation {
@@ -34,19 +38,42 @@ export async function generateApp(
   const messages: Message[] = [{ role: "user", content: "change" in ask ? changeFor(ask.app, ask.change) : requestFor(ask.description) }];
   const taken = "change" in ask ? [] : ask.taken;
   let name = "change" in ask ? ask.app.name : undefined;
+  const nameFor = (proposed: string): string => (name ??= unusedName(proposed, taken));
+  // The code the next edits apply to: the app's, then each attempt's that had any.
+  let current = "change" in ask ? ask.app.routes : "";
   const attempts: Attempt[] = [];
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
     watch({ kind: "writing", attempt });
     let draft = "";
     const { text: reply, usage } = await model.complete(SYSTEM_PROMPT, messages, (text) => watch({ kind: "draft", text: (draft += text) }));
-    const parsed = parseReply(reply);
-    const outcome: Outcome = parsed.ok ? await tryCode((name ??= unusedName(parsed.name, taken)), parsed.routes, builder, watch) : { problem: parsed.problem, image: null };
-    attempts.push({ routes: parsed.ok ? parsed.routes : "", summary: parsed.ok ? parsed.summary : "", spent: usage, at: Date.now(), ...outcome });
-    if (outcome.problem === null) break;
-    watch({ kind: "failed", problem: outcome.problem });
-    messages.push({ role: "assistant", content: reply }, { role: "user", content: repairFor(outcome.problem) });
+    const tried = await tryReply(reply, current, nameFor, builder, watch);
+    attempts.push({ ...tried, spent: usage, at: Date.now() });
+    if (tried.problem === null) break;
+    current = tried.routes || current;
+    watch({ kind: "failed", problem: tried.problem });
+    const edited = reply.includes("<<<<<<< SEARCH");
+    messages.push({ role: "assistant", content: reply }, { role: "user", content: repairFor(tried.problem, edited ? current : undefined) });
   }
   return { name: name ?? unusedName(UNNAMED, taken), attempts };
+}
+
+async function tryReply(reply: string, current: string, nameFor: (proposed: string) => string, builder: Builder, watch: Watcher): Promise<Tried> {
+  const parsed = parseReply(reply);
+  if (!parsed.ok) return unusable(parsed.problem);
+  const code = resolve(parsed.code, current);
+  if (!code.ok) return unusable(code.problem);
+  return { routes: code.routes, summary: parsed.summary, ...(await tryCode(nameFor(parsed.name), code.routes, builder, watch)) };
+}
+
+/** The whole code a reply gives, applying its edits to the code there is. */
+function resolve(code: Code, current: string): Applied {
+  if ("routes" in code) return { ok: true, routes: code.routes };
+  if (current === "") return { ok: false, problem: "There is no code yet to edit. Reply with the whole of routes.ts." };
+  return applyEdits(current, code.edits);
+}
+
+function unusable(problem: string): Tried {
+  return { routes: "", summary: "", problem, image: null };
 }
 
 async function tryCode(name: string, routes: string, builder: Builder, watch: Watcher): Promise<Outcome> {

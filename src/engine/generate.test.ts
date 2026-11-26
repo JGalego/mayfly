@@ -49,6 +49,29 @@ describe("generateApp", () => {
     assert.equal(generated.name, "my-notes");
   });
 
+  it("applies the model's edits to the app's code", async () => {
+    const edits = "name: notes\n<<<<<<< SEARCH\nconst a = 1;\n=======\nconst a = 2;\n>>>>>>> REPLACE\nNow two.";
+    const { model, builder, built } = fakes([edits], [{ ok: true }]);
+    const app = { name: "notes", routes: "const a = 1;\nexport default a;\n" };
+
+    const { attempts } = await generateApp({ change: "make it two", app }, { model, builder });
+
+    assert.deepEqual(built, [{ name: "notes", routes: "const a = 2;\nexport default a;\n" }]);
+    assert.equal(attempts[0]?.summary, "Now two.");
+  });
+
+  it("tells the model when an edit matches nothing, showing it the code", async () => {
+    const edits = "name: notes\n<<<<<<< SEARCH\nconst z = 9;\n=======\nconst z = 0;\n>>>>>>> REPLACE";
+    const { model, builder, conversations } = fakes([edits, good], [{ ok: true }]);
+    const app = { name: "notes", routes: "const a = 1;\n" };
+
+    await generateApp({ change: "make it zero", app }, { model, builder });
+
+    const repair = conversations[1]?.messages[2]?.content ?? "";
+    assert.match(repair, /edit 1 are not in routes\.ts/);
+    assert.match(repair, /const a = 1;/);
+  });
+
   it("sends a failed trial's problem back to the model and tries again", async () => {
     const { model, builder, conversations } = fakes([broken, good], [{ ok: false, problem: "boom at start" }, { ok: true }]);
 

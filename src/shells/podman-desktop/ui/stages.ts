@@ -48,10 +48,11 @@ export function stagesOf(steps: readonly Step[]): Stage[] {
   return stages;
 }
 
-/** The code in a reply the model is still writing: after the opening fence, up to the closing one. */
+/** The code in a reply the model is still writing: after the opening fence, up to the closing one, or its edits as they come. */
 export function codeIn(reply: string): string {
   const start = /```(?:ts|typescript)\n/.exec(reply);
-  if (start === null) return "";
+  const edits = reply.indexOf("<<<<<<< SEARCH");
+  if (start === null) return edits === -1 ? "" : reply.slice(edits);
   const code = reply.slice(start.index + start[0].length);
   const end = code.indexOf("\n```");
   return end === -1 ? code : code.slice(0, end + 1);

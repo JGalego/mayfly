@@ -32,6 +32,19 @@ export const SYSTEM_PROMPT = [
   "<the whole of routes.ts>",
   "```",
   "<one or two short sentences for the person: what the app does, or what you changed. Plain words, no code.>",
+  "",
+  "When you change an app that exists, you may reply with edits instead, which is quicker for small changes:",
+  "",
+  "name: <the app's name>",
+  "<<<<<<< SEARCH",
+  "<lines copied exactly from the current routes.ts, indentation included>",
+  "=======",
+  "<the lines to put in their place>",
+  ">>>>>>> REPLACE",
+  "<more edits, if needed>",
+  "<one or two short sentences for the person: what you changed.>",
+  "",
+  "Each SEARCH must match exactly one place in the code. Give just enough lines for that. For a large change, reply with the whole of routes.ts.",
 ].join("\n");
 
 export function requestFor(description: string): string {
@@ -51,10 +64,12 @@ export function changeFor(app: { readonly name: string; readonly routes: string 
     `Change the app for this request:\n\n${change}`,
     "",
     "Keep everything else as it is, including what the app keeps in localStorage and under which keys, so people keep their data.",
-    `Reply with the whole new routes.ts, in the same format, keeping the name ${app.name}.`,
+    `Reply with edits or with the whole new routes.ts, keeping the name ${app.name}.`,
   ].join("\n");
 }
 
-export function repairFor(problem: string): string {
-  return `That app did not pass its trial run:\n\n${problem}\n\nFix it and reply with the whole of routes.ts, in the same format.`;
+/** Asks for a fix. After edits, the model sees the code they made, rather than working it out. */
+export function repairFor(problem: string, routes?: string): string {
+  const now = routes === undefined ? "" : `\n\nWith your edits, routes.ts is now:\n\n\`\`\`ts\n${routes}\`\`\``;
+  return `That did not work:\n\n${problem}${now}\n\nFix it and reply in the same format.`;
 }

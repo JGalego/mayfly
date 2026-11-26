@@ -67,6 +67,10 @@ describe("codeIn", () => {
     assert.equal(codeIn("name: notes\n"), "");
     assert.equal(codeIn("name: notes\n```ts\nexport default 1;\n```\nKeeps notes."), "export default 1;\n");
   });
+
+  it("shows edits as they come, when the model edits rather than rewrites", () => {
+    assert.equal(codeIn("name: notes\n<<<<<<< SEARCH\nconst a"), "<<<<<<< SEARCH\nconst a");
+  });
 });
 
 describe("lineCount and elapsed", () => {
