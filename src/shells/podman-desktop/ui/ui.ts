@@ -90,7 +90,10 @@ popover(element("show-sign-in"), element("sign-in-popover"));
 const settingsLogs = logViewer(post, { activity: true });
 const ledger = ledgerView();
 const appLogs = logViewer(post, { activity: false });
-const editor = codeEditor({ field: element<HTMLTextAreaElement>("code-text"), shadow: element("code-shadow"), gutter: element("code-gutter"), changed: element("file-changed") });
+const editor = codeEditor({ field: element<HTMLTextAreaElement>("code-text"), shadow: element("code-shadow"), gutter: element("code-gutter"), changed: (changed) => {
+  element("file-changed").hidden = !changed;
+  element<HTMLButtonElement>("save-edit").disabled = !changed;
+} });
 element("settings-logs").append(settingsLogs.element);
 element("ledger").append(ledger.element);
 element("app-logs").append(appLogs.element);
@@ -300,14 +303,11 @@ function startEditing(): void {
 
 /** Shows what an edit changes before it goes out, and deploys it only when the person says so. */
 function confirmDeploy(): void {
-  if (editing === undefined) return;
   const { before, after } = editor.edit();
+  if (editing === undefined || after === before) return;
   const { view, added, removed } = changes(before, after);
-  const same = added + removed === 0;
-  element("deploy-title").textContent = same ? "Nothing has changed" : `Deploy these changes to ${editing}?`;
-  element("deploy-changes").replaceChildren(...(same ? [] : [h("p", "diff-file", icon("file"), "routes.ts", h("span", "diff-added", `+${added}`), h("span", "diff-removed", `−${removed}`))]), view);
-  element("deploy-note").hidden = same;
-  element("confirm-deploy").hidden = same;
+  element("deploy-title").textContent = `Deploy these changes to ${editing}?`;
+  element("deploy-changes").replaceChildren(h("p", "diff-file", icon("file"), "routes.ts", h("span", "diff-added", `+${added}`), h("span", "diff-removed", `−${removed}`)), view);
   const dialog = element<HTMLDialogElement>("deploy-dialog");
   dialog.returnValue = "";
   dialog.addEventListener("close", () => dialog.returnValue === "deploy" && saveEdit(), { once: true });

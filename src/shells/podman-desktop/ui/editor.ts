@@ -7,8 +7,8 @@ export interface EditorParts {
   /** The highlighted copy of the code, under the field. */
   readonly shadow: HTMLElement;
   readonly gutter: HTMLElement;
-  /** Shown beside the file's name once it has changed. */
-  readonly changed: HTMLElement;
+  /** Told after every change whether the code differs from where the edit started. */
+  readonly changed: (changed: boolean) => void;
 }
 
 export interface CodeEditor {
@@ -28,7 +28,7 @@ export function codeEditor({ field, shadow, gutter, changed }: EditorParts): Cod
   const paint = (): void => {
     highlightInto(shadow, field.value);
     gutter.replaceChildren(...lineMarks(before, field.value).map((mark, line) => h("span", mark ?? "", String(line + 1))));
-    changed.hidden = field.value === before;
+    changed(field.value !== before);
   };
   field.addEventListener("input", paint);
   field.addEventListener("scroll", () => {

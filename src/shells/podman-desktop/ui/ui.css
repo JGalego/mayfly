@@ -1534,7 +1534,7 @@ dialog .editor-actions {
   max-height: 55vh;
 }
 
-#deploy-note {
+.deploy-note {
   margin-top: 0.75rem;
 }
 
