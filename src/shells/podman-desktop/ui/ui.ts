@@ -17,7 +17,7 @@ import { logViewer } from "./logs.ts";
 import { historyView, versionPanel } from "./history.ts";
 import { addIcons, icon } from "./icons.ts";
 import { renderStatusbar, setUpStatusbar } from "./statusbar.ts";
-import { openForm, renderModels, savedModel, setUpModels } from "./models.ts";
+import { renderModels, savedModel, setUpModels } from "./models.ts";
 import { popover } from "./popover.ts";
 import { makingOf, progressView, tickClocks, whatChanged, type Showing } from "./progress.ts";
 
@@ -67,6 +67,8 @@ let view: View = { kind: "new" };
 const drafts = new Map<string, string>();
 /** What the person sent last, to give back if it fails. */
 let lastSent: Work | undefined;
+/** Why the work last asked for in a conversation failed, said there until the person asks for something else. */
+let failed: { readonly app: string | null; readonly text: string } | undefined;
 /** The app whose code the person is editing by hand, and the version the edit carries on from. */
 let editing: { readonly app: string; readonly from: string } | undefined;
 /** Whether the editor holds changes not saved yet. */
@@ -117,9 +119,8 @@ window.addEventListener("message", (event: MessageEvent<ToUi>) => receive(event.
 element("new-app").addEventListener("click", () => go({ kind: "new" }));
 element("show-settings").addEventListener("click", () => go({ kind: "settings", tab: "general" }));
 for (const tab of SETTINGS_TABS) element(`settings-tab-${tab}`).addEventListener("click", () => go({ kind: "settings", tab }));
-element("add-key").addEventListener("click", () => state !== undefined && askForKey(state, shownApp()));
 element("open-app").addEventListener("click", openApp);
-element("start-app").addEventListener("click", () => view.kind === "app" && startWork({ type: "start", app: view.name }, false));
+element("start-app").addEventListener("click", () => view.kind === "app" && startWork({ type: "start", app: view.name }));
 element("tab-chat").addEventListener("click", () => showTab("chat"));
 element("tab-history").addEventListener("click", () => showTab("history"));
 element("tab-code").addEventListener("click", () => showTab("code"));
@@ -226,7 +227,6 @@ function receiveState(next: State): void {
   // The ledger grows when work ends, which sends the state.
   if (view.kind === "settings") post({ type: "ledger" });
   // On first use, Settings opens on the default model, so the person can paste its key.
-  if (previous === undefined && !canWrite(next, undefined)) return askForKey(next, undefined);
   render();
 }
 
@@ -256,9 +256,9 @@ function send(): void {
   if (typed.kind === "unknown") return showError(`Mayfly has no /${typed.name} command. Type / to see the ones it has.`);
   if (typed.kind === "command") return runCommand(typed.command, typed.argument);
   if (state === undefined || state.working !== null) return;
-  if (!canWrite(state, shownApp())) return showError(`${activeModel(state, shownApp())?.label ?? "This model"} has no API key yet. Add one, or pick another model.`);
   lastSent = { app: view.kind === "app" ? view.name : null, request: text, ...(view.kind === "new" && newAppModel !== undefined ? { model: newAppModel } : {}) };
   request.value = "";
+  failed = undefined;
   hideBanner();
   post({ type: "send", ...lastSent });
 }
@@ -440,17 +440,26 @@ function runCommand(command: Command, argument: string): void {
   // Every command left acts on the app on screen.
   if (view.kind !== "app") return;
   const app = view.name;
-  if (command.name === "ask") return startWork({ type: "ask", app, question: argument }, true);
-  if (command.name === "rename") return askToRename(app, argument);
-  startWork({ type: command.name, app }, command.name === "fix" || command.name === "retry");
+  const typed = request.value.trim();
+  if (command.name === "rename") return askToRename(app, argument, typed);
+  request.value = "";
+  startWork(command.name === "ask" ? { type: "ask", app, question: argument } : { type: command.name, app }, typed);
 }
 
 /** Renames the app only once the person agrees to the redeploy it takes. Until then, the command stays in the composer. */
-function askToRename(app: string, to: string): void {
+function askToRename(app: string, to: string, typed: string): void {
   const dialog = element<HTMLDialogElement>("rename-dialog");
   element("rename-title").replaceChildren("Rename ", nameChip(app), " to ", nameChip(to), "?");
   dialog.returnValue = "";
-  dialog.addEventListener("close", () => dialog.returnValue === "rename" && startWork({ type: "rename", app, name: to }, false), { once: true });
+  dialog.addEventListener(
+    "close",
+    () => {
+      if (dialog.returnValue !== "rename") return;
+      request.value = "";
+      startWork({ type: "rename", app, name: to }, typed);
+    },
+    { once: true },
+  );
   dialog.showModal();
 }
 
@@ -463,10 +472,11 @@ function followRename(from: string, to: string): void {
   else render();
 }
 
-/** Starts the work a command asks for, unless other work is under way. Work that calls the model needs its key, like a request. */
-function startWork(message: FromUi, callsModel: boolean): void {
-  if (state?.working !== null || (callsModel && !canWrite(state, shownApp()))) return;
-  request.value = "";
+/** Starts work on an app, unless other work is under way. If it fails, the conversation says why, and what was typed for it comes back. */
+function startWork(message: Extract<FromUi, { readonly app: string }>, typed = ""): void {
+  if (state?.working !== null) return;
+  lastSent = { app: message.app, request: typed };
+  failed = undefined;
   hideBanner();
   post(message);
 }
@@ -561,15 +571,6 @@ function activeModel(current: State, app: AppView | undefined): ModelView | unde
   return current.models.find((model) => model.id === wanted) ?? current.models.find((model) => model.id === current.defaultModel);
 }
 
-function canWrite(current: State, app: AppView | undefined): boolean {
-  return activeModel(current, app)?.hasApiKey === true;
-}
-
-function askForKey(current: State, app: AppView | undefined): void {
-  openForm(activeModel(current, app));
-  go({ kind: "settings", tab: "models" });
-}
-
 // Choosing another model for an app is kept in its conversation; for a new app, it waits for the first message.
 function pickModel(): void {
   const app = shownApp();
@@ -656,13 +657,12 @@ function renderChat(state: State, app: AppView | undefined): void {
   openApp.classList.toggle("primary", !stopped);
   openApp.classList.toggle("secondary", stopped);
   for (const tab of element("app-tabs").querySelectorAll("button")) tab.disabled = removing;
-  element("welcome").hidden = app !== undefined || working !== null;
-  const writes = canWrite(state, app);
-  element("examples").hidden = !writes;
+  const failure = failed !== undefined && failed.app === (app?.name ?? null) && working === null ? [turn("mayfly", h("p", "failure", failed.text))] : [];
+  element("welcome").hidden = app !== undefined || working !== null || failure.length > 0;
   const turns = [...(app?.conversation ?? []), ...(working === null ? [] : [{ from: "person", text: working.request, at: working.since } as const])];
   const showing = showingFor(state);
   const items = turns.map((said) => turnItem(said, app === undefined ? [] : madeOf(said, app, showing)));
-  const pending = working === null ? [] : [turn("mayfly", pendingView(working, showing))];
+  const pending = working === null ? failure : [turn("mayfly", pendingView(working, showing))];
   const thread = element("thread");
   const following = thread.scrollHeight - thread.scrollTop - thread.clientHeight < FOLLOW_PX;
   // The Code tab is behind the curtain.
@@ -682,13 +682,9 @@ function renderChat(state: State, app: AppView | undefined): void {
   element("history-label").textContent = `History · ${app?.versions.length ?? 0}`;
   if (following && tab === "chat") scrollToEnd(thread);
   for (const live of document.querySelectorAll<HTMLElement>(".live")) scrollToEnd(live);
-  // Without the picked model's key, Send gives way to adding it. Commands that need no model still work.
-  const model = activeModel(state, app);
-  request.placeholder = !writes ? `${model?.label ?? "This model"} has no API key yet` : app === undefined ? "Describe the app you need" : "Ask for a change, or type / for commands";
+  request.placeholder = app === undefined ? "Describe the app you need" : "Ask for a change, or type / for commands";
   request.disabled = removing;
-  element<HTMLButtonElement>("send").hidden = !writes;
   element<HTMLButtonElement>("send").disabled = state.working !== null;
-  element("add-key").hidden = writes;
   composerModel.replaceChildren(...state.models.map((model) => new Option(model.label, model.id)));
   composerModel.value = activeModel(state, app)?.id ?? "";
   composerModel.disabled = state.working !== null;
@@ -787,11 +783,15 @@ function avatar(): HTMLImageElement {
 
 
 
+/** Work the person asked for from a conversation fails in that conversation, as Mayfly's reply, with what they typed back in the composer. Anything else fails in the banner. */
 function showError(text: string): void {
-  showBanner(text, "error");
-  const conversation = view.kind === "app" ? view.name : null;
-  if (lastSent !== undefined && lastSent.app === conversation && view.kind !== "settings" && request.value === "") request.value = lastSent.request;
+  const sent = lastSent;
   lastSent = undefined;
+  const conversation = view.kind === "app" ? view.name : null;
+  if (sent === undefined || sent.app !== conversation || view.kind === "settings") return showBanner(text, "error");
+  if (request.value === "") request.value = sent.request;
+  failed = { app: conversation, text };
+  render();
 }
 
 function showBanner(text: string, kind: "notice" | "error"): void {

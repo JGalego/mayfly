@@ -2,7 +2,7 @@ import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { modelSettingsFromEnv, openAiCompatibleModel } from "../../src/adapters/openai-compatible/openai-compatible-model.ts";
+import { KeyNeeded, listModels, modelSettingsFromEnv, openAiCompatibleModel } from "../../src/adapters/openai-compatible/openai-compatible-model.ts";
 
 /** The same thinking and reply of "ok", each way compatible servers stream thinking. */
 const THINKING: Record<string, readonly object[]> = {
@@ -70,6 +70,39 @@ describe("the OpenAI-compatible model, against a server that streams like OpenAI
     const model = openAiCompatibleModel({ baseUrl: await listening, apiKey: "sk-test", model: "m" });
 
     await assert.rejects(model.complete("Be brief.", [{ role: "user", content: "Say ok." }]), /cut off/);
+  });
+});
+
+describe("the OpenAI-compatible model, against a server that turns down every request", () => {
+  const keys: (string | undefined)[] = [];
+  let status = 401;
+  // As OpenAI does, it quotes part of the key, which must never reach a person.
+  const server = createServer((request, response) => {
+    keys.push(request.headers.authorization);
+    request.resume();
+    // Retried at once, so a refusal the SDK retries does not hold the test up.
+    response.writeHead(status, { "content-type": "application/json", "retry-after-ms": "0" });
+    response.end(JSON.stringify({ error: { message: "Incorrect API key provided: sk-te**st." } }));
+  });
+  const listening = new Promise<string>((resolve) => server.listen(0, "127.0.0.1", () => resolve(`http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`)));
+  after(() => server.close());
+  const ask = (apiKey?: string) => async () => openAiCompatibleModel({ baseUrl: await listening, ...(apiKey === undefined ? {} : { apiKey }), model: "m" }).complete("Be brief.", [{ role: "user", content: "Say ok." }]);
+
+  it("says a key is needed when none was given, and never in the provider's words", async () => {
+    await assert.rejects(ask(), (error) => error instanceof KeyNeeded && !error.message.includes("sk-"));
+    await assert.rejects(listModels({ baseUrl: await listening }), KeyNeeded);
+  });
+
+  it("says the provider refused the key it was given, without quoting it", async () => {
+    await assert.rejects(ask("sk-test"), { message: "The provider refused the key." });
+    assert.equal(keys.at(-1), "Bearer sk-test");
+  });
+
+  it("says plainly what any other refusal was", async () => {
+    status = 404;
+    await assert.rejects(ask("sk-test"), { message: "The provider has no model called m." });
+    status = 429;
+    await assert.rejects(ask("sk-test"), /limiting requests/);
   });
 });
 

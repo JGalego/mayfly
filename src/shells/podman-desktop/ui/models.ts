@@ -38,7 +38,7 @@ export function setUpModels(post: (message: FromUi) => void, redraw: () => void)
 }
 
 /** Opens the form on a model, or on a new one. */
-export function openForm(model: ModelView | undefined): void {
+function openForm(model: ModelView | undefined): void {
   editing = model?.id ?? "";
   provider.value = model?.provider ?? "openai";
   endpoint.value = model?.baseUrl ?? "";
@@ -68,7 +68,7 @@ export function renderModels(state: State, checks: readonly ModelCheck[] | undef
 function modelCard(model: ModelView, isDefault: boolean, check: HTMLElement[], post: (message: FromUi) => void, redraw: () => void): HTMLLIElement {
   const where = model.provider === "openai" ? "api.openai.com" : model.baseUrl;
   const name = h("p", "model-label", model.label, ...(isDefault ? [" ", h("span", "badge", "Default")] : []));
-  const facts = h("p", "quiet", `${where} · ${model.hasApiKey ? "key saved" : "no API key yet"}`);
+  const facts = h("p", "quiet", `${where} · ${model.hasApiKey ? "key saved" : "no API key"}`);
   const actions = [
     ...(isDefault ? [] : [button("Make default", () => post({ type: "default-model", id: model.id }))]),
     button("Change", () => {
@@ -81,9 +81,8 @@ function modelCard(model: ModelView, isDefault: boolean, check: HTMLElement[], p
 }
 
 function keyCheck(model: ModelView, checks: readonly ModelCheck[] | undefined): HTMLElement[] {
-  if (!model.hasApiKey) return [];
   const check = checks?.find(({ id }) => id === model.id);
-  if (check === undefined) return [h("p", "model-check quiet", "Trying the key…")];
+  if (check === undefined) return [h("p", "model-check quiet", model.hasApiKey ? "Trying the key…" : "Trying the model…")];
   return [h("p", `model-check ${check.status}`, findingMark(check.status), check.detail)];
 }
 

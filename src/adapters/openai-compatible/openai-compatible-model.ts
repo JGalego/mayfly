@@ -6,28 +6,41 @@ import { thinkTags, type Parts } from "./think-tags.ts";
 // Room for a whole routes.ts. No sampling settings: current Claude models reject them.
 const MAX_REPLY_TOKENS = 16_000;
 
+// The SDK wants a key. Local servers that need none ignore this one.
+const NO_KEY = "none";
+
+/** Where the model is, and its key when the provider needs one: local providers often do not. */
 export interface ModelSettings {
   readonly baseUrl: string;
-  readonly apiKey: string;
+  readonly apiKey?: string;
   readonly model: string;
+}
+
+/** A provider turned a request down for want of a key, and none was given. */
+export class KeyNeeded extends Error {
+  constructor() {
+    super("The provider needs an API key.");
+  }
 }
 
 /** Any endpoint that speaks OpenAI's chat completions API: OpenAI, Anthropic, OpenRouter, Ollama. */
 export function openAiCompatibleModel({ baseUrl, apiKey, model }: ModelSettings): ModelProvider {
-  const client = new OpenAI({ baseURL: baseUrl, apiKey });
+  const client = new OpenAI({ baseURL: baseUrl, apiKey: apiKey ?? NO_KEY });
   return {
     name: model,
     provider: URL.canParse(baseUrl) ? new URL(baseUrl).host : baseUrl,
     // Streamed, so people can watch the code being written, and the thinking where the provider shares it.
     async complete(system, messages, listener = {}) {
-      const stream = await client.chat.completions.create({
-        model,
-        max_completion_tokens: MAX_REPLY_TOKENS,
-        messages: [{ role: "system", content: system }, ...messages],
-        stream: true,
-        stream_options: { include_usage: true },
+      const { finish, ...completion } = await plainly({ baseUrl, apiKey, model }, async () => {
+        const stream = await client.chat.completions.create({
+          model,
+          max_completion_tokens: MAX_REPLY_TOKENS,
+          messages: [{ role: "system", content: system }, ...messages],
+          stream: true,
+          stream_options: { include_usage: true },
+        });
+        return gather(stream, listener);
       });
-      const { finish, ...completion } = await gather(stream, listener);
       if (finish === "length") throw new Error(`The model's reply was cut off at ${MAX_REPLY_TOKENS} tokens.`);
       if (completion.text === "") throw new Error("The model sent an empty reply.");
       return completion;
@@ -76,19 +89,25 @@ function thinkingIn(delta: object): string {
   return [content, reasoning].find((value): value is string => typeof value === "string" && value !== "") ?? "";
 }
 
-/**
- * The models an endpoint offers, which proves the key without spending tokens. Failures are said in plain
- * words, never in the provider's own, which can quote part of the key.
- */
+/** The models an endpoint offers, which proves the key, or that none is needed, without spending tokens. */
 export async function listModels({ baseUrl, apiKey }: Omit<ModelSettings, "model">): Promise<string[]> {
-  const client = new OpenAI({ baseURL: baseUrl, apiKey, maxRetries: 0, timeout: 10_000 });
-  try {
+  const client = new OpenAI({ baseURL: baseUrl, apiKey: apiKey ?? NO_KEY, maxRetries: 0, timeout: 10_000 });
+  return plainly({ baseUrl, apiKey }, async () => {
     const ids: string[] = [];
     for await (const model of client.models.list()) ids.push(model.id);
     return ids;
+  });
+}
+
+/** Runs a call to the provider, saying what went wrong in plain words, never in the provider's own, which can quote part of the key. */
+async function plainly<T>({ baseUrl, apiKey, model }: { readonly baseUrl: string; readonly apiKey: string | undefined; readonly model?: string }, call: () => Promise<T>): Promise<T> {
+  try {
+    return await call();
   } catch (error) {
-    if (error instanceof OpenAI.AuthenticationError || error instanceof OpenAI.PermissionDeniedError) throw new Error("The provider refused the key.");
+    if (error instanceof OpenAI.AuthenticationError || error instanceof OpenAI.PermissionDeniedError) throw apiKey === undefined ? new KeyNeeded() : new Error("The provider refused the key.");
     if (error instanceof OpenAI.APIConnectionError) throw new Error(`Mayfly cannot reach ${baseUrl}.`);
+    if (error instanceof OpenAI.NotFoundError && model !== undefined) throw new Error(`The provider has no model called ${model}.`);
+    if (error instanceof OpenAI.RateLimitError) throw new Error("The provider is limiting requests. Try again in a moment.");
     if (error instanceof OpenAI.APIError) throw new Error(`The provider answered with an error (${error.status ?? "no status"}).`);
     throw error;
   }

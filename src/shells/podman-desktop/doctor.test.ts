@@ -39,17 +39,21 @@ describe("the doctor", () => {
     assert.deepEqual(statuses(examination).slice(1), ["App runtime: warn", "Sign-in service: warn"]);
   });
 
-  it("tries each model's key, says when the provider refuses it or lacks the model, and leaves models with no key alone", async () => {
+  it("tries each model, with its key or without one, and says when the provider refuses or lacks it", async () => {
     const { models } = await examine({
       ...ready,
       models: async () => [
-        { id: "no key", model: "m", hasKey: false, list: async () => [] },
+        { id: "local", model: "m", hasKey: false, list: async () => ["m"] },
+        { id: "keyed", model: "m", hasKey: true, list: async () => ["m"] },
         { id: "refused", model: "m", hasKey: true, list: async () => Promise.reject(new Error("The key was refused.")) },
-        { id: "unknown", model: "m", hasKey: true, list: async () => ["other"] },
+        { id: "unknown", model: "m", hasKey: false, list: async () => ["other"] },
       ],
     });
 
-    assert.deepEqual(models.map(({ id, status }) => `${id}: ${status}`), ["refused: fail", "unknown: warn"]);
-    assert.equal(models[0]?.detail, "The key was refused.");
+    assert.deepEqual(models.map(({ id, status }) => `${id}: ${status}`), ["local: pass", "keyed: pass", "refused: fail", "unknown: warn"]);
+    assert.deepEqual(
+      models.map(({ detail }) => detail),
+      ["The provider answers without a key and has this model.", "The provider accepts the key and has this model.", "The key was refused.", "The provider answers without a key but does not list m. Check the model's name."],
+    );
   });
 });

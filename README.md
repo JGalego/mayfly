@@ -31,12 +31,12 @@ Describe a small app for a short or routine task. Mayfly builds it and runs it o
 ### Prerequisites
 
 - [Podman Desktop](https://podman-desktop.io/) with a Podman 5 machine running
-- An API key for [OpenAI](https://platform.openai.com/api-keys), or for another service that speaks OpenAI's API
+- An API key for [OpenAI](https://platform.openai.com/api-keys), or another service that speaks OpenAI's API. A model on your own machine usually needs no key
 
 ### Steps
 
 1. In Podman Desktop, open **Extensions**, choose **Install custom…**, and enter `ghcr.io/jgalego/mayfly-extension:main`.
-2. Open **Mayfly** in the navigation bar. In **Settings → Models**, pick the provider and model and paste your API key. The default is OpenAI with `gpt-6.2-sol`. Podman Desktop keeps the key in its secret storage, and Mayfly sends it only to the endpoint it was saved for.
+2. Open **Mayfly** in the navigation bar. In **Settings → Models**, pick the provider and model and paste its API key, if it needs one. The default is OpenAI with `gpt-6.2-sol`. Podman Desktop keeps the key in its secret storage, and Mayfly sends it only to the endpoint it was saved for.
 3. Choose **New app** and say what you need. About a minute later the app opens in your browser. Sign in with the email and password under **Sign-in details**, next to **Open app**; each has a **Copy** button.
 4. Each app is a conversation. Ask for a change there, and the new version replaces the old one at the same address. Type `/` for commands: `/ask` a question without changing the app, `/fix` the errors it logged, `/retry` your last request, `/undo` the last deploy, `/start` it again after it stopped, or switch its `/model`, `/rename` it or `/remove` it.
 

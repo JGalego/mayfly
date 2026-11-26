@@ -545,6 +545,11 @@ main {
   overflow-wrap: anywhere;
 }
 
+/* Why work asked for in the conversation did not go through. */
+.turn p.failure {
+  color: var(--error);
+}
+
 .turn.person {
   justify-content: flex-end;
 }

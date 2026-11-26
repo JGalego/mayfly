@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { dexIdentity } from "../../adapters/dex/dex-identity.ts";
 import { readJson, writeJson } from "../../adapters/json-file/json-file.ts";
 import { jsonFileStore } from "../../adapters/json-file/json-file-store.ts";
-import { listModels, openAiCompatibleModel } from "../../adapters/openai-compatible/openai-compatible-model.ts";
+import { KeyNeeded, listModels, openAiCompatibleModel } from "../../adapters/openai-compatible/openai-compatible-model.ts";
 import { podmanBuilder } from "../../adapters/podman/podman-builder.ts";
 import { imageExists, podmanDeployer, podmanObserver, versions } from "../../adapters/podman/podman.ts";
 import { createEngine, type Engine } from "../../engine/engine.ts";
@@ -119,11 +119,16 @@ function configuredModel(setting: ModelSetting, keys: KeyStore): ModelProvider {
   return {
     name,
     provider: providerOf(setting),
+    // Without a key when none is saved, as local providers often need none. One that does says so, and the person hears where to add it.
     async complete(system, messages, listener) {
       const baseUrl = endpointOf(setting);
       const apiKey = await keys.get(baseUrl);
-      if (!apiKey) throw new Error(`Add the API key for ${name} in Settings first.`);
-      return openAiCompatibleModel({ baseUrl, apiKey, model: setting.model }).complete(system, messages, listener);
+      try {
+        return await openAiCompatibleModel({ baseUrl, ...(apiKey ? { apiKey } : {}), model: setting.model }).complete(system, messages, listener);
+      } catch (error) {
+        if (error instanceof KeyNeeded) throw new Error(`${name} needs an API key. Add it in Settings → Models.`);
+        throw error;
+      }
     },
   };
 }
@@ -138,7 +143,7 @@ function settings(): api.Configuration {
 async function probe(setting: ModelSetting, keys: KeyStore): Promise<ModelProbe> {
   const baseUrl = endpointOf(setting);
   const apiKey = await keys.get(baseUrl);
-  return { id: setting.id, model: setting.model, hasKey: Boolean(apiKey), list: () => listModels({ baseUrl, apiKey: apiKey ?? "" }) };
+  return { id: setting.id, model: setting.model, hasKey: Boolean(apiKey), list: () => listModels({ baseUrl, ...(apiKey ? { apiKey } : {}) }) };
 }
 
 /** The models, kept in a file beside the state, and in memory so the page always has them at hand. */
