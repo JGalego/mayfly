@@ -45,7 +45,7 @@ describe("the stages a person sees", () => {
 });
 
 describe("the stages of a finished request", () => {
-  const version = { parent: null, request: "r", by: { kind: "model" as const, name: "the test model" }, summary: "", spent: { input: 0, output: 0 }, at: 0, lines: 9, thinkingWords: 0 };
+  const version = { parent: null, request: "r", by: { kind: "model" as const, name: "the test model" }, summary: "", spent: { input: 0, output: 0, thinking: 0 }, at: 0, lines: 9, thinkingWords: 0 };
 
   it("show each attempt's writing, building and trying, and the start of the one that passed", () => {
     const stages = stagesOfVersions([

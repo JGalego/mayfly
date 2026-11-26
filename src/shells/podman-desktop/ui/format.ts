@@ -2,8 +2,9 @@ import type { Usage } from "../../../engine/usage.ts";
 
 const RELATIVE = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 
-export function tokens({ input, output }: Usage): string {
-  return `${input.toLocaleString()} tokens in, ${output.toLocaleString()} out`;
+export function tokens({ input, output, thinking }: Usage): string {
+  const thought = thinking === 0 ? "" : `, ${thinking.toLocaleString()} thinking`;
+  return `${input.toLocaleString()} tokens in, ${output.toLocaleString()} out${thought}`;
 }
 
 /** When something happened, the way people say it: "5 minutes ago", "yesterday". */

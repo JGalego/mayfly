@@ -1360,6 +1360,10 @@ dialog .editor-actions {
   color: light-dark(#7c3aed, #c4b5fd);
 }
 
+.token-thinking {
+  color: light-dark(#b45309, #fcd34d);
+}
+
 .popover {
   position: absolute;
   z-index: 5;

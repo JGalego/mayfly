@@ -4,7 +4,7 @@ import type { VersionView } from "../../../engine/engine.ts";
 import { graph } from "./graph.ts";
 
 function version(id: string, parent: string | null): VersionView {
-  return { id, parent, request: "r", by: { kind: "model", name: "the test model" }, attempt: 1, summary: "", problem: null, spent: { input: 0, output: 0 }, at: 0, lines: 1, thinkingWords: 0 };
+  return { id, parent, request: "r", by: { kind: "model", name: "the test model" }, attempt: 1, summary: "", problem: null, spent: { input: 0, output: 0, thinking: 0 }, at: 0, lines: 1, thinkingWords: 0 };
 }
 
 describe("the history graph", () => {

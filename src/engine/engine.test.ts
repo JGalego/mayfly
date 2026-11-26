@@ -5,7 +5,7 @@ import { createEngine } from "./engine.ts";
 import type { Builder, Deployer, IdentitySource, Message, ModelProvider, Observer, StateStore, Trial } from "./ports.ts";
 import { EMPTY_STATE, type State } from "./state.ts";
 
-const COST = { input: 100, output: 20 };
+const COST = { input: 100, output: 20, thinking: 0 };
 const crashed: Trial = { ok: false, problem: "crashed" };
 
 describe("the engine", () => {
@@ -127,7 +127,7 @@ describe("the engine", () => {
     const after = await engine.edit("lunch", "export default 2;\n", "Say two");
 
     const mine = after.versions.at(-1);
-    assert.partialDeepStrictEqual(mine, { parent: before.head, request: "Say two", by: { kind: "person", name: "owner@mayfly.local" }, problem: null, spent: { input: 0, output: 0 } });
+    assert.partialDeepStrictEqual(mine, { parent: before.head, request: "Say two", by: { kind: "person", name: "owner@mayfly.local" }, problem: null, spent: { input: 0, output: 0, thinking: 0 } });
     assert.equal(after.head, mine?.id);
     assert.deepEqual(before.versions[0]?.by, { kind: "model", name: "the test model" });
     assert.equal(deployed.length, 2);
@@ -210,9 +210,9 @@ describe("the engine", () => {
 
     await engine.change("lunch", "break it");
 
-    assert.deepEqual((await engine.list())[0]?.spent, { input: 400, output: 80 });
+    assert.deepEqual((await engine.list())[0]?.spent, { input: 400, output: 80, thinking: 0 });
     await engine.remove("lunch");
-    assert.deepEqual(await engine.spent(), { input: 400, output: 80 });
+    assert.deepEqual(await engine.spent(), { input: 400, output: 80, thinking: 0 });
   });
 
   it("says when it starts the app, after the model's code passed its trial", async () => {

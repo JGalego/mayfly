@@ -44,32 +44,37 @@ function appCounts(state: State, health: readonly ServiceHealth[] | undefined): 
 }
 
 function tokenSummary(app: AppView | undefined, spent: Usage): (Node | string)[] {
-  const all = [h("span", "quiet", "All apps"), ...inOut(spent)];
-  return app === undefined ? ["🪙 ", ...all] : ["🪙 ", h("span", "", app.name), ...inOut(app.spent), h("span", "status-divider", "·"), ...all];
+  const all = [h("span", "quiet", "All apps"), ...counts(spent)];
+  return app === undefined ? ["🪙 ", ...all] : ["🪙 ", h("span", "", app.name), ...counts(app.spent), h("span", "status-divider", "·"), ...all];
 }
 
-function inOut({ input, output }: Usage): Node[] {
-  return [h("span", "token-in", ` ↑ ${input.toLocaleString()}`), h("span", "token-out", ` ↓ ${output.toLocaleString()}`)];
+// Thinking shows only once a provider has counted some: most never do.
+function counts({ input, output, thinking }: Usage): Node[] {
+  const spent = [h("span", "token-in", ` ↑ ${input.toLocaleString()}`), h("span", "token-out", ` ↓ ${output.toLocaleString()}`)];
+  return thinking === 0 ? spent : [...spent, h("span", "token-thinking", ` 💭 ${thinking.toLocaleString()}`)];
 }
 
 /** Every app's tokens, the hungriest first, and the total, removed apps included. */
 function tokenBreakdown({ apps, spent }: State): HTMLElement {
-  const rows = [...apps].sort((a, b) => total(b.spent) - total(a.spent)).map((app) => tokenRow(app.name, app.spent, ""));
+  const thinking = spent.thinking > 0;
+  const rows = [...apps].sort((a, b) => total(b.spent) - total(a.spent)).map((app) => tokenRow(app.name, app.spent, "", thinking));
   return h(
     "div",
     "",
     h("p", "popover-title", "Tokens by app"),
-    h("p", "quiet", "↑ sent to the model, ↓ written by it"),
-    h("table", "token-table", h("tbody", "", ...rows, tokenRow("All, removed apps too", spent, "total"))),
+    h("p", "quiet", thinking ? "↑ sent to the model, ↓ written in its replies, 💭 spent thinking" : "↑ sent to the model, ↓ written by it"),
+    h("table", "token-table", h("tbody", "", ...rows, tokenRow("All, removed apps too", spent, "total", thinking))),
   );
 }
 
-function tokenRow(name: string, usage: Usage, className: string): HTMLTableRowElement {
-  return h("tr", className, h("td", "", name), h("td", "token-in", `↑ ${usage.input.toLocaleString()}`), h("td", "token-out", `↓ ${usage.output.toLocaleString()}`));
+function tokenRow(name: string, usage: Usage, className: string, thinking: boolean): HTMLTableRowElement {
+  const cells = [h("td", "", name), h("td", "token-in", `↑ ${usage.input.toLocaleString()}`), h("td", "token-out", `↓ ${usage.output.toLocaleString()}`)];
+  if (thinking) cells.push(h("td", "token-thinking", `💭 ${usage.thinking.toLocaleString()}`));
+  return h("tr", className, ...cells);
 }
 
-function total({ input, output }: Usage): number {
-  return input + output;
+function total({ input, output, thinking }: Usage): number {
+  return input + output + thinking;
 }
 
 function setOpen(open: boolean): void {

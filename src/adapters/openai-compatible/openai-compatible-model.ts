@@ -54,10 +54,16 @@ async function gather(stream: AsyncIterable<OpenAI.ChatCompletionChunk>, listene
       take(tags.read(choice.delta.content ?? ""));
       finish = choice.finish_reason ?? finish;
     }
-    if (chunk.usage) usage = { input: chunk.usage.prompt_tokens, output: chunk.usage.completion_tokens };
+    if (chunk.usage) usage = usageOf(chunk.usage);
   }
   take(tags.end());
   return { ...reply, usage, finish };
+}
+
+// The reply's tokens include the thinking's, which providers that count it say apart.
+function usageOf({ prompt_tokens, completion_tokens, completion_tokens_details }: OpenAI.CompletionUsage): Usage {
+  const thinking = completion_tokens_details?.reasoning_tokens ?? 0;
+  return { input: prompt_tokens, output: completion_tokens - thinking, thinking };
 }
 
 /**

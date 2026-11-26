@@ -16,7 +16,7 @@ describe("generateApp", () => {
     const { name, attempts } = await generateApp(newNotes, { model, builder });
 
     assert.equal(name, "notes");
-    assert.partialDeepStrictEqual(attempts, [{ routes: "export default 1;\n", summary: "Keeps your notes.", problem: null, image: "image-1", spent: { input: 10, output: 5 } }]);
+    assert.partialDeepStrictEqual(attempts, [{ routes: "export default 1;\n", summary: "Keeps your notes.", problem: null, image: "image-1", spent: { input: 10, output: 5, thinking: 0 } }]);
     assert.deepEqual(built, [{ name: "notes", routes: "export default 1;\n" }]);
   });
 
@@ -123,7 +123,7 @@ describe("generateApp", () => {
       complete: async (_system, _messages, listener) => {
         for (const piece of ["Notes need ", "one route."]) listener?.thinking?.(piece);
         for (const piece of ["name: notes\n", "```ts\nexport default 1;\n```"]) listener?.text?.(piece);
-        return { text: good, thinking: "Notes need one route.", usage: { input: 1, output: 1 } };
+        return { text: good, thinking: "Notes need one route.", usage: { input: 1, output: 1, thinking: 0 } };
       },
     };
     const { builder } = fakes([], [{ ok: true }]);
@@ -172,7 +172,7 @@ function fakes(replies: string[], trials: Trial[]) {
     name: "the test model",
     complete: async (system, messages) => {
       conversations.push({ system, messages: [...messages] });
-      return { text: replies.shift() ?? "", thinking: "", usage: { input: 10, output: 5 } };
+      return { text: replies.shift() ?? "", thinking: "", usage: { input: 10, output: 5, thinking: 0 } };
     },
   };
   const builder: Builder = {

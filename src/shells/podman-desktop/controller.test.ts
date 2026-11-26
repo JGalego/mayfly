@@ -14,7 +14,7 @@ const lunch: AppView = {
   starred: false,
   head: "v1",
   versions: [],
-  spent: { input: 100, output: 20 },
+  spent: { input: 100, output: 20, thinking: 0 },
 };
 const owner = { email: "owner@mayfly.local", username: "owner", password: "s3cret-pass" };
 const openai: ModelSetting = { id: "openai", provider: "openai", baseUrl: "", model: "gpt-6.2-sol" };
@@ -36,7 +36,7 @@ describe("the Mayfly panel's controller", () => {
       owner: owner.email,
       models: [{ ...openai, label: "OpenAI · gpt-6.2-sol", hasApiKey: true }],
       defaultModel: "openai",
-      spent: { input: 500, output: 80 },
+      spent: { input: 500, output: 80, thinking: 0 },
       working: null,
       developer: false,
     });
@@ -402,7 +402,7 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
     owner: async () => owner,
     changeEmail: async (email) => (calls.push(`email ${email}`), { ...owner, email }),
     newPassword: async () => ({ ...owner, password: "brand-new-pass" }),
-    spent: async () => ({ input: 500, output: 80 }),
+    spent: async () => ({ input: 500, output: 80, thinking: 0 }),
     logs: async (pod, container) => [`2026-11-26T15:04:05Z ${pod} ${container}`],
     health: async () => [{ name: "lunch-split", kind: "app", pod: "mayfly-lunch-split", containers: [] }],
   };

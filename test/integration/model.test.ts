@@ -15,13 +15,14 @@ describe("the OpenAI-compatible model, against a server that streams like OpenAI
   const requests: Record<string, unknown>[] = [];
   let finish = "stop";
   let replying: readonly object[] = [{ content: "o" }, { content: "k" }];
+  let usage: object = { prompt_tokens: 12, completion_tokens: 2, total_tokens: 14 };
   const server = createServer((request, response) => {
     let body = "";
     request.on("data", (chunk: Buffer) => (body += chunk));
     request.on("end", () => {
       requests.push(JSON.parse(body) as Record<string, unknown>);
       response.writeHead(200, { "content-type": "text/event-stream" });
-      for (const chunk of chunks(replying, finish)) response.write(`data: ${JSON.stringify(chunk)}\n\n`);
+      for (const chunk of chunks(replying, usage, finish)) response.write(`data: ${JSON.stringify(chunk)}\n\n`);
       response.end("data: [DONE]\n\n");
     });
   });
@@ -37,7 +38,7 @@ describe("the OpenAI-compatible model, against a server that streams like OpenAI
     assert.deepEqual(pieces, ["o", "k"]);
     assert.equal(text, "ok");
     assert.equal(thinking, "");
-    assert.deepEqual(usage, { input: 12, output: 2 });
+    assert.deepEqual(usage, { input: 12, output: 2, thinking: 0 });
     assert.deepEqual(requests.at(-1)?.stream_options, { include_usage: true });
   });
 
@@ -54,6 +55,15 @@ describe("the OpenAI-compatible model, against a server that streams like OpenAI
       assert.equal(thoughts.join(""), thinking);
     });
   }
+
+  it("counts the tokens spent thinking apart from the reply's, when the provider says how many", async () => {
+    usage = { prompt_tokens: 12, completion_tokens: 50, total_tokens: 62, completion_tokens_details: { reasoning_tokens: 48 } };
+    const model = openAiCompatibleModel({ baseUrl: await listening, apiKey: "sk-test", model: "m" });
+
+    const completion = await model.complete("Be brief.", [{ role: "user", content: "Say ok." }]);
+
+    assert.deepEqual(completion.usage, { input: 12, output: 2, thinking: 48 });
+  });
 
   it("refuses a reply cut off at its token limit", async () => {
     finish = "length";
@@ -78,11 +88,11 @@ describe("the OpenAI-compatible model, live", { skip: process.env.MAYFLY_LIVE !=
 });
 
 /** Deltas in the chunks OpenAI streams, ending with the usage chunk `include_usage` asks for. */
-function chunks(deltas: readonly object[], finish: string): object[] {
+function chunks(deltas: readonly object[], usage: object, finish: string): object[] {
   const chunk = (choices: object[], extra = {}) => ({ id: "c", object: "chat.completion.chunk", created: 0, model: "m", choices, ...extra });
   return [
     ...deltas.map((delta) => chunk([{ index: 0, delta, finish_reason: null }])),
     chunk([{ index: 0, delta: {}, finish_reason: finish }]),
-    chunk([], { usage: { prompt_tokens: 12, completion_tokens: 2, total_tokens: 14 } }),
+    chunk([], { usage }),
   ];
 }
