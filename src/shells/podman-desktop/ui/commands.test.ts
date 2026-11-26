@@ -16,7 +16,7 @@ describe("commands", () => {
   it("offers the commands that start with what is typed, only those that need no app when there is none", () => {
     assert.deepEqual(
       suggestions("/", { app: true, models }).map((s) => s.fill),
-      ["/ask ", "/fix ", "/retry ", "/undo ", "/model ", "/rename ", "/remove "],
+      ["/ask ", "/fix ", "/retry ", "/undo ", "/start ", "/model ", "/rename ", "/remove "],
     );
     assert.deepEqual(
       suggestions("/R", { app: true, models }).map((s) => s.fill),

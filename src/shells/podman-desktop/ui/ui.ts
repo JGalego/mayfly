@@ -36,7 +36,7 @@ const SETTINGS_TABS: readonly SettingsTab[] = ["general", "models", "logs", "usa
 // Logs and usage are for developers.
 const DEVELOPER_TABS: readonly SettingsTab[] = ["logs", "usage"];
 
-const TITLES: Record<Exclude<Progress["kind"], "remove">, string> = { create: "Writing your app", change: "Changing your app", ask: "Answering", deploy: "Deploying", save: "Trying your edit", rename: "Renaming" };
+const TITLES: Record<Exclude<Progress["kind"], "remove">, string> = { create: "Writing your app", change: "Changing your app", ask: "Answering", deploy: "Deploying", save: "Trying your edit", rename: "Renaming", start: "Starting" };
 
 const NOTICE_MS = 4000;
 const CONFIRM_MS = 4000;
@@ -119,6 +119,7 @@ element("show-settings").addEventListener("click", () => go({ kind: "settings", 
 for (const tab of SETTINGS_TABS) element(`settings-tab-${tab}`).addEventListener("click", () => go({ kind: "settings", tab }));
 element("add-key").addEventListener("click", () => state !== undefined && askForKey(state, shownApp()));
 element("open-app").addEventListener("click", openApp);
+element("start-app").addEventListener("click", () => view.kind === "app" && startWork({ type: "start", app: view.name }, false));
 element("tab-chat").addEventListener("click", () => showTab("chat"));
 element("tab-history").addEventListener("click", () => showTab("history"));
 element("tab-code").addEventListener("click", () => showTab("code"));
@@ -439,7 +440,7 @@ function runCommand(command: Command, argument: string): void {
   const app = view.name;
   if (command.name === "ask") return startWork({ type: "ask", app, question: argument }, true);
   if (command.name === "rename") return askToRename(app, argument);
-  startWork({ type: command.name, app }, command.name !== "undo");
+  startWork({ type: command.name, app }, command.name === "fix" || command.name === "retry");
 }
 
 /** Renames the app only once the person agrees to the redeploy it takes. Until then, the command stays in the composer. */
@@ -646,6 +647,11 @@ function renderChat(state: State, app: AppView | undefined): void {
   const removing = busy && state.working?.kind === "remove";
   element<HTMLButtonElement>("remove-app").disabled = busy;
   if (removing) openApp.disabled = true;
+  // A stopped app gets a way to run again; Open app would find nothing there.
+  const stopped = app !== undefined && !busy && lightFor(app, health, state.working?.app).colour === "red";
+  element("start-app").hidden = !stopped;
+  openApp.classList.toggle("primary", !stopped);
+  openApp.classList.toggle("secondary", stopped);
   for (const tab of element("app-tabs").querySelectorAll("button")) tab.disabled = removing;
   element("welcome").hidden = app !== undefined || working !== null;
   const writes = canWrite(state, app);

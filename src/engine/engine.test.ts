@@ -223,6 +223,24 @@ describe("the engine", () => {
     await assert.rejects(engine.rename("lunch", "lunch"), /lunch is already called that/);
   });
 
+  it("starts the running version again, with the sign-in service, changing nothing about the app", async () => {
+    const { engine, deployed, synced } = setUp([reply("lunch")]);
+    const before = await engine.create("split lunch bills");
+
+    const started = await engine.start("lunch");
+
+    assert.deepEqual([started.head, started.versions, started.conversation], [before.head, before.versions, before.conversation]);
+    assert.deepEqual(names(deployed.at(-1)), names(deployed.at(-2)));
+    assert.equal(synced.length, 2);
+  });
+
+  it("refuses to start an app that has never run", async () => {
+    const { engine } = setUp([reply("lunch"), reply("lunch"), reply("lunch")], [crashed, crashed, crashed]);
+    await engine.create("split lunch bills");
+
+    await assert.rejects(engine.start("lunch"), /lunch has no version that passed to start/);
+  });
+
   it("refuses to save from a version it does not have, or to deploy one that failed", async () => {
     const { engine } = setUp([reply("lunch"), reply("lunch")], [crashed, { ok: true }]);
     const app = await engine.create("split lunch bills");

@@ -38,7 +38,7 @@ Describe a small app for a short or routine task. Mayfly builds it and runs it o
 1. In Podman Desktop, open **Extensions**, choose **Install custom…**, and enter `ghcr.io/jgalego/mayfly-extension:main`.
 2. Open **Mayfly** in the navigation bar. In **Settings → Models**, pick the provider and model and paste your API key. The default is OpenAI with `gpt-6.2-sol`. Podman Desktop keeps the key in its secret storage, and Mayfly sends it only to the endpoint it was saved for.
 3. Choose **New app** and say what you need. About a minute later the app opens in your browser. Sign in with the email and password under **Sign-in details**, next to **Open app**; each has a **Copy** button.
-4. Each app is a conversation. Ask for a change there, and the new version replaces the old one at the same address. Type `/` for commands: `/ask` a question without changing the app, `/fix` the errors it logged, `/retry` your last request, `/undo` the last deploy, or switch its `/model`, `/rename` it or `/remove` it.
+4. Each app is a conversation. Ask for a change there, and the new version replaces the old one at the same address. Type `/` for commands: `/ask` a question without changing the app, `/fix` the errors it logged, `/retry` your last request, `/undo` the last deploy, `/start` it again after it stopped, or switch its `/model`, `/rename` it or `/remove` it.
 
 The status bar shows the model, and the tokens in, out and spent thinking on the app you're looking at and on all apps. To see under the hood, turn on **Settings → General → Enable developer mode**: the code as Mayfly writes it and the model's thinking where its provider shares it, what each change did, every version as a graph of branches, a code editor that saves your edits from any version as new ones without running them, a way to deploy any version that passed, each app's health and logs, and in **Settings → Usage** the tokens each call to a model spent, whether its code passed and how long it took, by day, week or month, for any app, model or provider.
 
@@ -137,14 +137,14 @@ stateDiagram-v2
 
   [*] --> working: describe an app
   working --> never: no attempt passed
-  working --> up: an attempt passed, or a version was deployed
+  working --> up: an attempt passed, or a version was deployed or started
   working --> [*]: removed
   never --> working: a change, or remove
   up --> working: a change, deploy, undo, rename or remove
   up --> stopped: it stopped, say with the Podman machine
-  stopped --> working: a change, deploy, undo, rename or remove
+  stopped --> working: start, a change, deploy, undo, rename or remove
   note right of working
-    Writing, building, trying, deploying, renaming or removing.
+    Writing, building, trying, deploying, starting, renaming or removing.
     A change that fails leaves the app as it was, and so do questions and saved edits.
   end note
 ```

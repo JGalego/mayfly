@@ -14,7 +14,7 @@ const BUSY = "Mayfly is still working on your last request. Wait for it to finis
 const DRAFT_MS = 150;
 // Enough to see the last few hours of work, and small enough to keep in memory.
 const ACTIVITY = 200;
-const DONE: Record<Exclude<Progress["kind"], "remove">, string> = { create: "Made", change: "Changed", ask: "Answered a question about", deploy: "Deployed a version of", save: "Saved a hand edit to", rename: "Renamed" };
+const DONE: Record<Exclude<Progress["kind"], "remove">, string> = { create: "Made", change: "Changed", ask: "Answered a question about", deploy: "Deployed a version of", save: "Saved a hand edit to", rename: "Renamed", start: "Started" };
 
 export interface ControllerPorts {
   readonly engine: Engine;
@@ -109,6 +109,8 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       return runAlone({ app: request.app, request: "Put back the version that ran before", kind: "deploy" }, session, (watch) => session.engine.undo(request.app, watch));
     case "rename":
       return rename(request.app, request.name.trim(), session);
+    case "start":
+      return runAlone({ app: request.app, request: "Start the app", kind: "start" }, session, (watch) => session.engine.start(request.app, watch));
     case "deploy":
       return deploy(request.app, request.version, session);
     case "save":
@@ -201,7 +203,7 @@ async function run(work: Omit<Progress, "since" | "steps"> & { kind: keyof typeo
   });
   // Deploying runs a version that passed, and answering makes none; anything else passed if its last attempt did.
   const last = app.versions.at(-1);
-  const passed = ["deploy", "ask", "rename"].includes(work.kind) || last === undefined || last.problem === null;
+  const passed = ["deploy", "ask", "rename", "start"].includes(work.kind) || last === undefined || last.problem === null;
   note(session, passed ? "info" : "error", `${DONE[work.kind]} ${app.name}${passed ? "" : ", but it did not pass its trial"}`);
   await showState(session);
   return app;
@@ -326,6 +328,7 @@ function readRequest(message: unknown): FromUi | undefined {
     case "fix":
     case "retry":
     case "undo":
+    case "start":
       return typeof app === "string" ? { type, app } : undefined;
     case "rename":
       return typeof app === "string" && typeof name === "string" ? { type, app, name } : undefined;

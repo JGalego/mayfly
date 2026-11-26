@@ -64,6 +64,8 @@ export interface Engine {
   retry(name: string, watch?: Watcher): Promise<AppView>;
   /** Runs the version that ran before the one running now again. Undoing twice puts back the one undone. */
   undo(name: string, watch?: Watcher): Promise<AppView>;
+  /** Runs the running version again, and the sign-in service, as after Podman stopped them. Nothing about the app changes. */
+  start(name: string, watch?: Watcher): Promise<AppView>;
   /** Has the app's model answer a question about it from its code, changing nothing. The exchange joins the conversation. */
   ask(name: string, question: string, watch?: Watcher): Promise<AppView>;
   /** Gives an app a new name and runs it again under it, at the same address. People signed in to it sign in again. */
@@ -185,6 +187,20 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       const { previous } = existingApp(await store.load(), name);
       if (previous === undefined) throw new Error(`For ${name}, no version ran before this one.`);
       return engine.deploy(name, previous, watch);
+    },
+
+    async start(name, watch = UNWATCHED) {
+      const state = withOwner(await store.load());
+      const app = existingApp(state, name);
+      const running = runningVersion(app);
+      if (running === undefined) throw new Error(`${name} has no version that passed to start.`);
+      // Built again, as when deploying, in case its image is gone; it passed its trial when it was made.
+      watch({ kind: "building" });
+      const image = await builder.build(name, running.routes);
+      watch({ kind: "deploying" });
+      await identity.sync(state);
+      await deployer.deploy(appObjects(app, image, identity.settingsFor(app)));
+      return appView(app);
     },
 
     async ask(name, question, watch = UNWATCHED) {

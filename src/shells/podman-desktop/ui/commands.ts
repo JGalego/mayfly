@@ -1,4 +1,4 @@
-export type CommandName = "ask" | "fix" | "retry" | "undo" | "model" | "rename" | "remove";
+export type CommandName = "ask" | "fix" | "retry" | "undo" | "start" | "model" | "rename" | "remove";
 
 /** A command the conversation takes after a slash: what it does, what it takes, and whether it needs an app to act on. */
 export interface Command {
@@ -14,6 +14,7 @@ export const COMMANDS: readonly Command[] = [
   { name: "fix", says: "Fix the errors in the app's logs", needsApp: true },
   { name: "retry", says: "Send your last request again", needsApp: true },
   { name: "undo", says: "Put back the version that ran before", needsApp: true },
+  { name: "start", says: "Run the app again after it stopped", needsApp: true },
   { name: "model", says: "Switch the model that writes the app", takes: "provider · model", needsApp: false },
   { name: "rename", says: "Give the app a new name", takes: "a new name", needsApp: true },
   { name: "remove", says: "Remove the app for good", needsApp: true },
