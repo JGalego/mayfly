@@ -47,7 +47,7 @@ Every container runs as a non-root user with all capabilities dropped, a read-on
 
 ## Architecture
 
-Mayfly is a TypeScript library with a small API and no UI of its own. The core holds the contract, turns a manifest into a pod spec and applies expiry rules, and it imports nothing outside itself. Everything else (storage, identity, the model and the deployer) plugs in through small interfaces, the ports below.
+Mayfly's engine is a TypeScript library with a small API. People use it through a UI built on top: the Podman Desktop extension now, a web app for Enterprise and SaaS later. The core holds the contract, turns a manifest into a pod spec and applies expiry rules, and it imports nothing outside itself. Everything else (storage, identity, the model and the deployer) plugs in through small interfaces, the ports below.
 
 ```mermaid
 flowchart LR
