@@ -1,6 +1,7 @@
 import { highlightInto } from "./code.ts";
 import { h } from "./dom.ts";
 import { lineMarks } from "./gutter.ts";
+import { indent } from "./indent.ts";
 
 export interface EditorParts {
   readonly field: HTMLTextAreaElement;
@@ -37,12 +38,18 @@ export function codeEditor({ field, shadow, gutter, changed }: EditorParts): Cod
     shadow.scrollTo(field.scrollLeft, field.scrollTop);
     gutter.scrollTop = field.scrollTop;
   });
+  // A code editor indents with Tab and outdents with Shift+Tab. Esc, then Tab, leaves it, for whoever moves by keyboard.
+  let leaving = false;
   field.addEventListener("keydown", (event) => {
-    // A code editor indents with Tab rather than leaving the field.
-    if (event.key !== "Tab" || event.shiftKey) return;
+    if (event.key === "Escape") return void (leaving = true);
+    if (event.key !== "Tab" || leaving) return void (leaving = false);
     event.preventDefault();
-    field.setRangeText("  ", field.selectionStart, field.selectionEnd, "end");
-    paint();
+    const change = indent(field.value, field.selectionStart, field.selectionEnd, event.shiftKey);
+    if (field.value.slice(change.from, change.to) === change.text) return;
+    field.setSelectionRange(change.from, change.to);
+    // Typed in, unlike setRangeText, so Ctrl+Z takes it back. It paints, as typing does.
+    document.execCommand("insertText", false, change.text);
+    field.setSelectionRange(change.start, change.end);
   });
   return {
     load(code) {
