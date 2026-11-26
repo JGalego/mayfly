@@ -114,6 +114,34 @@ flowchart LR
   t -->|"passes"| dep["Deploy behind sign-in"]
 ```
 
+Each app has a light in the sidebar: orange while Mayfly works on it, and otherwise what Podman says about it.
+
+```mermaid
+stateDiagram-v2
+  direction LR
+  state "⚪ Never ran" as never
+  state "🟠 In the works" as working
+  state "🟢 Running" as running
+  state "🟡 Restarted" as restarted
+  state "🔴 Stopped" as stopped
+
+  [*] --> working: describe an app
+  working --> never: no attempt passed
+  working --> running: an attempt passed, or a version was deployed
+  working --> [*]: removed
+  never --> working: a change, or remove
+  running --> working: a change, deploy, undo, rename or remove
+  running --> restarted: it crashed or failed its health check three times, and Podman restarted it
+  restarted --> working: a change, deploy, undo, rename or remove
+  running --> stopped: it stopped, say with the Podman machine
+  restarted --> stopped: it stopped
+  stopped --> working: a change, deploy, undo, rename or remove
+  note right of working
+    Writing, building, trying, deploying, renaming or removing.
+    A change that fails leaves the app as it was, and so do questions and saved edits.
+  end note
+```
+
 Each app runs as one pod with two containers: oauth2-proxy and the app. The proxy is the only way in, and you reach it on 127.0.0.1. It signs you in with OIDC, checks your roles against the app's policy and passes the request on with your identity in headers. The app has no port on the host, so it only ever sees people who are signed in and allowed.
 
 ```mermaid
