@@ -680,6 +680,8 @@ function renderChat(state: State, app: AppView | undefined): void {
   // The Code tab is behind the curtain.
   // History and Code are for developers.
   const tab = view.kind !== "app" || !state.developer ? "chat" : view.tab;
+  // The editor has its own message box; a second one for the model would only confuse.
+  element("composer").hidden = tab === "code" && editing !== undefined && editing.app === app?.name;
   element("turns").hidden = tab !== "chat";
   element("turns").replaceChildren(...(tab === "chat" ? [...items, ...pending] : []));
   element("history").hidden = tab !== "history";
