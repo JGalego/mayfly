@@ -1,13 +1,16 @@
 import type { ServiceHealth } from "../../../engine/engine.ts";
 import type { Activity, FromUi } from "../messages.ts";
 import { h } from "./dom.ts";
-import { atLeast, parseLogLine, type Level, type LogLine } from "./log-lines.ts";
+import { matches, parseLogLine, type Level, type LogLine } from "./log-lines.ts";
 
 // Mayfly's own activity, picked like any container's logs.
 const MAYFLY = "mayfly";
 
 const source = element<HTMLSelectElement>("log-source");
 const level = element<HTMLSelectElement>("log-level");
+const since = element<HTMLSelectElement>("log-since");
+const search = element<HTMLInputElement>("log-text");
+const expand = element<HTMLButtonElement>("expand-logs");
 
 let lines: readonly LogLine[] | undefined;
 
@@ -15,8 +18,21 @@ let lines: readonly LogLine[] | undefined;
 export function setUpLogs(post: (message: FromUi) => void): void {
   const ask = (): void => askLogs(post);
   source.addEventListener("change", ask);
-  level.addEventListener("change", showLines);
+  for (const filter of [level, since]) filter.addEventListener("change", showLines);
+  search.addEventListener("input", showLines);
   element("refresh-logs").addEventListener("click", ask);
+  expand.addEventListener("click", () => setExpanded(expand.getAttribute("aria-expanded") !== "true"));
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") setExpanded(false);
+  });
+}
+
+/** Lets the logs fill the page, for reading a lot of them, and puts them back. */
+function setExpanded(expanded: boolean): void {
+  element("logs").classList.toggle("expanded", expanded);
+  expand.setAttribute("aria-expanded", String(expanded));
+  expand.textContent = expanded ? "Close" : "Expand";
+  showLines();
 }
 
 export function askLogs(post: (message: FromUi) => void): void {
@@ -46,9 +62,11 @@ export function receiveActivity(entries: readonly Activity[]): void {
 
 function showLines(): void {
   const list = element("log-lines");
-  const wanted = level.value as Level;
-  const shown = (lines ?? []).filter((line) => atLeast(line.level, wanted));
-  const empty = lines === undefined ? "Fetching…" : lines.length === 0 ? "Nothing yet." : "Nothing this serious.";
+  const age = Number(since.value);
+  const filter = { level: level.value as Level, since: age === 0 ? 0 : Date.now() - age, text: search.value };
+  const shown = (lines ?? []).filter((line) => matches(line, filter));
+  const empty = lines === undefined ? "Fetching…" : lines.length === 0 ? "Nothing yet." : "No lines match.";
+  element("log-count").textContent = lines === undefined || lines.length === 0 ? "" : `${shown.length} of ${lines.length} lines`;
   list.replaceChildren(...(shown.length === 0 ? [h("li", "quiet", empty)] : shown.map(lineItem)));
   list.scrollTop = list.scrollHeight;
 }

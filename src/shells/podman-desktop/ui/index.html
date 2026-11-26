@@ -116,10 +116,13 @@
           <p class="quiet">Whether each app and the sign-in service are running, as Podman sees them.</p>
           <ul id="health" class="health-list"></ul>
         </section>
-        <section>
+        <section id="logs">
           <div class="section-head">
             <h2>Logs</h2>
-            <button id="refresh-logs" class="quiet-button" type="button">Refresh</button>
+            <div>
+              <button id="refresh-logs" class="quiet-button" type="button">Refresh</button>
+              <button id="expand-logs" class="quiet-button" type="button" aria-expanded="false">Expand</button>
+            </div>
           </div>
           <p class="quiet">What Mayfly did, and what each app and the sign-in service wrote.</p>
           <div class="log-controls">
@@ -130,7 +133,15 @@
               <option value="warn">Warnings and errors</option>
               <option value="error">Errors only</option>
             </select>
+            <select id="log-since" aria-label="How recent">
+              <option value="0">Any time</option>
+              <option value="300000">Last 5 minutes</option>
+              <option value="3600000" selected>Last hour</option>
+              <option value="86400000">Last day</option>
+            </select>
+            <input id="log-text" type="search" placeholder="Find…" aria-label="Find in the logs">
           </div>
+          <p id="log-count" class="quiet log-count"></p>
           <ol id="log-lines" class="log-lines"></ol>
         </section>
         <section>

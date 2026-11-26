@@ -45,3 +45,19 @@ export function atLeast(level: Level, wanted: Level): boolean {
   const order: readonly Level[] = ["debug", "info", "warn", "error"];
   return order.indexOf(level) >= order.indexOf(wanted);
 }
+
+/** What the person wants to see: how serious, how recent, and containing what. */
+export interface LogFilter {
+  readonly level: Level;
+  /** The oldest time wanted, in milliseconds since the epoch, or 0 for any. */
+  readonly since: number;
+  readonly text: string;
+}
+
+export function matches(line: LogLine, { level, since, text }: LogFilter): boolean {
+  if (!atLeast(line.level, level)) return false;
+  // A line without a time is never dropped for its age.
+  if (since > 0 && line.at !== "" && Date.parse(line.at) < since) return false;
+  const wanted = text.trim().toLowerCase();
+  return wanted === "" || `${line.text} ${line.extra}`.toLowerCase().includes(wanted);
+}

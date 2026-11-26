@@ -10,8 +10,8 @@ import { UNWATCHED, type Watcher } from "./step.ts";
 import { addUsage, metered, NO_USAGE, type Usage } from "./usage.ts";
 
 const FIRST_PORT = 18100;
-// Enough to see what led up to a problem.
-const LOG_LINES = 300;
+// Enough to look back a while, which the page's filters then narrow.
+const LOG_LINES = 1000;
 const CONTAINER = /^[a-z0-9-]+$/;
 // What Mayfly says when the model said nothing after the code.
 const MADE = "Your app is ready.";
