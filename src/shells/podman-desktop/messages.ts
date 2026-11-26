@@ -2,7 +2,7 @@ import type { AppView, ServiceHealth } from "../../engine/engine.ts";
 import type { ModelCall } from "../../engine/state.ts";
 import type { Step } from "../../engine/step.ts";
 import type { Usage } from "../../engine/usage.ts";
-import type { Check } from "./doctor.ts";
+import type { Examination } from "./doctor.ts";
 import type { ModelSetting } from "./settings.ts";
 
 /** A model as the page shows it: its settings, its name, and whether its key is saved. Never the key. */
@@ -75,7 +75,7 @@ export type ToUi =
   | { readonly type: "created"; readonly name: string }
   | { readonly type: "health"; readonly services: readonly ServiceHealth[] }
   | { readonly type: "ledger"; readonly calls: readonly ModelCall[] }
-  | { readonly type: "doctor"; readonly checks: readonly Check[] }
+  | ({ readonly type: "doctor" } & Examination)
   | { readonly type: "activity"; readonly entries: readonly Activity[] }
   | { readonly type: "logs"; readonly pod: string; readonly container: string; readonly lines: readonly string[] }
   | { readonly type: "code"; readonly app: string; readonly version: string; readonly routes: string; readonly thinking: string }

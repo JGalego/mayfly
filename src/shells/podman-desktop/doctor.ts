@@ -5,9 +5,22 @@ export interface Check {
   readonly detail: string;
 }
 
+/** How a model's key fares with its provider, shown on the model's own card. */
+export interface ModelCheck {
+  readonly id: string;
+  readonly status: Check["status"];
+  readonly detail: string;
+}
+
+/** Whether Mayfly is ready to make and run apps, and how each model with a key fares. */
+export interface Examination {
+  readonly ready: readonly Check[];
+  readonly models: readonly ModelCheck[];
+}
+
 /** A model to try: whether it has a key, and a way to ask its provider which models it has. */
 export interface ModelProbe {
-  readonly label: string;
+  readonly id: string;
   readonly model: string;
   readonly hasKey: boolean;
   readonly list: () => Promise<readonly string[]>;
@@ -24,12 +37,13 @@ export interface DoctorPorts {
 
 const NEEDED_PODMAN = 5;
 
-/** Looks at everything Mayfly needs to make and run apps, one check at a time. */
-export async function examine(ports: DoctorPorts): Promise<Check[]> {
+/** Looks at everything Mayfly needs to make and run apps, one check at a time, and tries each model's key. */
+export async function examine(ports: DoctorPorts): Promise<Examination> {
   const podman = await checkPodman(ports);
   const runtime = podman.status === "pass" ? [await checkRuntime(ports), await checkSignIn(ports)] : [];
-  const models = await Promise.all((await ports.models()).map(checkModel));
-  return [podman, ...runtime, ...models];
+  // A model with no key has nothing to try, and its card already says it has none.
+  const keyed = (await ports.models()).filter((probe) => probe.hasKey);
+  return { ready: [podman, ...runtime], models: await Promise.all(keyed.map(checkModel)) };
 }
 
 async function checkPodman({ podman }: DoctorPorts): Promise<Check> {
@@ -56,13 +70,12 @@ async function checkSignIn({ signIn }: DoctorPorts): Promise<Check> {
   return { name, status: "fail", detail: "The sign-in service has stopped. Its logs, in Settings, say why." };
 }
 
-async function checkModel({ label, model, hasKey, list }: ModelProbe): Promise<Check> {
-  if (!hasKey) return { name: label, status: "warn", detail: "No API key yet. Add one under Models." };
+async function checkModel({ id, model, list }: ModelProbe): Promise<ModelCheck> {
   try {
     const offered = await list();
-    if (offered.includes(model)) return { name: label, status: "pass", detail: "Its provider accepts the key and has the model." };
-    return { name: label, status: "warn", detail: `Its provider accepts the key but does not list ${model}. Check the model's name.` };
+    if (offered.includes(model)) return { id, status: "pass", detail: "The provider accepts the key and has this model." };
+    return { id, status: "warn", detail: `The provider accepts the key but does not list ${model}. Check the model's name.` };
   } catch (error) {
-    return { name: label, status: "fail", detail: error instanceof Error ? error.message : String(error) };
+    return { id, status: "fail", detail: error instanceof Error ? error.message : String(error) };
   }
 }

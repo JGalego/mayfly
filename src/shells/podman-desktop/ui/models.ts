@@ -1,5 +1,7 @@
+import type { ModelCheck } from "../doctor.ts";
 import type { FromUi, ModelView, ToUi } from "../messages.ts";
 import { isProvider, PROVIDERS } from "../settings.ts";
+import { findingMark } from "./doctor-view.ts";
 import { h } from "./dom.ts";
 
 type State = Extract<ToUi, { type: "state" }>;
@@ -47,20 +49,23 @@ export function openForm(model: ModelView | undefined): void {
   showEndpointField();
 }
 
-/** The extension answered a save: with the new state when it kept the model, with an error when it did not. */
-export function savedModel(kept: boolean): void {
-  if (!saving) return;
+/** The extension answered a save: with the new state when it kept the model, with an error when it did not. Says whether a save was kept. */
+export function savedModel(kept: boolean): boolean {
+  if (!saving) return false;
   saving = false;
   if (kept) editing = undefined;
+  return kept;
 }
 
-export function renderModels(state: State, post: (message: FromUi) => void, redraw: () => void): void {
-  element("model-list").replaceChildren(...state.models.map((model) => modelCard(model, model.id === state.defaultModel, post, redraw)));
+/** Each model as a card, with how its key fared when the doctor tried it, or undefined while it tries. */
+export function renderModels(state: State, checks: readonly ModelCheck[] | undefined, post: (message: FromUi) => void, redraw: () => void): void {
+  const card = (model: ModelView): HTMLLIElement => modelCard(model, model.id === state.defaultModel, keyCheck(model, checks), post, redraw);
+  element("model-list").replaceChildren(...state.models.map(card));
   element("model-form").hidden = editing === undefined;
   element("add-model").hidden = editing !== undefined;
 }
 
-function modelCard(model: ModelView, isDefault: boolean, post: (message: FromUi) => void, redraw: () => void): HTMLLIElement {
+function modelCard(model: ModelView, isDefault: boolean, check: HTMLElement[], post: (message: FromUi) => void, redraw: () => void): HTMLLIElement {
   const where = model.provider === "openai" ? "api.openai.com" : model.baseUrl;
   const name = h("p", "model-label", model.label, ...(isDefault ? [" ", h("span", "badge", "Default")] : []));
   const facts = h("p", "quiet", `${where} · ${model.hasApiKey ? "key saved" : "no API key yet"}`);
@@ -72,7 +77,14 @@ function modelCard(model: ModelView, isDefault: boolean, post: (message: FromUi)
     }),
     ...(isDefault ? [] : [button("Remove", () => post({ type: "remove-model", id: model.id }))]),
   ];
-  return h("li", "model-card", h("div", "model-facts", name, facts), h("div", "model-actions", ...actions));
+  return h("li", "model-card", h("div", "model-facts", name, facts, ...check), h("div", "model-actions", ...actions));
+}
+
+function keyCheck(model: ModelView, checks: readonly ModelCheck[] | undefined): HTMLElement[] {
+  if (!model.hasApiKey) return [];
+  const check = checks?.find(({ id }) => id === model.id);
+  if (check === undefined) return [h("p", "model-check quiet", "Trying the key…")];
+  return [h("p", `model-check ${check.status}`, findingMark(check.status), check.detail)];
 }
 
 function button(label: string, act: () => void): HTMLButtonElement {

@@ -119,7 +119,7 @@ function settings(): api.Configuration {
 async function probe(setting: ModelSetting, keys: KeyStore): Promise<ModelProbe> {
   const baseUrl = endpointOf(setting);
   const apiKey = await keys.get(baseUrl);
-  return { label: labelOf(setting), model: setting.model, hasKey: Boolean(apiKey), list: () => listModels({ baseUrl, apiKey: apiKey ?? "" }) };
+  return { id: setting.id, model: setting.model, hasKey: Boolean(apiKey), list: () => listModels({ baseUrl, apiKey: apiKey ?? "" }) };
 }
 
 /** The models, kept in a file beside the state, and in memory so the page always has them at hand. */

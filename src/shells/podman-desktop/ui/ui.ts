@@ -1,7 +1,7 @@
 import type { AppView, ServiceHealth, Written } from "../../../engine/engine.ts";
 import type { ModelCall, Turn } from "../../../engine/state.ts";
 import type { FromUi, Progress, ToUi, Work } from "../messages.ts";
-import type { Check } from "../doctor.ts";
+import type { Examination } from "../doctor.ts";
 import type { ModelView } from "../messages.ts";
 import { h, keepTime } from "./dom.ts";
 import { codeView } from "./code.ts";
@@ -70,7 +70,7 @@ const written = new Map<string, Written>();
 const asked = new Set<string>();
 let bannerTimer: number | undefined;
 /** What the doctor found when last asked. */
-let checks: readonly Check[] | undefined;
+let examination: Examination | undefined;
 /** Every call to a model, when last asked. */
 let calls: readonly ModelCall[] | undefined;
 /** How the apps and the sign-in service were doing when Podman was last asked. */
@@ -143,9 +143,13 @@ post({ type: "ready" });
 
 function receive(message: ToUi): void {
   switch (message.type) {
-    case "state":
-      savedModel(true);
-      return receiveState(message);
+    case "state": {
+      const saved = savedModel(true);
+      receiveState(message);
+      // The model saved just now may have a new key, so the doctor tries it again.
+      if (saved) askDoctor();
+      return;
+    }
     case "progress":
       if (state !== undefined) state = { ...state, working: message.working };
       return render();
@@ -160,7 +164,7 @@ function receive(message: ToUi): void {
       settingsLogs.offer(message.services);
       return render();
     case "doctor":
-      checks = message.checks;
+      examination = message;
       return render();
     case "logs":
       settingsLogs.receiveLogs(message.pod, message.container, message.lines);
@@ -367,7 +371,7 @@ function flash(control: HTMLElement, words: string): void {
 }
 
 function askDoctor(): void {
-  checks = undefined;
+  examination = undefined;
   render();
   post({ type: "doctor" });
 }
@@ -412,9 +416,9 @@ function render(): void {
   // What only developers see, Settings' health and logs among it.
   for (const part of document.querySelectorAll<HTMLElement>(".developer-only")) part.hidden = !state.developer;
   if (view.kind === "settings") {
-    renderModels(state, post, () => render());
+    renderModels(state, examination?.models, post, () => render());
     element("health").replaceChildren(...healthView(health));
-    element("doctor").replaceChildren(...doctorView(checks));
+    element("doctor").replaceChildren(...doctorView(examination?.ready));
     ledger.show(calls, { spent: state.spent, apps: state.apps.map((app) => app.name) });
   }
   else renderChat(state, app);

@@ -1128,6 +1128,22 @@ pre.problem {
   font-weight: 600;
 }
 
+/* How the model's key fared with its provider, under what the card says about it. */
+.model-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+  font-size: 0.9em;
+}
+
+.model-check .finding-mark {
+  width: 16px;
+  height: 16px;
+  margin-top: 0.15em;
+  font-size: 0.65rem;
+}
+
 .model-actions {
   display: flex;
   flex: none;
@@ -1209,15 +1225,15 @@ pre.problem {
   color: var(--on-accent);
 }
 
-.finding.pass .finding-mark {
+.pass > .finding-mark {
   background: var(--success);
 }
 
-.finding.warn .finding-mark {
+.warn > .finding-mark {
   background: light-dark(#ca8a04, #eab308);
 }
 
-.finding.fail .finding-mark {
+.fail > .finding-mark {
   background: var(--error);
 }
 
