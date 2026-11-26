@@ -728,14 +728,112 @@ pre.editable {
 }
 
 #code-editor {
+  display: grid;
+  grid-template-columns: 10rem minmax(0, 1fr);
+  gap: 0.6rem 0.75rem;
+  align-items: start;
+}
+
+/* The editor: the files on the left, and the code with its line numbers and what changed in the gutter. */
+#code-tab.editing {
+  max-width: calc(var(--column) + 12rem);
+}
+
+.editor-files {
+  grid-row: 1 / span 3;
+}
+
+.editor-files .label {
+  margin: 0.5rem 0.5rem 0;
+}
+
+.editor-files ul {
+  margin: 0.4rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.editor-files li {
   display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.3rem 0.5rem;
+  border-radius: 6px;
+}
+
+.editor-files li[aria-current="true"] {
+  background: var(--hover);
+}
+
+.file-changed {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--link);
+}
+
+.code-input {
+  display: flex;
+  border: 1px solid var(--field-line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--field);
+}
+
+.code-input:focus-within {
+  border-color: var(--accent);
+}
+
+/* As tall as the code area beside it, however many lines it numbers, and scrolled with it. */
+#code-gutter {
+  flex: none;
+  width: 3.25rem;
+  padding: 0.75rem 0 3rem;
+  overflow: hidden;
+  contain: size;
+  font: 12px/1.45 ui-monospace, "Cascadia Code", Consolas, monospace;
+  text-align: right;
+  color: var(--muted);
+  user-select: none;
+}
+
+#code-gutter > span {
+  position: relative;
+  display: block;
+  padding-right: 0.75rem;
+}
+
+#code-gutter > span::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0.25rem;
+  bottom: 0;
+  width: 3px;
+}
+
+#code-gutter > .added::after {
+  background: var(--success);
+}
+
+#code-gutter > .changed::after {
+  background: var(--link);
+}
+
+/* Lines removed between two lines: a small wedge on the line between them. */
+#code-gutter > .removed::after {
+  top: -4px;
+  bottom: auto;
+  width: 0;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  border-left: 5px solid var(--error);
 }
 
 /* The textarea takes the typing; a highlighted copy of its text shows through it from underneath, set and scrolled the same. */
-.code-input {
+.code-area {
   position: relative;
+  flex: 1;
+  min-width: 0;
 }
 
 #code-shadow {
@@ -746,7 +844,10 @@ pre.editable {
   /* Room past the end, so the copy scrolls as far as the textarea does beside its scrollbars. */
   padding-right: 3rem;
   padding-bottom: 3rem;
+  border: 0;
+  border-radius: 0;
   overflow: hidden;
+  background: none;
   tab-size: 2;
 }
 
@@ -757,8 +858,9 @@ pre.editable {
   width: 100%;
   min-height: 28rem;
   padding: 0.75rem;
-  border: 1px solid var(--field-line);
-  border-radius: 8px;
+  border: 0;
+  border-radius: 0;
+  outline: none;
   font: 12px/1.45 ui-monospace, "Cascadia Code", Consolas, monospace;
   font-variant-ligatures: none;
   white-space: pre;
@@ -771,11 +873,6 @@ pre.editable {
 
 #code-text::selection {
   background: color-mix(in srgb, var(--accent) 30%, transparent);
-}
-
-#code-text:focus {
-  border-color: var(--accent);
-  outline: none;
 }
 
 .editor-actions {

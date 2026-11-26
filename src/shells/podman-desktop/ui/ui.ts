@@ -90,7 +90,7 @@ popover(element("show-sign-in"), element("sign-in-popover"));
 const settingsLogs = logViewer(post, { activity: true });
 const ledger = ledgerView();
 const appLogs = logViewer(post, { activity: false });
-const loadEditor = codeEditor(element<HTMLTextAreaElement>("code-text"), element("code-shadow"));
+const editor = codeEditor({ field: element<HTMLTextAreaElement>("code-text"), shadow: element("code-shadow"), gutter: element("code-gutter"), changed: element("file-changed") });
 element("settings-logs").append(settingsLogs.element);
 element("ledger").append(ledger.element);
 element("app-logs").append(appLogs.element);
@@ -264,6 +264,7 @@ function renderAppLogs(app: AppView): void {
 /** Behind the curtain: the code running now, and an editor to change it by hand. */
 function renderCode(app: AppView, showing: Showing): void {
   const isEditing = editing === app.name;
+  element("code-tab").classList.toggle("editing", isEditing);
   element("code-reading").hidden = isEditing;
   element("code-editor").hidden = !isEditing;
   if (isEditing) return;
@@ -294,12 +295,12 @@ function startEditing(): void {
   editing = app.name;
   element<HTMLInputElement>("code-message").value = "";
   render();
-  loadEditor(code);
+  editor.load(code);
 }
 
 function saveEdit(): void {
   if (editing === undefined) return;
-  post({ type: "edit", app: editing, routes: element<HTMLTextAreaElement>("code-text").value, message: element<HTMLInputElement>("code-message").value });
+  post({ type: "edit", app: editing, routes: editor.edit().after, message: element<HTMLInputElement>("code-message").value });
   const app = editing;
   editing = undefined;
   codeShown = "";

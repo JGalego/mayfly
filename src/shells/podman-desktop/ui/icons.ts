@@ -14,6 +14,7 @@ const ICONS = {
   conversation: [path("M21 15a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z")],
   copy: [["rect", { x: 8, y: 8, width: 12, height: 12, rx: 2 }], path("M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2")],
   external: [path("M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5")],
+  file: [path("M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"), path("M14 3v5h5")],
   history: [circle(6, 6, 2), circle(6, 18, 2), circle(18, 6, 2), path("M6 8v8M18 8v5a5 5 0 0 1-5 5H8")],
   key: [circle(8, 15, 4), path("M11 12l9-9M16 7l3 3M14 9l2 2")],
   logs: [path("M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01")],

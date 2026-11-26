@@ -68,9 +68,18 @@
               <div id="code-current"></div>
             </div>
             <form id="code-editor" hidden>
+              <nav class="editor-files" aria-label="Files">
+                <p class="label">Files</p>
+                <ul>
+                  <li aria-current="true"><span data-icon="file">routes.ts</span><span id="file-changed" class="file-changed" title="Changed" hidden>M</span></li>
+                </ul>
+              </nav>
               <div class="code-input">
-                <pre id="code-shadow" aria-hidden="true"></pre>
-                <textarea id="code-text" spellcheck="false" wrap="off" aria-label="routes.ts"></textarea>
+                <div id="code-gutter" aria-hidden="true"></div>
+                <div class="code-area">
+                  <pre id="code-shadow" aria-hidden="true"></pre>
+                  <textarea id="code-text" spellcheck="false" wrap="off" aria-label="routes.ts"></textarea>
+                </div>
               </div>
               <input id="code-message" type="text" maxlength="200" placeholder="What did you change? (optional)" aria-label="What you changed">
               <div class="editor-actions">
