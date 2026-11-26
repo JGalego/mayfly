@@ -5,7 +5,7 @@
   "version": "0.1.0",
   "icon": "icon.png",
   "publisher": "jgalego",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "engines": {
     "podman-desktop": ">=1.26.0"
   },

@@ -11,7 +11,7 @@ good := {
 			"org.opencontainers.image.title": "t",
 			"org.opencontainers.image.source": "s",
 			"org.opencontainers.image.revision": "r",
-			"org.opencontainers.image.licenses": "MIT",
+			"org.opencontainers.image.licenses": "AGPL-3.0-only",
 		},
 	},
 	"size": 150000000,

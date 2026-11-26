@@ -8,7 +8,7 @@ LABEL org.opencontainers.image.title="Mayfly" \
       org.opencontainers.image.vendor="JGalego" \
       org.opencontainers.image.source="https://github.com/JGalego/mayfly" \
       org.opencontainers.image.revision="${REVISION}" \
-      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.licenses="AGPL-3.0-only" \
       io.podman-desktop.api.version=">= 1.26.0"
 
 COPY package.json icon.png /extension/

@@ -162,4 +162,6 @@ CI runs the hooks, checks every commit message, proves the runtime image, and ru
 
 ## License
 
-[MIT](LICENSE)
+Copyright © 2026 João Galego.
+
+Mayfly is free software under the [GNU Affero General Public License v3.0 only](LICENSE). If you run a changed version for others over a network, you must offer them its source.

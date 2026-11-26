@@ -8,7 +8,7 @@ good := [
 		"org.opencontainers.image.title", "\"t\"", "=",
 		"org.opencontainers.image.source", "\"s\"", "=",
 		"org.opencontainers.image.revision", "\"r\"", "=",
-		"org.opencontainers.image.licenses", "\"MIT\"", "=",
+		"org.opencontainers.image.licenses", "\"AGPL-3.0-only\"", "=",
 	], "JSON": false},
 	{"Cmd": "copy", "Flags": [], "Value": ["src", "./runtime"], "JSON": false},
 	{"Cmd": "user", "Flags": [], "Value": ["65532:65532"], "JSON": false},
