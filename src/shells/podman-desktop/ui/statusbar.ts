@@ -17,10 +17,10 @@ const COUNTED: readonly [Colour, string][] = [
   ["grey", "never ran"],
 ];
 
-/** Wires the status bar: the model and the apps lead to Settings, the tokens open a breakdown by app. */
-export function setUpStatusbar(openSettings: () => void): void {
-  element("status-model").addEventListener("click", openSettings);
-  element("status-apps").addEventListener("click", openSettings);
+/** Wires the status bar: the model leads to the models in Settings, the apps to how they are running, the tokens open a breakdown by app. */
+export function setUpStatusbar(openSettings: (tab: "setup" | "logs") => void): void {
+  element("status-model").addEventListener("click", () => openSettings("setup"));
+  element("status-apps").addEventListener("click", () => openSettings("logs"));
   popover(element("status-tokens"), element("token-popover"));
 }
 

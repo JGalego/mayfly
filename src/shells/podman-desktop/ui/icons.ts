@@ -26,6 +26,7 @@ const ICONS = {
     circle(12, 12, 6),
     circle(12, 12, 2.5),
   ],
+  sliders: [path("M4 6h8M16 6h4M4 12h2M10 12h10M4 18h10M18 18h2"), circle(14, 6, 2), circle(8, 12, 2), circle(16, 18, 2)],
   star: [path("M12 3l2.8 5.8 6.2.8-4.5 4.3 1.1 6.2L12 17.2l-5.6 2.9 1.1-6.2L3 9.6l6.2-.8z")],
   thinking: [["ellipse", { cx: 13, cy: 9, rx: 8, ry: 5.5 }], circle(6.5, 17, 1.6), circle(4, 20.5, 0.8)],
 } satisfies Record<string, readonly Shape[]>;

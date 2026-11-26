@@ -22,9 +22,13 @@ declare function acquirePodmanDesktopApi(): { postMessage(message: FromUi): void
 
 type State = Extract<ToUi, { type: "state" }>;
 /** What the main area shows: a new app's empty conversation, an app's conversation, or the settings. */
-type View = { readonly kind: "new" } | { readonly kind: "app"; readonly name: string; readonly tab: Tab } | { readonly kind: "settings" };
+type View = { readonly kind: "new" } | { readonly kind: "app"; readonly name: string; readonly tab: Tab } | { readonly kind: "settings"; readonly tab: SettingsTab };
 /** An app's conversation, or its history. */
 type Tab = "chat" | "history" | "code" | "logs";
+/** What Mayfly needs and the models, how everything is running, or what the models spent. */
+type SettingsTab = "setup" | "logs" | "tokens";
+
+const SETTINGS_TABS: readonly SettingsTab[] = ["setup", "logs", "tokens"];
 
 const TITLES: Record<Exclude<Progress["kind"], "remove">, string> = { create: "Writing your app", change: "Changing your app", restore: "Going back", edit: "Trying your edit" };
 
@@ -79,7 +83,7 @@ let health: readonly ServiceHealth[] | undefined;
 let newAppModel: string | undefined;
 
 setUpModels(post, () => render());
-setUpStatusbar(() => go({ kind: "settings" }));
+setUpStatusbar((tab) => go({ kind: "settings", tab }));
 popover(element("show-sign-in"), element("sign-in-popover"));
 // One log reader in Settings for everything, Mayfly's activity included, and one for the app on screen.
 const settingsLogs = logViewer(post, { activity: true });
@@ -92,7 +96,8 @@ element("examples").replaceChildren(...EXAMPLES.map(exampleItem));
 
 window.addEventListener("message", (event: MessageEvent<ToUi>) => receive(event.data));
 element("new-app").addEventListener("click", () => go({ kind: "new" }));
-element("show-settings").addEventListener("click", () => go({ kind: "settings" }));
+element("show-settings").addEventListener("click", () => go({ kind: "settings", tab: "setup" }));
+for (const tab of SETTINGS_TABS) element(`settings-tab-${tab}`).addEventListener("click", () => go({ kind: "settings", tab }));
 element("add-key").addEventListener("click", () => state !== undefined && askForKey(state, shownApp()));
 element("open-app").addEventListener("click", openApp);
 element("tab-chat").addEventListener("click", () => showTab("chat"));
@@ -196,17 +201,16 @@ function receiveState(next: State): void {
 }
 
 function go(next: View): void {
+  const arriving = next.kind === "settings" && view.kind !== "settings";
   drafts.set(draftKey(view), request.value);
   view = next;
   request.value = drafts.get(draftKey(view)) ?? "";
   hideBanner();
   render();
   if (view.kind === "settings") {
-    element<HTMLInputElement>("owner-email").value = state?.owner ?? "";
-    askDoctor();
-    askHealth();
-    post({ type: "ledger" });
-    return settingsLogs.ask();
+    element("settings-body").scrollTop = 0;
+    if (arriving) askSettings();
+    return;
   }
   request.focus();
   // A conversation opens at its latest message; history and code open at the top.
@@ -369,6 +373,15 @@ function flash(control: HTMLElement, words: string): void {
   window.setTimeout(() => (control.textContent = before), COPIED_MS);
 }
 
+// Settings asks for everything it shows as it opens, whichever tab it opens on, so switching tabs never waits.
+function askSettings(): void {
+  element<HTMLInputElement>("owner-email").value = state?.owner ?? "";
+  askDoctor();
+  askHealth();
+  post({ type: "ledger" });
+  settingsLogs.ask();
+}
+
 function askDoctor(): void {
   examination = undefined;
   render();
@@ -393,7 +406,7 @@ function canWrite(current: State, app: AppView | undefined): boolean {
 
 function askForKey(current: State, app: AppView | undefined): void {
   openForm(activeModel(current, app));
-  go({ kind: "settings" });
+  go({ kind: "settings", tab: "setup" });
 }
 
 // Choosing another model for an app is kept in its conversation; for a new app, it waits for the first message.
@@ -412,16 +425,23 @@ function render(): void {
   element("chat").hidden = view.kind === "settings";
   element("settings").hidden = view.kind !== "settings";
   developer.checked = state.developer;
-  // What only developers see, Settings' health and logs among it.
-  for (const part of document.querySelectorAll<HTMLElement>(".developer-only")) part.hidden = !state.developer;
-  if (view.kind === "settings") {
-    renderModels(state, examination?.models, post, () => render());
-    element("health").replaceChildren(...healthView(health));
-    element("doctor").replaceChildren(...doctorView(examination?.ready));
-    ledger.show(calls, { spent: state.spent, apps: state.apps.map((app) => app.name) });
-  }
+  if (view.kind === "settings") renderSettings(state, view.tab);
   else renderChat(state, app);
   renderStatusbar(state, app, activeModel(state, app), health);
+}
+
+function renderSettings(current: State, wanted: SettingsTab): void {
+  // Logs and tokens are for developers.
+  const tab = current.developer ? wanted : "setup";
+  element("settings-tabs").hidden = !current.developer;
+  for (const name of SETTINGS_TABS) {
+    element(`settings-tab-${name}`).setAttribute("aria-selected", String(tab === name));
+    element(`settings-${name}-tab`).hidden = tab !== name;
+  }
+  renderModels(current, examination?.models, post, () => render());
+  element("doctor").replaceChildren(...doctorView(examination?.ready));
+  element("health").replaceChildren(...healthView(health));
+  ledger.show(calls, { spent: current.spent, apps: current.apps.map((app) => app.name) });
 }
 
 function renderSidebar({ apps, working }: State): void {

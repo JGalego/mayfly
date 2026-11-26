@@ -297,8 +297,8 @@ main {
   min-height: 0;
 }
 
-/* The app's name and what you can do with it on one row, and its tabs on the row below, from the same left edge. */
-#app-header {
+/* A page's title, and an app's actions, on one row, and its tabs on the row below, from the same left edge. */
+.page-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
@@ -307,8 +307,10 @@ main {
   border-bottom: 1px solid var(--line);
 }
 
-#app-name {
+/* As tall as a button, so the tabs sit at the same height on every page, with or without actions beside the title. */
+.page-header h1 {
   font-size: 1.15rem;
+  line-height: 2.3rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1044,7 +1046,8 @@ pre.problem {
 
 /* Settings */
 
-#settings {
+#settings-body {
+  flex: 1;
   overflow-y: auto;
 }
 
@@ -1057,10 +1060,6 @@ pre.problem {
   margin: 2rem auto;
   padding: 0 1.5rem;
   box-sizing: border-box;
-}
-
-.settings-page h1 {
-  font-size: 1.4rem;
 }
 
 .settings-page h2 {
