@@ -23,6 +23,13 @@ export interface Progress extends Work {
   readonly steps: readonly Step[];
 }
 
+/** Something Mayfly did, kept for its activity log. */
+export interface Activity {
+  readonly at: number;
+  readonly level: "info" | "error";
+  readonly text: string;
+}
+
 /** What the page asks the extension to do. */
 export type FromUi =
   | { readonly type: "ready" }
@@ -36,6 +43,8 @@ export type FromUi =
   | { readonly type: "use-model"; readonly app: string; readonly model: string }
   | { readonly type: "peek"; readonly on: boolean }
   | { readonly type: "health" }
+  | { readonly type: "activity" }
+  | { readonly type: "logs"; readonly pod: string; readonly container: string }
   | { readonly type: "code"; readonly app: string; readonly version: string }
   | { readonly type: "restore"; readonly app: string; readonly version: string }
   | { readonly type: "edit"; readonly app: string; readonly routes: string; readonly message: string };
@@ -57,6 +66,8 @@ export type ToUi =
   | { readonly type: "progress"; readonly working: Progress }
   | { readonly type: "created"; readonly name: string }
   | { readonly type: "health"; readonly services: readonly ServiceHealth[] }
+  | { readonly type: "activity"; readonly entries: readonly Activity[] }
+  | { readonly type: "logs"; readonly pod: string; readonly container: string; readonly lines: readonly string[] }
   | { readonly type: "code"; readonly app: string; readonly version: string; readonly routes: string }
   | { readonly type: "notice"; readonly text: string }
   | { readonly type: "error"; readonly text: string };

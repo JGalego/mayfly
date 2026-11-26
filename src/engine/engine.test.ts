@@ -180,6 +180,15 @@ describe("the engine", () => {
     );
   });
 
+  it("reads the logs of its own pods only", async () => {
+    const { engine } = setUp([reply("lunch")]);
+    await engine.create("split lunch bills");
+
+    assert.deepEqual(await engine.logs("mayfly-lunch", "app"), ["2026-11-26T15:04:05Z mayfly-lunch app"]);
+    await assert.rejects(engine.logs("someone-elses-pod", "app"), /does not read the logs/);
+    await assert.rejects(engine.logs("mayfly-lunch", "app; rm -rf"), /does not read the logs/);
+  });
+
   it("refuses to change an app it does not know", async () => {
     const { engine } = setUp([]);
 
@@ -286,6 +295,7 @@ function setUp(replies: string[], trials: Trial[] = [], named: (id: string | nul
     trial: async () => trials.shift() ?? { ok: true },
   };
   const observer: Observer = {
+    logs: async (pod, container) => [`2026-11-26T15:04:05Z ${pod} ${container}`],
     health: async (pods) => pods.filter((pod) => pod !== "mayfly-gone").map((pod) => ({ pod, containers: [{ name: "app", state: "running", status: "Up", restarts: 0 }] })),
   };
   const engine = createEngine({ store, deployer, observer, identity, models, builder });

@@ -117,6 +117,23 @@
           <ul id="health" class="health-list"></ul>
         </section>
         <section>
+          <div class="section-head">
+            <h2>Logs</h2>
+            <button id="refresh-logs" class="quiet-button" type="button">Refresh</button>
+          </div>
+          <p class="quiet">What Mayfly did, and what each app and the sign-in service wrote.</p>
+          <div class="log-controls">
+            <select id="log-source" aria-label="Whose logs"><option value="mayfly">Mayfly's activity</option></select>
+            <select id="log-level" aria-label="How serious">
+              <option value="debug">Everything</option>
+              <option value="info" selected>Info and up</option>
+              <option value="warn">Warnings and errors</option>
+              <option value="error">Errors only</option>
+            </select>
+          </div>
+          <ol id="log-lines" class="log-lines"></ol>
+        </section>
+        <section>
           <h2>Code</h2>
           <label class="check"><input id="peek" type="checkbox"> Peek behind the curtain</label>
           <p class="quiet">Show the code Mayfly writes, and each step of making an app: writing it, trying it, and fixing what failed.</p>

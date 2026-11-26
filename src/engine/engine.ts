@@ -10,6 +10,9 @@ import { UNWATCHED, type Watcher } from "./step.ts";
 import { addUsage, metered, NO_USAGE, type Usage } from "./usage.ts";
 
 const FIRST_PORT = 18100;
+// Enough to see what led up to a problem.
+const LOG_LINES = 300;
+const CONTAINER = /^[a-z0-9-]+$/;
 // What Mayfly says when the model said nothing after the code.
 const MADE = "Your app is ready.";
 const CHANGED = "Done. Your app has the change.";
@@ -59,6 +62,8 @@ export interface Engine {
   spent(): Promise<Usage>;
   /** How each app that should be running, and the sign-in service, is doing. */
   health(): Promise<ServiceHealth[]>;
+  /** The last lines one container of an app's pod, or the sign-in service's, wrote. No other pod's. */
+  logs(pod: string, container: string): Promise<string[]>;
 }
 
 export function createEngine({ store, deployer, observer, identity, models, builder }: Ports): Engine {
@@ -208,6 +213,12 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       ];
       const pods = await observer.health(services.map((service) => service.pod));
       return services.map((service) => ({ ...service, containers: pods.find((pod) => pod.pod === service.pod)?.containers ?? [] }));
+    },
+
+    async logs(pod, container) {
+      const ours = [...(await store.load()).apps.map((app) => mayflyName(app.name)), identity.pod];
+      if (!ours.includes(pod) || !CONTAINER.test(container)) throw new Error(`Mayfly does not read the logs of ${pod}`);
+      return observer.logs(pod, container, LOG_LINES);
     },
   };
 }

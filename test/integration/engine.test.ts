@@ -41,6 +41,7 @@ describe("the engine on Podman with Dex", () => {
       ["app", "running"],
       ["auth-proxy", "running"],
     ]);
+    assert.ok((await engine.logs("mayfly-hello", "app")).some((line) => line.includes('"level":"info"')));
 
     await engine.remove("hello");
     await assert.rejects(fetch(app.url));

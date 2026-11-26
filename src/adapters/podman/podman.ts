@@ -8,7 +8,7 @@ const NETWORK = "mayfly";
 
 export const podmanDeployer: Deployer = { deploy: play, remove: down };
 
-export const podmanObserver: Observer = { health };
+export const podmanObserver: Observer = { health, logs };
 
 /** The fields of `podman ps --format json` that say how a container is doing. */
 interface Listed {
@@ -27,6 +27,13 @@ export async function health(pods: readonly string[]): Promise<{ pod: string; co
     const containers = listed.filter((entry) => entry.PodName === pod && !entry.IsInfra);
     return containers.length === 0 ? [] : [{ pod, containers: containers.map((entry) => containerHealth(pod, entry)) }];
   });
+}
+
+/** What a container wrote to stdout and stderr, merged by time. */
+export async function logs(pod: string, container: string, lines: number): Promise<string[]> {
+  const { code, stdout, stderr } = await run(["logs", "--tail", String(lines), "--timestamps", `${pod}-${container}`]);
+  if (code !== 0) throw new Error(`podman logs failed: ${stderr.trim()}`);
+  return [...stdout.split("\n"), ...stderr.split("\n")].filter((line) => line !== "").sort();
 }
 
 function containerHealth(pod: string, { Names, State, Status, Restarts }: Listed): ContainerHealth {

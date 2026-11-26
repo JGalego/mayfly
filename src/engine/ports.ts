@@ -33,6 +33,8 @@ export interface PodHealth {
 export interface Observer {
   /** The pods with these names that exist, and their containers. */
   health(pods: readonly string[]): Promise<PodHealth[]>;
+  /** The last lines a pod's container wrote, oldest first, each starting with its time. */
+  logs(pod: string, container: string, lines: number): Promise<string[]>;
 }
 
 export interface IdentitySource {

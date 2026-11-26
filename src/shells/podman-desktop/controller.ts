@@ -1,6 +1,6 @@
 import type { AppView, Engine } from "../../engine/engine.ts";
 import type { Step, Watcher } from "../../engine/step.ts";
-import type { FromUi, Progress, ToUi, Work } from "./messages.ts";
+import type { Activity, FromUi, Progress, ToUi, Work } from "./messages.ts";
 import { makeDefault, modelViews, readModel, removeModel, saveModel } from "./model-settings.ts";
 import type { Models, ModelSetting } from "./settings.ts";
 
@@ -11,6 +11,9 @@ const MAX_MESSAGE = 200;
 const BUSY = "Mayfly is still working on your last request. Wait for it to finish.";
 // The model's draft changes many times a second. The page gets the latest at most this often.
 const DRAFT_MS = 150;
+// Enough to see the last few hours of work, and small enough to keep in memory.
+const ACTIVITY = 200;
+const DONE: Record<Progress["kind"], string> = { create: "Made", change: "Changed", restore: "Went back on", edit: "Tried a hand edit on" };
 
 export interface ControllerPorts {
   readonly engine: Engine;
@@ -28,18 +31,20 @@ export interface ControllerPorts {
 }
 
 // One request at a time: each one reads and writes the whole state.
-type Session = ControllerPorts & { working: Progress | null; draftDue: boolean };
+type Session = ControllerPorts & { working: Progress | null; draftDue: boolean; activity: Activity[] };
 
 /** Handles what the page asks for. The page is trusted with nothing: it names apps, never URLs, and never sees a secret. */
 export function createController(ports: ControllerPorts): (message: unknown) => Promise<void> {
-  const session: Session = { ...ports, working: null, draftDue: false };
+  const session: Session = { ...ports, working: null, draftDue: false, activity: [] };
   return async (message) => {
     const request = readRequest(message);
     if (request === undefined) return;
     try {
       await handle(request, session);
     } catch (error) {
-      await ports.post({ type: "error", text: error instanceof Error ? error.message : String(error) });
+      const text = error instanceof Error ? error.message : String(error);
+      note(session, "error", text);
+      await ports.post({ type: "error", text });
       await showState(session);
     }
   };
@@ -71,6 +76,10 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       return sendCode(request.app, request.version, session);
     case "health":
       return session.post({ type: "health", services: await session.engine.health() });
+    case "activity":
+      return session.post({ type: "activity", entries: session.activity });
+    case "logs":
+      return session.post({ type: "logs", pod: request.pod, container: request.container, lines: await session.engine.logs(request.pod, request.container) });
     case "restore":
       return restore(request.app, request.version, session);
     case "edit":
@@ -95,6 +104,7 @@ async function useModel(app: string, model: string, session: Session): Promise<v
   if (session.working !== null) return void (await session.post({ type: "error", text: BUSY }));
   if (!session.settings.models().models.some((setting) => setting.id === model)) return;
   await session.engine.useModel(app, model);
+  note(session, "info", `Switched ${app} to another model`);
   await showState(session);
 }
 
@@ -125,13 +135,23 @@ function problemWithEdit(routes: string, message: string, session: Session): str
   return undefined;
 }
 
+/** Keeps something Mayfly did in its activity log, dropping the oldest once it is full. */
+function note(session: Session, level: Activity["level"], text: string): void {
+  session.activity = [...session.activity, { at: Date.now(), level, text }].slice(-ACTIVITY);
+}
+
 /** Does one piece of work, showing its progress while it runs. */
 async function run(work: Omit<Progress, "since" | "steps">, session: Session, job: (watch: Watcher) => Promise<AppView>): Promise<AppView> {
   session.working = { ...work, since: Date.now(), steps: [] };
+  note(session, "info", `Started: ${work.request}`);
   await showState(session);
   const app = await job((step) => showProgress(step, session)).finally(() => {
     session.working = null;
   });
+  // Going back runs a version that passed; anything else passed if its last attempt did.
+  const last = app.versions.at(-1);
+  const passed = work.kind === "restore" || last === undefined || last.problem === null;
+  note(session, passed ? "info" : "error", `${DONE[work.kind]} ${app.name}${passed ? "" : ", but it did not pass its trial"}`);
   await showState(session);
   return app;
 }
@@ -175,6 +195,7 @@ async function open(name: string, session: Session): Promise<void> {
 async function remove(name: string, session: Session): Promise<void> {
   if (session.working !== null) return void (await session.post({ type: "error", text: BUSY }));
   await session.engine.remove(name);
+  note(session, "info", `Removed ${name}`);
   await showState(session);
 }
 
@@ -208,11 +229,14 @@ async function showState(session: Session): Promise<void> {
 // Messages come from the page, so each is checked for its shape before anything acts on it.
 function readRequest(message: unknown): FromUi | undefined {
   if (typeof message !== "object" || message === null) return undefined;
-  const { type, app, request, name, apiKey, on, version, what, routes, message: note, model, id } = message as Record<string, unknown>;
+  const { type, app, request, name, apiKey, on, version, what, routes, message: words, model, id, pod, container } = message as Record<string, unknown>;
   switch (type) {
     case "ready":
     case "health":
+    case "activity":
       return { type };
+    case "logs":
+      return typeof pod === "string" && typeof container === "string" ? { type, pod, container } : undefined;
     case "copy":
       return what === "email" || what === "password" ? { type, what } : undefined;
     case "send": {
@@ -230,7 +254,7 @@ function readRequest(message: unknown): FromUi | undefined {
     case "peek":
       return typeof on === "boolean" ? { type, on } : undefined;
     case "edit":
-      return typeof app === "string" && typeof routes === "string" && typeof note === "string" ? { type, app, routes, message: note } : undefined;
+      return typeof app === "string" && typeof routes === "string" && typeof words === "string" ? { type, app, routes, message: words } : undefined;
     case "code":
     case "restore":
       return typeof app === "string" && typeof version === "string" ? { type, app, version } : undefined;

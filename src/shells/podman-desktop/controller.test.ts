@@ -114,6 +114,27 @@ describe("the Mayfly panel's controller", () => {
     assert.deepEqual(posted, [{ type: "health", services: [{ name: "lunch-split", kind: "app", pod: "mayfly-lunch-split", containers: [] }] }]);
   });
 
+  it("keeps what it did in an activity log, and passes on a container's logs", async () => {
+    const { handle, posted } = setUp({ apps: [lunch], createFails: "The model's service is down." });
+
+    await handle({ type: "send", app: "lunch-split", request: "add totals" });
+    await handle({ type: "send", app: null, request: "keep notes" });
+    await handle({ type: "activity" });
+    await handle({ type: "logs", pod: "mayfly-lunch-split", container: "app" });
+
+    const activity = posted.find((m) => m.type === "activity");
+    assert.deepEqual(
+      activity?.type === "activity" ? activity.entries.map((entry) => [entry.level, entry.text]) : [],
+      [
+        ["info", "Started: add totals"],
+        ["info", "Changed lunch-split"],
+        ["info", "Started: keep notes"],
+        ["error", "The model's service is down."],
+      ],
+    );
+    assert.deepEqual(posted.at(-1), { type: "logs", pod: "mayfly-lunch-split", container: "app", lines: ["2026-11-26T15:04:05Z mayfly-lunch-split app"] });
+  });
+
   it("sends the code of a version the page asks for", async () => {
     const { handle, posted } = setUp({ apps: [lunch] });
 
@@ -332,6 +353,7 @@ function setUp({ apps, created: made = lunch, steps = [], peek: peeking = false,
     remove: async (name) => void calls.push(`remove ${name}`),
     owner: async () => owner,
     spent: async () => ({ input: 500, output: 80 }),
+    logs: async (pod, container) => [`2026-11-26T15:04:05Z ${pod} ${container}`],
     health: async () => [{ name: "lunch-split", kind: "app", pod: "mayfly-lunch-split", containers: [] }],
   };
   const handle = createController({

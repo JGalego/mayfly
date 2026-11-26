@@ -6,6 +6,7 @@ import { h, keepTime } from "./dom.ts";
 import { tokens } from "./format.ts";
 import { codeView } from "./code.ts";
 import { healthView } from "./health.ts";
+import { askLogs, offerSources, receiveActivity, receiveLogs, setUpLogs } from "./logs.ts";
 import { historyView } from "./history.ts";
 import { openForm, renderModels, savedModel, setUpModels } from "./models.ts";
 import { makingOf, progressView, tickClocks, whatChanged, type Showing } from "./progress.ts";
@@ -62,6 +63,7 @@ let health: readonly ServiceHealth[] | undefined;
 let newAppModel: string | undefined;
 
 setUpModels(post, () => render());
+setUpLogs(post);
 element("examples").replaceChildren(...EXAMPLES.map(exampleItem));
 
 window.addEventListener("message", (event: MessageEvent<ToUi>) => receive(event.data));
@@ -113,7 +115,12 @@ function receive(message: ToUi): void {
       return render();
     case "health":
       health = message.services;
+      offerSources(message.services);
       return render();
+    case "logs":
+      return receiveLogs(message.lines);
+    case "activity":
+      return receiveActivity(message.entries);
     case "created":
       if (view.kind === "new") go({ kind: "app", name: message.name, tab: "chat" });
       return;
@@ -143,7 +150,10 @@ function go(next: View): void {
   removeArmed = false;
   hideBanner();
   render();
-  if (view.kind === "settings") return askHealth();
+  if (view.kind === "settings") {
+    askHealth();
+    return askLogs(post);
+  }
   request.focus();
   // A conversation opens at its latest message; history and code open at the top.
   const thread = element("thread");
