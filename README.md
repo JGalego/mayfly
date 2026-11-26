@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/logo.svg" alt="Mayfly logo: a mayfly against a setting sun" width="160">
+<img src="assets/logo.svg" alt="Mayfly at sunset" width="160">
 
 <h1>Mayfly</h1>
 
@@ -24,23 +24,23 @@
 
 </div>
 
-Describe a small app for a short or routine task. Mayfly builds it and runs it on your machine, behind sign-in, with health checks and JSON logs. The model writes none of those parts.
+Describe a small web app. Mayfly builds it and runs it locally in Podman behind sign-in. The model writes the app's routes; Mayfly supplies authentication, health checks, logs and container settings.
 
 ## Use it
 
 ### Prerequisites
 
-- [Podman Desktop](https://podman-desktop.io/) with a Podman 5 machine running
-- An API key for [OpenAI](https://platform.openai.com/api-keys), or another service that speaks OpenAI's API. A model on your own machine usually needs no key
+- [Podman Desktop](https://podman-desktop.io/) with Podman 5 or later running.
+- [OpenAI](https://platform.openai.com/api-keys) or another OpenAI-compatible provider.
 
 ### Steps
 
 1. In Podman Desktop, open **Extensions**, choose **Install custom…**, and enter `ghcr.io/jgalego/mayfly-extension:main`.
-2. Open **Mayfly** in the navigation bar. In **Settings → Models**, pick the provider and model and paste its API key, if it needs one. The default is OpenAI with `gpt-6.2-sol`. Podman Desktop keeps the key in its secret storage, and Mayfly sends it only to the endpoint it was saved for.
-3. Choose **New app** and say what you need. About a minute later the app opens in your browser. Sign in with the email and password under **Sign-in details**, next to **Open app**; each has a **Copy** button.
-4. Each app is a conversation. Ask for a change there, and the new version replaces the old one at the same address. Type `/` for commands: `/ask` a question without changing the app, `/fix` the errors it logged, `/retry` your last request, `/undo` the last deploy, `/start` it again after it stopped, or switch its `/model`, `/rename` it or `/remove` it.
+2. Open **Mayfly → Settings → Models**. The default is OpenAI's `gpt-6.2-sol`. Add a key or choose another provider and model. Podman Desktop stores the key, and Mayfly sends it only to the endpoint it was saved for.
+3. Choose **New app** and describe what you need. After deployment, sign in with the email and password under **Sign-in details**, next to **Open app**.
+4. Ask for changes in the app's conversation. A successful update replaces the previous version at the same address. Type `/` to list commands, including `/ask` for questions, `/fix` for logged errors and `/undo` to redeploy the previous version.
 
-The status bar shows how your apps are doing, and the tokens in, out and spent thinking on the app you're looking at; click them for every app's. To see under the hood, turn on **Settings → General → Enable developer mode**: the code as Mayfly writes it and the model's thinking where its provider shares it, what each change did, every version as a graph of branches, a code editor that saves your edits from any version as new ones without running them, a way to deploy any version that passed, each app's health and logs, and in **Settings → Usage** the tokens each call to a model spent, whether its code passed and how long it took, by day, week or month, for any app, model or provider.
+The status bar shows app status and token usage. **Settings → General → Enable developer mode** adds the code, available model reasoning, version history, logs and usage reports. You can save an edit from any version without deploying it, or deploy a version that passed its trial.
 
 ## Why not Dyad?
 
@@ -48,36 +48,29 @@ Applications like [Dyad](https://www.dyad.sh/) and [Lovable](https://lovable.dev
 
 ## The contract
 
-A generated app:
+A generated app is one TypeScript file, `routes.ts`, using [Hono](https://hono.dev/) on Node 24. The runtime listens on `$PORT`, serves `/healthz` and writes JSON logs to stdout. The app serves HTML at `/` with a link to `/oauth2/sign_out`. It has no server-side storage; data that must survive a restart can live in the browser.
 
-- is an HTTP service on `$PORT`, configured only through environment variables;
-- is stateless, with SQLite locally at most;
-- answers `/healthz`;
-- links to `/oauth2/sign_out` from its home page, so people can sign out of it;
-- logs JSON to stdout;
-- never implements login. An OIDC proxy ([oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/)) in front of it authenticates and passes identity to it in trusted headers. Locally, [Dex](https://dexidp.io/) stands in for a real identity provider;
-- is authorized by role. A policy outside the app lists the roles allowed in, read from the OIDC `groups` claim, and the proxy enforces the list;
-- ships as an OCI image plus Kubernetes manifests that `podman kube play` runs on Podman 5 or later. To run an app someone handed you, set your identity provider and allowed roles in its one ConfigMap;
-- is TypeScript on Node with Hono, like every other app.
+[oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/) handles sign-in, checks the OIDC `groups` claim against the app's allowed roles and forwards identity in headers. [Dex](https://dexidp.io/) provides local OIDC. The app's port is not published; the proxy listens on loopback.
 
-Every container runs as a non-root user with all capabilities dropped, a read-only root filesystem and CPU and memory limits. Only the proxy is published, and only on loopback.
+Mayfly deploys an OCI image and Kubernetes objects with `podman kube play`. Containers run as non-root with a read-only root filesystem, no Linux capabilities and CPU and memory limits. The proxy's ConfigMap sets the identity provider and allowed roles; credentials live in a Secret.
 
 ## The runtime image
 
-Every app runs on one image: Node 24 on [Wolfi](https://github.com/wolfi-dev), built with [apko](https://github.com/chainguard-dev/apko) from a locked list of packages, plus Mayfly's runtime (identity from the proxy's headers, JSON logs, `/healthz`, security headers, a body limit, graceful shutdown). It has no shell and no package manager, its code is owned by root and read-only to the app, and it is about 150 MB. A generated app adds one file, `routes.ts`.
+The runtime image uses Node 24 on [Wolfi](https://github.com/wolfi-dev), built with [apko](https://github.com/chainguard-dev/apko) from locked packages. It has no shell or package manager. Its code is root-owned and read-only to the app. The runtime also sets security headers, limits request bodies to 1 MiB and handles shutdown.
 
-`pixi run check-image` proves the image meets the policies in [`policy/`](policy/), and CI runs it on every push:
+`pixi run check-image` runs these checks locally and in CI:
 
 | What | How |
 |---|---|
-| Containerfile best practices | [hadolint](https://github.com/hadolint/hadolint), on every commit |
 | Containerfile: base pinned by digest, no `RUN` or `ADD`, numeric non-root user, exec-form entrypoint, no secrets, labels | [OPA](https://www.openpolicyagent.org/) via [conftest](https://www.conftest.dev/): [`containerfile.rego`](policy/containerfile.rego) |
-| The same commit always builds the same image | two clean builds, same digest. With Podman's default `overlay` storage it is also the same digest as on CI; `vfs` writes layer entries in a different order |
-| Image: no shell, package manager or download tool, no setuid files, nothing writable by anyone, root-owned read-only code, no tests, under 160 MB, no secrets in the environment, labels | OPA via conftest: [`image.rego`](policy/image.rego), on the built image's config and every file in it |
-| No known high or critical vulnerabilities | [Grype](https://github.com/anchore/grype) |
-| The policies themselves | Rego tests, `conftest verify` |
+| Reproducible image | Compare two build digests. Use Podman's `overlay` storage to match CI; `vfs` writes layer entries in a different order |
+| Image: no shell, package manager or download tool, no setuid files, file ownership and permissions, no tests, 160 MB limit, no secrets in the environment, labels | OPA via conftest: [`image.rego`](policy/image.rego), checked against the image config and filesystem |
+| High and critical vulnerabilities | [Grype](https://github.com/anchore/grype) |
+| Policy tests | `conftest verify` |
 
-Each commit on `main` that passes CI is published to [`ghcr.io/jgalego/mayfly-runtime`](https://github.com/JGalego/mayfly/pkgs/container/mayfly-runtime), tagged with its commit SHA and `main`. CI rebuilds it and publishes it only if it is the exact image that passed the checks above. It is signed with [Sigstore](https://www.sigstore.dev/) and carries an SBOM and build provenance. Check one before you use it:
+Pre-commit runs [hadolint](https://github.com/hadolint/hadolint) separately.
+
+CI publishes passing `main` builds to [`ghcr.io/jgalego/mayfly-runtime`](https://github.com/JGalego/mayfly/pkgs/container/mayfly-runtime) with commit SHA and `main` tags. It checks the rebuilt digest against the tested image, signs it with [Sigstore](https://www.sigstore.dev/) and attests its SBOM and build provenance. To verify:
 
 ```sh
 gh attestation verify oci://ghcr.io/jgalego/mayfly-runtime:main --owner JGalego
@@ -88,13 +81,13 @@ cosign verify ghcr.io/jgalego/mayfly-runtime:main \
 
 ## Architecture
 
-Mayfly's engine is a TypeScript library with a small API. People use it through a UI built on top: the Podman Desktop extension now, a web app for Enterprise and SaaS later. The core holds the contract, turns a manifest into a pod spec and applies expiry rules, and it imports nothing outside itself. Everything else (storage, identity, the model and the deployer) plugs in through small interfaces, the ports below.
+The Podman Desktop extension calls a TypeScript engine. The core defines the app contract and builds pod specs. The engine uses adapters for state, identity, model calls and deployment.
 
 ```mermaid
 flowchart LR
   shell["Podman Desktop extension"] --> api
-  subgraph engine["Engine: headless TypeScript library"]
-    api["API"] --> core["Core<br/>contract · manifest → pod spec · expiry"]
+  subgraph engine["Engine"]
+    api["API"] --> core["Core<br/>contract · manifest → pod spec"]
     api --> ports["Ports<br/>state · identity · model · deployer"]
   end
   podman["Podman deployer"] -. implements .-> ports
@@ -103,7 +96,7 @@ flowchart LR
   model["OpenAI-compatible model provider<br/>your own key"] -. implements .-> ports
 ```
 
-An app is made from a description and changed by later requests in its conversation, for which the model starts from the app's current code. The model writes `routes.ts`, Mayfly builds it on the runtime image and tries it out with no network and no privileges, and any failure goes back to the model, up to three times. Only an app that starts, passes its health check and serves an HTML home page with a sign-out link gets deployed.
+For each request, Mayfly builds and tests the model's code without network access or elevated privileges. The trial checks that the app starts, answers `/healthz` and serves an HTML home page with a sign-out link. Mayfly sends failures back to the model for up to three attempts in total.
 
 ```mermaid
 flowchart LR
@@ -146,9 +139,7 @@ Asking for a change turns any light orange, until a new version is deployed or t
 | 🟢 Running | The app is up and its health check passes. | |
 | 🟡 Restarted | Running, after Podman restarted it at least once since its last deploy. | Read its logs, or `/fix` |
 | ⭕ Unhealthy | Running, but its health check fails. After three failures in a row Podman restarts it, and it starts again. | Read its logs, or `/fix` |
-| 🔴 Stopped | Not running, for example after the Podman machine stopped. | **Start**, or `/start`. To have Mayfly start them when Podman Desktop starts, turn on **Settings → General → Start stopped apps automatically**. |
-
-Each app runs as one pod with two containers: oauth2-proxy and the app. The proxy is the only way in, and you reach it on 127.0.0.1. It signs you in with OIDC, checks your roles against the app's policy and passes the request on with your identity in headers. The app has no port on the host, so it only ever sees people who are signed in and allowed.
+| 🔴 Stopped | Not running, for example after the Podman machine stopped. | **Start**, or `/start`. To have Mayfly start them when Podman Desktop starts, turn on **Settings → General → Start stopped apps automatically**.
 
 ```mermaid
 flowchart LR
@@ -170,35 +161,34 @@ flowchart LR
 ## Non-goals
 
 - Login, user databases or sessions inside generated apps.
-- Stateful apps in v1.
-- Limiting an app's outbound network in v1. The app shares the pod's network with the proxy, which has to reach the identity provider.
+- Server-side persistence.
+- Outbound network restrictions after deployment. The app shares a network with the proxy, which needs to reach the identity provider.
 - More than one stack for generated apps.
 - Mobile or WebAssembly targets.
-- Container platforms other than Podman, for now. The engine doesn't depend on Podman, so Docker Desktop and Rancher Desktop can come later as new deployers and shells.
+- Container platforms other than Podman.
 
 ## Development
 
-Needs Node 24, and for the image and integration tests, Podman 5 and [pixi](https://pixi.sh).
+Development requires Node 24 and pre-commit. Image and integration checks also require Podman 5 or later and [pixi](https://pixi.sh).
 
 ```sh
-nvm use                                  # Node 24
+nvm use
 npm ci && npm ci --prefix runtime
-pre-commit install                       # hygiene, Conventional Commits, lint, typecheck, tests, policies on every commit
-npm test                                 # unit tests
+pre-commit install
+npm test
 npm run typecheck
-npm run build:runtime                    # the runtime image every app starts from
-npm run build:extension                  # the Podman Desktop extension, into extension/
-pixi run check-image                     # proves the image meets policy/
-npm run test:integration                 # signs in through Dex to a real app on Podman
-MAYFLY_LIVE=1 npm run test:integration   # also calls the real model from .env, which costs money
+npm run build:runtime
+npm run build:extension
+pixi run check-image
+npm run test:integration
 ```
 
-CI runs the hooks, checks every commit message, proves the runtime image, and runs the integration tests on Podman 5.
+`MAYFLY_LIVE=1 npm run test:integration` also calls the model configured in `.env` and may incur charges.
 
 ## License
 
 Copyright © 2026 João Galego.
 
-Mayfly is free software under the [GNU Affero General Public License v3.0 only](LICENSE). If you run a changed version for others over a network, you must offer them its source.
+Mayfly is licensed under the [GNU Affero General Public License v3.0 only](LICENSE). If you run a modified version for others over a network, you must offer them its source.
 
-The runtime every app runs on, in [`runtime/`](runtime/), is under the [MIT License](runtime/LICENSE) instead, so the apps you make are yours to use, share or sell on any terms.
+The runtime uses the [MIT License](runtime/LICENSE), so the apps you make are yours to use, share or sell on any terms.
