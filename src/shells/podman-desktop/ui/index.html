@@ -77,11 +77,21 @@
               </nav>
               <div class="editor-main">
                 <p id="editor-base" class="quiet"></p>
+                <div id="find-bar" class="find-bar" role="search" hidden>
+                  <input id="find-text" type="text" placeholder="Find" aria-label="Find in routes.ts" spellcheck="false">
+                  <span id="find-count" class="quiet" aria-live="polite"></span>
+                  <button id="find-previous" class="quiet-button" type="button" aria-label="Previous match" title="Previous match (Shift+Enter)">↑</button>
+                  <button id="find-next" class="quiet-button" type="button" aria-label="Next match" title="Next match (Enter)">↓</button>
+                  <input id="replace-text" type="text" placeholder="Replace with" aria-label="Replace with" spellcheck="false">
+                  <button id="replace-one" class="quiet-button" type="button">Replace</button>
+                  <button id="replace-all" class="quiet-button" type="button">Replace all</button>
+                  <button id="find-close" class="quiet-button" type="button" aria-label="Close find" title="Close (Esc)" data-icon="close"></button>
+                </div>
                 <div class="code-input">
                   <div id="code-gutter" aria-hidden="true"></div>
                   <div class="code-area">
                     <pre id="code-shadow" aria-hidden="true"></pre>
-                    <textarea id="code-text" spellcheck="false" wrap="off" aria-label="routes.ts" title="Tab indents and Shift+Tab outdents. To leave the editor by keyboard, press Esc, then Tab."></textarea>
+                    <textarea id="code-text" spellcheck="false" wrap="off" aria-label="routes.ts" title="Tab indents and Shift+Tab outdents. Ctrl+F finds and replaces. To leave the editor by keyboard, press Esc, then Tab."></textarea>
                   </div>
                 </div>
                 <div id="editor-status" class="editor-status" hidden></div>

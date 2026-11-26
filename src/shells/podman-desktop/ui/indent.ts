@@ -25,3 +25,19 @@ export function indent(code: string, start: number, end: number, outdent: boolea
   const first = (changed[0]?.length ?? 0) - (lines[0]?.length ?? 0);
   return { from, to, text, start: Math.max(from, start + first), end: Math.max(from, end + text.length - (to - from)) };
 }
+
+const CLOSERS: Readonly<Record<string, string>> = { "{": "}", "[": "]", "(": ")" };
+
+/**
+ * Enter starts the new line as indented as the one it breaks, a step more after an opening bracket. Between a pair, the closing
+ * bracket goes on a line of its own, back at the first line's indent, and the caret on the line between.
+ */
+export function newline(code: string, start: number, end: number): Indented {
+  const lineStart = code.lastIndexOf("\n", start - 1) + 1;
+  const indent = /^[ \t]*/.exec(code.slice(lineStart, start))?.[0] ?? "";
+  const closer = CLOSERS[code[start - 1] ?? ""];
+  const inner = closer === undefined ? indent : indent + STEP;
+  const text = closer !== undefined && code[end] === closer ? `\n${inner}\n${indent}` : `\n${inner}`;
+  const caret = start + 1 + inner.length;
+  return { from: start, to: end, text, start: caret, end: caret };
+}

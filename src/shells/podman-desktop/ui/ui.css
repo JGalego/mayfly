@@ -794,6 +794,19 @@ pre.editable {
   gap: 0.6rem;
 }
 
+/* Find and replace in the editor, in one row above the code. */
+.find-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.find-bar input {
+  flex: 1 1 8rem;
+  min-width: 0;
+}
+
 /* What became of the last save: the work while it runs, or why it failed. */
 .editor-status {
   display: flex;

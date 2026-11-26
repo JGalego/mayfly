@@ -1,7 +1,7 @@
 import { highlightInto } from "./code.ts";
 import { h } from "./dom.ts";
 import { lineMarks } from "./gutter.ts";
-import { indent } from "./indent.ts";
+import { indent, newline, type Indented } from "./indent.ts";
 
 export interface EditorParts {
   readonly field: HTMLTextAreaElement;
@@ -42,15 +42,23 @@ export function codeEditor({ field, shadow, gutter, changed }: EditorParts): Cod
   let leaving = false;
   field.addEventListener("keydown", (event) => {
     if (event.key === "Escape") return void (leaving = true);
+    // Enter keeps the line's indent, a step more after an opening bracket.
+    if (event.key === "Enter" && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey && !event.isComposing) {
+      event.preventDefault();
+      leaving = false;
+      return typeIn(newline(field.value, field.selectionStart, field.selectionEnd));
+    }
     if (event.key !== "Tab" || leaving) return void (leaving = false);
     event.preventDefault();
-    const change = indent(field.value, field.selectionStart, field.selectionEnd, event.shiftKey);
+    typeIn(indent(field.value, field.selectionStart, field.selectionEnd, event.shiftKey));
+  });
+  // Typed in, unlike setRangeText, so Ctrl+Z takes it back. It paints, as typing does.
+  const typeIn = (change: Indented): void => {
     if (field.value.slice(change.from, change.to) === change.text) return;
     field.setSelectionRange(change.from, change.to);
-    // Typed in, unlike setRangeText, so Ctrl+Z takes it back. It paints, as typing does.
     document.execCommand("insertText", false, change.text);
     field.setSelectionRange(change.start, change.end);
-  });
+  };
   return {
     load(code) {
       before = code;

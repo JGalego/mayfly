@@ -6,6 +6,7 @@ import type { ModelView } from "../messages.ts";
 import { h, keepTime } from "./dom.ts";
 import { changes, codeView } from "./code.ts";
 import { codeEditor } from "./editor.ts";
+import { findBar } from "./find-bar.ts";
 import { commandMenu } from "./command-menu.ts";
 import { parse, suggestions, type Command } from "./commands.ts";
 import { nameChip, withChips } from "./chips.ts";
@@ -120,6 +121,18 @@ const editor = codeEditor({ field: element<HTMLTextAreaElement>("code-text"), sh
   const app = shownApp();
   if (app !== undefined) editorButtons(app);
 } });
+findBar({
+  field: element<HTMLTextAreaElement>("code-text"),
+  bar: element("find-bar"),
+  find: element<HTMLInputElement>("find-text"),
+  count: element("find-count"),
+  previous: element("find-previous"),
+  next: element("find-next"),
+  replace: element<HTMLInputElement>("replace-text"),
+  replaceOne: element("replace-one"),
+  replaceAll: element("replace-all"),
+  close: element("find-close"),
+});
 element("settings-logs").append(settingsLogs.element);
 element("ledger").append(ledger.element);
 element("app-logs").append(appLogs.element);

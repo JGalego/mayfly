@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { indent } from "./indent.ts";
+import { indent, newline } from "./indent.ts";
 
 const code = "a\n  b\n    c\nd";
 
@@ -22,5 +22,17 @@ describe("indent", () => {
 
   it("leaves alone the line a selection ends at the very start of", () => {
     assert.deepEqual(indent(code, 0, 2, false), { from: 0, to: 1, text: "  a", start: 2, end: 4 });
+  });
+});
+
+describe("newline", () => {
+  it("starts the new line as indented as the one it breaks", () => {
+    assert.deepEqual(newline("    a", 5, 5), { from: 5, to: 5, text: "\n    ", start: 10, end: 10 });
+  });
+
+  it("indents a step more after an opening bracket, and puts its closing one on a line of its own", () => {
+    assert.deepEqual(newline("  f() {", 7, 7), { from: 7, to: 7, text: "\n    ", start: 12, end: 12 });
+    assert.deepEqual(newline("  [x", 3, 3), { from: 3, to: 3, text: "\n    ", start: 8, end: 8 });
+    assert.deepEqual(newline("  ({})", 4, 4), { from: 4, to: 4, text: "\n    \n  ", start: 9, end: 9 });
   });
 });
