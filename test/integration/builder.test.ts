@@ -11,7 +11,7 @@ after(() => removeImages(built));
 
 describe("the Podman builder", () => {
   it("builds an app that passes its trial", async () => {
-    const trial = await buildAndTry("good", 'import { Hono } from "hono";\nexport default new Hono().get("/", (c) => c.html("<h1>hi</h1>"));\n');
+    const trial = await buildAndTry("good", 'import { Hono } from "hono";\nexport default new Hono().get("/", (c) => c.html(\'<h1>hi</h1><a href="/oauth2/sign_out">Sign out</a>\'));\n');
 
     assert.deepEqual(trial, { ok: true });
   });

@@ -53,6 +53,7 @@ A generated app:
 - is an HTTP service on `$PORT`, configured only through environment variables;
 - is stateless, with SQLite locally at most;
 - answers `/healthz`;
+- links to `/oauth2/sign_out` from its home page, so people can sign out of it;
 - logs JSON to stdout;
 - never implements login. An OIDC proxy ([oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/)) in front of it authenticates and passes identity to it in trusted headers. Locally, [Dex](https://dexidp.io/) stands in for a real identity provider;
 - is authorized by role. A policy outside the app lists the roles allowed in, read from the OIDC `groups` claim, and the proxy enforces the list;
@@ -102,7 +103,7 @@ flowchart LR
   model["OpenAI-compatible model provider<br/>your own key"] -. implements .-> ports
 ```
 
-An app is made from a description and changed by later requests in its conversation, for which the model starts from the app's current code. The model writes `routes.ts`, Mayfly builds it on the runtime image and tries it out with no network and no privileges, and any failure goes back to the model, up to three times. Only an app that starts, passes its health check and serves an HTML home page gets deployed.
+An app is made from a description and changed by later requests in its conversation, for which the model starts from the app's current code. The model writes `routes.ts`, Mayfly builds it on the runtime image and tries it out with no network and no privileges, and any failure goes back to the model, up to three times. Only an app that starts, passes its health check and serves an HTML home page with a sign-out link gets deployed.
 
 ```mermaid
 flowchart LR

@@ -1,6 +1,7 @@
+import { SIGN_OUT_PATH } from "../core/contract.ts";
+
 // What the model is told. The runtime enforces the important parts anyway: sign-in, the CSP,
 // JSON logs, the body limit. The prompt is there so the model's code works with them, not against them.
-
 export const SYSTEM_PROMPT = [
   "You write small web apps that run on Mayfly. Each app is one TypeScript file, routes.ts, that runs inside a fixed runtime. The runtime already handles sign-in, health checks, logging and security headers, so you write only the app's own pages and logic.",
   "",
@@ -13,7 +14,7 @@ export const SYSTEM_PROMPT = [
   "",
   "People:",
   '- Everyone who reaches the app is already signed in. `c.get("user")` gives `{ id, email, name, groups }`. Never add login, logout, passwords or sessions.',
-  '- People sign out at /oauth2/sign_out, which the runtime handles. Put a small "Sign out" link to it somewhere unobtrusive, such as a corner of the page.',
+  `- People sign out at ${SIGN_OUT_PATH}, which the runtime handles. The home page must link to it: put a small \`<a href="${SIGN_OUT_PATH}">Sign out</a>\` somewhere unobtrusive, such as a corner of the page. A home page without it is sent back.`,
   "- To show different things to different people, check `user.groups`.",
   "",
   "Pages:",

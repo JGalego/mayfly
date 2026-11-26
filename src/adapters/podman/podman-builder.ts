@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { APP_PORT, HEALTH_CHECK, NODE } from "../../core/contract.ts";
+import { homePageProblem, type HomePage } from "../../core/home-page.ts";
 import type { Builder, Trial } from "../../engine/ports.ts";
 import { podman, run } from "./cli.ts";
 
@@ -57,11 +58,8 @@ async function trial(image: string): Promise<Trial> {
 
 async function visit(container: string): Promise<Trial> {
   if (!(await becomesHealthy(container))) return failure(container, "It did not start: its health check never passed.");
-  const home = await requestHome(container);
-  if (home.status !== 200 || !home.type.startsWith("text/html")) {
-    return failure(container, `GET / answered ${home.status} ${home.type || "with no content type"}, not an HTML page.`);
-  }
-  return { ok: true };
+  const problem = homePageProblem(await requestHome(container));
+  return problem === null ? { ok: true } : failure(container, problem);
 }
 
 async function becomesHealthy(container: string): Promise<boolean> {
@@ -78,11 +76,11 @@ async function isRunning(container: string): Promise<boolean> {
 }
 
 // Visits the home page from inside the container, since the trial has no network to reach it from outside.
-async function requestHome(container: string): Promise<{ status: number; type: string }> {
+async function requestHome(container: string): Promise<HomePage> {
   const headers = JSON.stringify(TRIAL_USER);
-  const script = `fetch("http://127.0.0.1:${APP_PORT}/", { headers: ${headers} }).then((r) => process.stdout.write(JSON.stringify({ status: r.status, type: r.headers.get("content-type") ?? "" })))`;
+  const script = `fetch("http://127.0.0.1:${APP_PORT}/", { headers: ${headers} }).then(async (r) => process.stdout.write(JSON.stringify({ status: r.status, type: r.headers.get("content-type") ?? "", body: await r.text() })))`;
   const { code, stdout } = await run(["exec", container, NODE, "--eval", script]);
-  return code === 0 ? (JSON.parse(stdout) as { status: number; type: string }) : { status: 0, type: "" };
+  return code === 0 ? (JSON.parse(stdout) as HomePage) : { status: 0, type: "", body: "" };
 }
 
 async function failure(container: string, reason: string): Promise<Trial> {

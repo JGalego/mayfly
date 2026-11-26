@@ -37,7 +37,6 @@ export type FromUi =
   | { readonly type: "ready" }
   | ({ readonly type: "send" } & Work)
   | { readonly type: "open"; readonly name: string }
-  | { readonly type: "sign-out"; readonly name: string }
   | { readonly type: "remove"; readonly name: string }
   | { readonly type: "copy"; readonly what: "email" | "password" }
   | { readonly type: "save-model"; readonly model: ModelSetting; readonly apiKey: string }

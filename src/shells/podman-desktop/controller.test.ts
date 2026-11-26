@@ -255,14 +255,13 @@ describe("the Mayfly panel's controller", () => {
     assert.equal(posted[0]?.type, "error");
   });
 
-  it("opens an app, or its sign-out page, by name, at the URL the engine knows rather than one from the page", async () => {
+  it("opens an app by name, at the URL the engine knows rather than one from the page", async () => {
     const { handle, opened } = setUp({ apps: [lunch] });
 
     await handle({ type: "open", name: "lunch-split" });
     await handle({ type: "open", name: "not-an-app" });
-    await handle({ type: "sign-out", name: "lunch-split" });
 
-    assert.deepEqual(opened, [lunch.url, "http://localhost:18100/oauth2/sign_out"]);
+    assert.deepEqual(opened, [lunch.url]);
   });
 
   it("removes an app, showing it is being removed until it is gone", async () => {
