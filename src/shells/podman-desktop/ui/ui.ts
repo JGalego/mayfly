@@ -664,8 +664,13 @@ function renderChat(state: State, app: AppView | undefined): void {
   const removing = busy && state.working?.kind === "remove";
   element<HTMLButtonElement>("remove-app").disabled = busy;
   if (removing) openApp.disabled = true;
-  // A stopped app gets a way to run again; Open app would find nothing there.
-  const stopped = app !== undefined && !busy && lightFor(app, health, state.working?.app).colour === "red";
+  // A stopped app gets a way to run again; Open app would find nothing there. One still starting would not answer yet.
+  const light = app === undefined || busy ? undefined : lightFor(app, health, state.working?.app).colour;
+  const stopped = light === "red";
+  if (light === "starting") {
+    openApp.disabled = true;
+    openApp.title = "Starting: it opens once its health check passes";
+  }
   element("start-app").hidden = !stopped;
   openApp.classList.toggle("primary", !stopped);
   openApp.classList.toggle("secondary", stopped);
