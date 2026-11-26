@@ -8,6 +8,12 @@ export interface StateStore {
   save(state: State): Promise<void>;
 }
 
+/** Where the files people attach are kept, each under the hash of its contents, so a file attached twice is kept once. */
+export interface FileStore {
+  put(data: Uint8Array): Promise<string>;
+  get(id: string): Promise<Uint8Array>;
+}
+
 export interface Deployer {
   /** Creates the objects, replacing any that already exist. */
   deploy(objects: readonly KubeObject[]): Promise<void>;
@@ -48,9 +54,13 @@ export interface IdentitySource {
   settingsFor(app: App): IdpSettings;
 }
 
+/** A piece of what the person says to the model: text, or an image, in base64. */
+export type Part = { readonly type: "text"; readonly text: string } | { readonly type: "image"; readonly mediaType: string; readonly data: string };
+
 export interface Message {
   readonly role: "user" | "assistant";
-  readonly content: string;
+  /** Text, or text and images when the person attached some. */
+  readonly content: string | readonly Part[];
 }
 
 export interface Completion {
@@ -92,4 +102,5 @@ export interface Ports {
   /** The model with this id, or the default model for null or for an id that no longer exists. */
   readonly models: (id: string | null) => ModelProvider;
   readonly builder: Builder;
+  readonly files: FileStore;
 }

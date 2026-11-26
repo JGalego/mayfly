@@ -358,6 +358,26 @@ describe("the Mayfly panel's controller", () => {
     assert.deepEqual(opened, [lunch.url]);
   });
 
+  it("sends the files attached to a request, and refuses ones Mayfly does not take", async () => {
+    const { handle, posted, calls } = setUp({ apps: [lunch] });
+    const csv = { name: "bills.csv", type: "text/csv", data: Buffer.from("who,amount").toString("base64") };
+
+    await handle({ type: "send", app: "lunch-split", request: "use these bills", files: [csv] });
+    await handle({ type: "send", app: "lunch-split", request: "read this", files: [{ name: "report.pdf", type: "application/pdf", data: "JVBERi0=" }] });
+
+    assert.deepEqual(calls, ["change lunch-split use these bills with bills.csv (10 bytes)"]);
+    const refusal = posted.at(-1);
+    assert.ok(refusal?.type === "error" && /not report\.pdf/.test(refusal.text));
+  });
+
+  it("sends the page a file from an app's conversation, for it to show", async () => {
+    const { handle, posted } = setUp({ apps: [lunch] });
+
+    await handle({ type: "attachment", app: "lunch-split", id: "f1" });
+
+    assert.deepEqual(posted.at(-1), { type: "attachment", app: "lunch-split", id: "f1", name: "mockup.png", mediaType: "image/png", data: "AQID" });
+  });
+
   it("opens a link from a reply in the browser, but only to a web page", async () => {
     const { handle, opened, posted } = setUp({ apps: [] });
 
@@ -500,6 +520,7 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
       return made;
     },
     written: async () => ({ routes: "export default 1;\n", thinking: "One route will do." }),
+    attachment: async () => ({ name: "mockup.png", type: "image/png", data: new Uint8Array([1, 2, 3]) }),
     save: async (name, from, routes, message) => {
       calls.push(`save ${name} ${from} ${routes.trim()} ${message}`);
       const by = { kind: "person", name: "owner@mayfly.local" } as const;
@@ -515,8 +536,8 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
       calls.push(`use ${name} ${model}`);
       return lunch;
     },
-    change: async (name, request) => {
-      calls.push(`change ${name} ${request}`);
+    change: async (name, request, _watch, files = []) => {
+      calls.push(`change ${name} ${request}${files.length === 0 ? "" : ` with ${files.map((file) => `${file.name} (${file.data.length} bytes)`).join(", ")}`}`);
       if (changeFails !== undefined) throw changeFails;
       return lunch;
     },

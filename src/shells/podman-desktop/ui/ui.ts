@@ -1,6 +1,6 @@
 import type { AppView, ServiceHealth, Written } from "../../../engine/engine.ts";
 import type { ModelCall, Turn } from "../../../engine/state.ts";
-import type { FromUi, Progress, ToUi, Work } from "../messages.ts";
+import type { FromUi, Progress, ToUi, Upload, Work } from "../messages.ts";
 import type { Examination } from "../doctor.ts";
 import type { ModelView } from "../messages.ts";
 import { h, keepTime } from "./dom.ts";
@@ -8,6 +8,8 @@ import { changes, codeView } from "./code.ts";
 import { codeEditor } from "./editor.ts";
 import { findBar } from "./find-bar.ts";
 import { threadFind } from "./thread-find.ts";
+import { fileLook, imageUrl, sentImage, uploads } from "./uploads.ts";
+import { kindOf } from "../../../engine/attachments.ts";
 import { chooseTab, keyboardTabs } from "./tabs.ts";
 import { commandMenu } from "./command-menu.ts";
 import { parse, suggestions, type Command } from "./commands.ts";
@@ -95,6 +97,9 @@ let foldsChanged = 0;
 let builtTurns: { readonly key: string; readonly items: readonly HTMLElement[] } | undefined;
 let turnsShown = "";
 let pendingShown: readonly HTMLElement[] = [];
+/** Attached images to show, by file id, and the ones already asked for. */
+const thumbnails = new Map<string, string>();
+const askedFiles = new Set<string>();
 /** Versions' code and thinking fetched from the extension, and the ones already asked for. */
 const written = new Map<string, Written>();
 const asked = new Set<string>();
@@ -162,6 +167,7 @@ window.addEventListener("focus", () => post({ type: "focus", on: true }));
 window.addEventListener("blur", () => post({ type: "focus", on: false }));
 keyboardTabs(element("app-tabs"));
 keyboardTabs(element("settings-tabs"));
+const attached = uploads({ input: element<HTMLInputElement>("file-input"), button: element("attach"), list: element("pending-files"), composer: element("composer") }, (why) => showBanner(why, "error"));
 const appFilter = element<HTMLInputElement>("app-filter");
 appFilter.addEventListener("input", () => state !== undefined && renderSidebar(state));
 appFilter.addEventListener("keydown", (event) => {
@@ -272,6 +278,9 @@ function receive(message: ToUi): void {
     case "saved":
       carryOn(message.app, message.version);
       return render();
+    case "attachment":
+      thumbnails.set(message.id, imageUrl(message.mediaType, message.data));
+      return render();
     case "renamed":
       return followRename(message.from, message.to);
     case "notice":
@@ -322,7 +331,8 @@ function send(): void {
   if (typed.kind === "unknown") return showError(`Unknown command: /${typed.name}. Type / to list commands.`);
   if (typed.kind === "command") return runCommand(typed.command, typed.argument);
   if (state === undefined || state.working !== null) return;
-  lastSent = { app: view.kind === "app" ? view.name : null, request: text, ...(view.kind === "new" && newAppModel !== undefined ? { model: newAppModel } : {}) };
+  const files = attached.take();
+  lastSent = { app: view.kind === "app" ? view.name : null, request: text, ...(view.kind === "new" && newAppModel !== undefined ? { model: newAppModel } : {}), ...(files.length === 0 ? {} : { files }) };
   request.value = "";
   failed = undefined;
   hideBanner();
@@ -522,8 +532,12 @@ function runCommand(command: Command, argument: string): void {
   const app = view.name;
   const typed = request.value.trim();
   if (command.name === "rename") return askToRename(app, argument, typed);
+  if (state?.working !== null) return;
   request.value = "";
-  startWork(command.name === "ask" ? { type: "ask", app, question: argument } : { type: command.name, app }, typed);
+  if (command.name !== "ask") return startWork({ type: command.name, app }, typed);
+  // Files in the composer go with a question, as with a request.
+  const files = attached.take();
+  startWork({ type: "ask", app, question: argument, ...(files.length === 0 ? {} : { files }) }, typed, files);
 }
 
 /** Renames the app only once the person agrees to the redeploy it takes. Until then, the command stays in the composer. */
@@ -554,9 +568,9 @@ function followRename(from: string, to: string): void {
 }
 
 /** Starts work on an app, unless other work is under way. If it fails, the conversation says why, and what was typed for it comes back. */
-function startWork(message: Extract<FromUi, { readonly app: string }>, typed = ""): void {
+function startWork(message: Extract<FromUi, { readonly app: string }>, typed = "", files: readonly Upload[] = []): void {
   if (state?.working !== null) return;
-  lastSent = { app: message.app, request: typed };
+  lastSent = { app: message.app, request: typed, ...(files.length === 0 ? {} : { files }) };
   failed = undefined;
   hideBanner();
   post(message);
@@ -759,8 +773,8 @@ function renderChat(state: State, app: AppView | undefined): void {
   const showing = showingFor(state);
   const said = app?.conversation ?? [];
   // The turns are built again only when what they show changes: not on each step of the work, which only the last turns show.
-  const key = [app?.name, said.length, said.at(-1)?.at, state.developer, foldsChanged, written.size, app?.versions.length].join("|");
-  if (builtTurns?.key !== key) builtTurns = { key, items: said.map((turn) => turnItem(turn, app === undefined ? [] : madeOf(turn, app, showing))) };
+  const key = [app?.name, said.length, said.at(-1)?.at, state.developer, foldsChanged, written.size, app?.versions.length, thumbnails.size].join("|");
+  if (builtTurns?.key !== key) builtTurns = { key, items: said.map((turn) => turnItem(turn, app === undefined ? [] : [...filesOf(app.name, turn), ...madeOf(turn, app, showing)])) };
   const asked = working === null ? [] : [turnItem({ from: "person", text: working.request, at: working.since })];
   const pending = working === null ? failure : [...asked, turn("mayfly", pendingView(working, showing))];
   const thread = element("thread");
@@ -864,6 +878,30 @@ function showTurns(built: typeof builtTurns, pending: readonly HTMLElement[]): v
   pendingShown = pending;
 }
 
+/** The files a person attached to a turn: images as thumbnails, fetched the first time they are wanted, and text files by name. */
+function filesOf(app: string, said: Turn): Node[] {
+  const files = said.from === "person" ? (said.attachments ?? []) : [];
+  if (files.length === 0) return [];
+  return [
+    h(
+      "ul",
+      "turn-files",
+      ...files.map((file) => {
+        const url = kindOf(file) === "image" ? thumbnailOf(app, file.id) : undefined;
+        return url === undefined ? h("li", "file-chip", ...fileLook(file.name, file.type, file.bytes, undefined)) : sentImage(file.name, file.bytes, url);
+      }),
+    ),
+  ];
+}
+
+function thumbnailOf(app: string, id: string): string | undefined {
+  if (!thumbnails.has(id) && !askedFiles.has(id)) {
+    askedFiles.add(id);
+    post({ type: "attachment", app, id });
+  }
+  return thumbnails.get(id);
+}
+
 // A link in a reply opens in the browser, by way of the extension, which opens only web pages.
 function openLink(url: string): void {
   post({ type: "open-link", url });
@@ -929,6 +967,7 @@ function showError(text: string, recorded = false): void {
   const conversation = view.kind === "app" ? view.name : null;
   if (sent === undefined || sent.app !== conversation || view.kind === "settings") return showBanner(text, "error");
   if (request.value === "") request.value = sent.request;
+  if (sent.files !== undefined) attached.put(sent.files);
   if (recorded) return;
   failed = { app: conversation, text };
   render();

@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import type { Completion, Listener, ModelProvider } from "../../engine/ports.ts";
+import type { Completion, Listener, Message, ModelProvider } from "../../engine/ports.ts";
 import { NO_USAGE, type Usage } from "../../engine/usage.ts";
 import { thinkTags, type Parts } from "./think-tags.ts";
 
@@ -35,7 +35,7 @@ export function openAiCompatibleModel({ baseUrl, apiKey, model }: ModelSettings)
         const stream = await client.chat.completions.create({
           model,
           max_completion_tokens: MAX_REPLY_TOKENS,
-          messages: [{ role: "system", content: system }, ...messages],
+          messages: [{ role: "system", content: system }, ...messages.map(forOpenAi)],
           stream: true,
           stream_options: { include_usage: true },
         });
@@ -45,6 +45,16 @@ export function openAiCompatibleModel({ baseUrl, apiKey, model }: ModelSettings)
       if (completion.text === "") throw new Error("The model sent an empty reply.");
       return completion;
     },
+  };
+}
+
+/** A message as OpenAI's API takes it: images as data URLs. Replies are always text. */
+function forOpenAi({ role, content }: Message): OpenAI.ChatCompletionMessageParam {
+  if (typeof content === "string") return { role, content };
+  if (role === "assistant") return { role, content: content.map((part) => (part.type === "text" ? part.text : "")).join("") };
+  return {
+    role,
+    content: content.map((part): OpenAI.ChatCompletionContentPart => (part.type === "text" ? { type: "text", text: part.text } : { type: "image_url", image_url: { url: `data:${part.mediaType};base64,${part.data}` } })),
   };
 }
 

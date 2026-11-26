@@ -42,6 +42,17 @@ describe("the OpenAI-compatible model, against a server that streams like OpenAI
     assert.deepEqual(requests.at(-1)?.stream_options, { include_usage: true });
   });
 
+  it("sends an attached image as a data URL, beside the text", async () => {
+    const model = openAiCompatibleModel({ baseUrl: await listening, apiKey: "sk-test", model: "m" });
+
+    await model.complete("Be brief.", [{ role: "user", content: [{ type: "text", text: "Like this" }, { type: "image", mediaType: "image/png", data: "AQID" }] }]);
+
+    assert.deepEqual((requests.at(-1)?.messages as unknown[] | undefined)?.[1], {
+      role: "user",
+      content: [{ type: "text", text: "Like this" }, { type: "image_url", image_url: { url: "data:image/png;base64,AQID" } }],
+    });
+  });
+
   for (const [how, deltas] of Object.entries(THINKING)) {
     it(`passes on thinking sent ${how}, apart from the reply`, async () => {
       replying = deltas;

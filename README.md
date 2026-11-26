@@ -37,7 +37,7 @@ Describe a small web app. Mayfly builds it and runs it locally in Podman behind 
 
 1. In Podman Desktop, open **Extensions**, choose **Install custom…**, and enter `ghcr.io/jgalego/mayfly-extension:main`.
 2. Open **Mayfly → Settings → Models**. The default is OpenAI's `gpt-6.2-sol`. Add a key or choose another provider and model. Podman Desktop stores the key, and Mayfly sends it only to the endpoint it was saved for.
-3. Choose **New app** and describe what you need. After deployment, sign in with the email and password under **Sign-in details**, next to **Open app**.
+3. Choose **New app** and describe what you need. You can attach images, such as a mockup, and text files with data (`.txt`, `.md`, `.csv`, `.tsv`, `.json`): use the paperclip, or paste or drop them. After deployment, sign in with the email and password under **Sign-in details**, next to **Open app**.
 4. Ask for changes in the app's conversation. A successful update replaces the previous version at the same address. Type `/` for commands: `/ask` a question without changing the app, `/fix` the errors it logged, `/retry` your last request, `/undo` the last deploy, `/start` it again after it stopped, or switch its `/model`, `/rename` it or `/remove` it.
 
 The status bar shows app status and token usage. **Settings → General → Enable developer mode** adds the code, available model reasoning, version history, logs and usage reports. You can save an edit from any version without deploying it, or deploy a version that passed its trial.

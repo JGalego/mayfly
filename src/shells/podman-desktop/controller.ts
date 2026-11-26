@@ -1,7 +1,8 @@
 import { RecordedFailure, type AppView, type Engine } from "../../engine/engine.ts";
 import type { Step, Watcher } from "../../engine/step.ts";
+import { problemWithFiles, type FileData } from "../../engine/attachments.ts";
 import type { Examination } from "./doctor.ts";
-import type { Activity, FromUi, Progress, ToUi, Work } from "./messages.ts";
+import type { Activity, FromUi, Progress, ToUi, Upload, Work } from "./messages.ts";
 import { makeDefault, modelViews, readModel, removeModel, saveModel } from "./model-settings.ts";
 import type { Models, ModelSetting } from "./settings.ts";
 
@@ -115,7 +116,9 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
     case "logs":
       return session.post({ type: "logs", pod: request.pod, container: request.container, lines: await session.engine.logs(request.pod, request.container) });
     case "ask":
-      return ask(request.app, request.question.trim(), session);
+      return ask(request.app, request.question.trim(), request.files ?? [], session);
+    case "attachment":
+      return sendAttachment(request.app, request.id, session);
     case "fix":
       return runAlone({ app: request.app, request: "Fix the errors in the app's logs", kind: "change" }, session, (watch) => session.engine.fix(request.app, watch));
     case "retry":
@@ -134,13 +137,15 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
 }
 
 async function send(work: Work, session: Session): Promise<void> {
-  const problem = problemWithWork(work, session);
+  const files = filesOf(work.files ?? []);
+  const problem = problemWithWork(work, session) ?? problemWithFiles(files);
   if (problem !== undefined) return void (await session.post({ type: "error", text: problem }));
   const { engine } = session;
   const kind = work.app === null ? "create" : "change";
   const model = work.model ?? session.settings.models().default;
-  const job = (watch: Watcher): Promise<AppView> => (work.app === null ? engine.create(work.request, { model, watch }) : engine.change(work.app, work.request, watch));
-  const app = await run({ ...work, kind }, session, job);
+  const job = (watch: Watcher): Promise<AppView> => (work.app === null ? engine.create(work.request, { model, watch, files }) : engine.change(work.app, work.request, watch, files));
+  // Without the files, which the progress would otherwise carry to the page on every step.
+  const app = await run({ app: work.app, request: work.request, kind }, session, job);
   if (work.app !== null) return;
   await session.post({ type: "created", name: app.name });
   if (app.head !== null) await session.openExternal(app.url);
@@ -162,10 +167,21 @@ async function settle(change: Promise<string | undefined | void>, session: Sessi
   await showState(session);
 }
 
-async function ask(app: string, question: string, session: Session): Promise<void> {
-  const problem = problemWithWork({ app, request: question }, session);
+async function ask(app: string, question: string, uploads: readonly Upload[], session: Session): Promise<void> {
+  const files = filesOf(uploads);
+  const problem = problemWithWork({ app, request: question }, session) ?? problemWithFiles(files);
   if (problem !== undefined) return void (await session.post({ type: "error", text: problem }));
-  await run({ app, request: question, kind: "ask" }, session, (watch) => session.engine.ask(app, question, watch));
+  await run({ app, request: question, kind: "ask" }, session, (watch) => session.engine.ask(app, question, watch, files));
+}
+
+/** The files the page sent, decoded. */
+function filesOf(uploads: readonly Upload[]): FileData[] {
+  return uploads.map(({ name, type, data }) => ({ name, type, data: new Uint8Array(Buffer.from(data, "base64")) }));
+}
+
+async function sendAttachment(app: string, id: string, session: Session): Promise<void> {
+  const file = await session.engine.attachment(app, id);
+  await session.post({ type: "attachment", app, id, name: file.name, mediaType: file.type, data: Buffer.from(file.data).toString("base64") });
 }
 
 // The page hears the new name before the state that no longer has the old one, so it stays on the app.
@@ -332,7 +348,7 @@ async function showState(session: Session): Promise<void> {
 // Messages come from the page, so each is checked for its shape before anything acts on it.
 function readRequest(message: unknown): FromUi | undefined {
   if (typeof message !== "object" || message === null) return undefined;
-  const { type, app, request, question, name, apiKey, on, version, what, from, routes, message: words, model, id, pod, container, starred, email, url } = message as Record<string, unknown>;
+  const { type, app, request, question, name, apiKey, on, version, what, from, routes, message: words, model, id, pod, container, starred, email, url, files } = message as Record<string, unknown>;
   switch (type) {
     case "ready":
     case "new-password":
@@ -347,7 +363,8 @@ function readRequest(message: unknown): FromUi | undefined {
       return what === "email" || what === "password" ? { type, what } : undefined;
     case "send": {
       const valid = (typeof app === "string" || app === null) && typeof request === "string" && (model === undefined || typeof model === "string");
-      return valid ? { type, app, request, ...(model === undefined ? {} : { model }) } : undefined;
+      const sent = uploadsIn(files);
+      return valid && sent !== undefined ? { type, app, request, ...(model === undefined ? {} : { model }), ...(sent.length === 0 ? {} : { files: sent }) } : undefined;
     }
     case "use-model":
       return typeof app === "string" && typeof model === "string" ? { type, app, model } : undefined;
@@ -371,8 +388,12 @@ function readRequest(message: unknown): FromUi | undefined {
       return { type };
     case "save":
       return typeof app === "string" && typeof from === "string" && typeof routes === "string" && typeof words === "string" ? { type, app, from, routes, message: words } : undefined;
-    case "ask":
-      return typeof app === "string" && typeof question === "string" ? { type, app, question } : undefined;
+    case "ask": {
+      const sent = uploadsIn(files);
+      return typeof app === "string" && typeof question === "string" && sent !== undefined ? { type, app, question, ...(sent.length === 0 ? {} : { files: sent }) } : undefined;
+    }
+    case "attachment":
+      return typeof app === "string" && typeof id === "string" ? { type, app, id } : undefined;
     case "fix":
     case "retry":
     case "undo":
@@ -390,4 +411,18 @@ function readRequest(message: unknown): FromUi | undefined {
     default:
       return undefined;
   }
+}
+
+// More than the engine takes, so a page that sends too many hears why, rather than nothing.
+const MAX_UPLOADS = 8;
+
+/** Files sent from the page, each a name, a type and base64 contents, or none; undefined when they are anything else. */
+function uploadsIn(value: unknown): Upload[] | undefined {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > MAX_UPLOADS) return undefined;
+  const fine = value.every((file: unknown) => {
+    const { name, type, data } = (file ?? {}) as Record<string, unknown>;
+    return typeof name === "string" && typeof type === "string" && typeof data === "string";
+  });
+  return fine ? (value as Upload[]) : undefined;
 }

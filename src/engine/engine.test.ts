@@ -1,8 +1,9 @@
+import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ConfigMap, KubeObject } from "../core/kube.ts";
 import { createEngine, RecordedFailure } from "./engine.ts";
-import type { Builder, Deployer, IdentitySource, Message, ModelProvider, Observer, StateStore, Trial } from "./ports.ts";
+import type { Builder, Deployer, FileStore, IdentitySource, Message, ModelProvider, Observer, StateStore, Trial } from "./ports.ts";
 import { EMPTY_STATE, type State } from "./state.ts";
 
 const COST = { input: 100, output: 20, thinking: 0 };
@@ -251,6 +252,25 @@ describe("the engine", () => {
     await assert.rejects(engine.start("lunch"), /lunch has no deployed version to start/);
   });
 
+  it("sends attached files with a request, keeps them apart from the state and in the conversation by name, and sends them again on retry", async () => {
+    const { engine, asked, kept } = setUp([reply("lunch"), reply("lunch"), reply("lunch")]);
+    await engine.create("split lunch bills");
+    const csv = { name: "bills.csv", type: "text/csv", data: new TextEncoder().encode("who,amount") };
+    const png = { name: "mockup.png", type: "image/png", data: new Uint8Array([1, 2, 3]) };
+
+    const changed = await engine.change("lunch", "use these", undefined, [csv, png]);
+
+    assert.match(asked.at(-1) ?? "", /use these[\s\S]*bills\.csv:[\s\S]*who,amount[\s\S]*an image: mockup\.png[\s\S]*\[image\/png\]/);
+    const request = changed.conversation.at(-2);
+    const attached = request?.from === "person" ? (request.attachments ?? []) : [];
+    assert.deepEqual(attached.map((file) => [file.name, file.type, file.bytes]), [["bills.csv", "text/csv", 10], ["mockup.png", "image/png", 3]]);
+    assert.equal(kept.size, 2);
+    assert.deepEqual([...(await engine.attachment("lunch", attached[1]?.id ?? "")).data], [1, 2, 3]);
+    await assert.rejects(engine.attachment("lunch", "0".repeat(64)), /lunch has no file 0+/);
+    await engine.retry("lunch");
+    assert.match(asked.at(-1) ?? "", /who,amount/);
+  });
+
   it("keeps a request that failed in the conversation, with why, and sends it again on retry", async () => {
     const { engine } = setUp([reply("lunch"), new Error("The model's service is down."), reply("lunch")]);
     await engine.create("split lunch bills");
@@ -429,6 +449,11 @@ function reply(name: string, summary = "", code = "export default 1;"): string {
   return `name: ${name}\n\`\`\`ts\n${code}\n\`\`\`\n${summary}`;
 }
 
+/** What the model was asked, as text, with any image as its media type. */
+function textOf(content: Message["content"]): string {
+  return typeof content === "string" ? content : content.map((part) => (part.type === "text" ? part.text : `[${part.mediaType}]`)).join("\n");
+}
+
 // A reply, or an error the model's service fails with instead.
 function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: string | null) => string = () => "the test model") {
   const log: string[] = [];
@@ -456,7 +481,7 @@ function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: st
     name: named(id),
     provider: "the test provider",
     complete: async (_system, messages: readonly Message[]) => {
-      asked.push(messages[0]?.content ?? "");
+      asked.push(textOf(messages[0]?.content ?? ""));
       const next = replies.shift() ?? "";
       if (next instanceof Error) throw next;
       return { text: next, thinking: "", usage: COST };
@@ -471,8 +496,18 @@ function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: st
     logs: async (pod, container) => (logged.length > 0 ? logged : [`2026-11-26T15:04:05Z ${pod} ${container}`]),
     health: async (pods) => pods.filter((pod) => pod !== "mayfly-gone").map((pod) => ({ pod, containers: [{ name: "app", state: "running", status: "Up", restarts: 0 }] })),
   };
-  const engine = createEngine({ store, deployer, observer, identity, models, builder });
-  return { engine, deployed, removed, synced, log, asked, logged };
+  // Attached files, kept by their hash.
+  const kept = new Map<string, Uint8Array>();
+  const files: FileStore = {
+    put: async (data) => {
+      const id = createHash("sha256").update(data).digest("hex");
+      kept.set(id, data);
+      return id;
+    },
+    get: async (id) => kept.get(id) ?? Promise.reject(new Error(`no file ${id}`)),
+  };
+  const engine = createEngine({ store, deployer, observer, identity, models, builder, files });
+  return { engine, deployed, removed, synced, log, asked, logged, kept };
 }
 
 function names(objects: readonly KubeObject[] | undefined): string[] {

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { dexIdentity } from "../../adapters/dex/dex-identity.ts";
 import { readJson, writeJson } from "../../adapters/json-file/json-file.ts";
 import { jsonFileStore } from "../../adapters/json-file/json-file-store.ts";
+import { fileStore } from "../../adapters/files/file-store.ts";
 import { KeyNeeded, listModels, openAiCompatibleModel } from "../../adapters/openai-compatible/openai-compatible-model.ts";
 import { podmanBuilder } from "../../adapters/podman/podman-builder.ts";
 import { imageExists, podmanDeployer, podmanObserver, versions } from "../../adapters/podman/podman.ts";
@@ -30,6 +31,7 @@ export async function activate(context: api.ExtensionContext): Promise<void> {
     identity: dexIdentity(logo),
     models: (id) => configuredModel(modelFor(models.models(), id), keys),
     builder: podmanBuilder(RUNTIME_IMAGE),
+    files: fileStore(join(context.storagePath, "files")),
   });
   let panel: Panel | undefined;
   let handle: Handler = async () => {};

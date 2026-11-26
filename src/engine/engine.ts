@@ -2,7 +2,8 @@ import { randomBytes } from "node:crypto";
 import { appUrl } from "../core/app-url.ts";
 import { appObjects } from "./app-objects.ts";
 import { generateApp, listenFor, type Ask, type Attempt, type Generation } from "./generate.ts";
-import { ASK_PROMPT, fixFor, questionFor } from "./prompt.ts";
+import { ASK_PROMPT, fixFor, questionFor, withFiles } from "./prompt.ts";
+import type { Attachment, FileData } from "./attachments.ts";
 import { errorsIn } from "./log-errors.ts";
 import { mayflyName } from "../core/names.ts";
 import { parseAppName } from "../core/manifest.ts";
@@ -58,9 +59,9 @@ export interface AppView {
 
 export interface Engine {
   /** Has a model write an app for the description, and runs it behind sign-in once an attempt passes. Every attempt is kept. */
-  create(description: string, options?: { readonly model?: string | null; readonly watch?: Watcher }): Promise<AppView>;
+  create(description: string, options?: { readonly model?: string | null; readonly watch?: Watcher; readonly files?: readonly FileData[] }): Promise<AppView>;
   /** Has the app's model change it as asked. An attempt that passes replaces the running one at the same URL. Every attempt is kept. */
-  change(name: string, request: string, watch?: Watcher): Promise<AppView>;
+  change(name: string, request: string, watch?: Watcher, files?: readonly FileData[]): Promise<AppView>;
   /** Has the app's model fix what makes the app log errors, as a change. Refuses when it logged none. */
   fix(name: string, watch?: Watcher): Promise<AppView>;
   /** Sends the last request the app's model was given to it again, as a change. */
@@ -72,7 +73,9 @@ export interface Engine {
   /** Runs the running version again, and the sign-in service, as after Podman stopped them. Nothing about the app changes. */
   start(name: string, watch?: Watcher): Promise<AppView>;
   /** Has the app's model answer a question about it from its code, changing nothing. The exchange joins the conversation. */
-  ask(name: string, question: string, watch?: Watcher): Promise<AppView>;
+  ask(name: string, question: string, watch?: Watcher, files?: readonly FileData[]): Promise<AppView>;
+  /** A file the person attached in the app's conversation: its name, type and contents. No other file. */
+  attachment(name: string, id: string): Promise<FileData>;
   /** Gives an app a new name and runs it again under it, at the same address. People signed in to it sign in again. */
   rename(name: string, to: string, watch?: Watcher): Promise<AppView>;
   /** Marks an app as a favourite, or no longer. */
@@ -103,7 +106,7 @@ export interface Engine {
   logs(pod: string, container: string): Promise<string[]>;
 }
 
-export function createEngine({ store, deployer, observer, identity, models, builder }: Ports): Engine {
+export function createEngine({ store, deployer, observer, identity, models, builder, files }: Ports): Engine {
   async function generate(ask: Ask, model: ModelProvider, watch: Watcher): Promise<Generated> {
     const meter = metered(model);
     // Each attempt is one call, so a call's outcome is its attempt's. Work cut short leaves its calls' outcomes unknown.
@@ -122,8 +125,17 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     }
   }
 
+  /** Keeps the files a person attached, and says what the conversation keeps of them. */
+  async function keep(attached: readonly FileData[]): Promise<Attachment[]> {
+    return Promise.all(attached.map(async ({ name, type, data }) => ({ id: await files.put(data), name, type, bytes: data.length })));
+  }
+
+  async function loaded(attachments: readonly Attachment[]): Promise<FileData[]> {
+    return Promise.all(attachments.map(async ({ id, name, type }) => ({ name, type, data: await files.get(id) })));
+  }
+
   /** Does work on an app. If it fails, the app's conversation keeps what was asked and why it failed, and the failure goes on. */
-  async function recording<T>(name: string, request: string, work: () => Promise<T>): Promise<T> {
+  async function recording<T>(name: string, request: string, attachments: readonly Attachment[], work: () => Promise<T>): Promise<T> {
     const started = Date.now();
     try {
       return await work();
@@ -133,7 +145,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       const app = findApp(state, name);
       if (app === undefined) throw error;
       const turns: Turn[] = [
-        { from: "person", text: request, at: started },
+        { from: "person", text: request, at: started, ...withAttachments(attachments) },
         { from: "mayfly", text: reason, versions: [], took: Date.now() - started, at: Date.now(), failed: true },
       ];
       await store.save(withApp(state, { ...app, conversation: [...app.conversation, ...turns] }));
@@ -155,7 +167,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       ...(running === undefined || app.head === null ? {} : { previous: app.head }),
       versions: [...app.versions, ...versions],
       head: running?.id ?? app.head,
-      conversation: [...app.conversation, { from: "person", text: request, at: made.started }, reply],
+      conversation: [...app.conversation, { from: "person", text: request, at: made.started, ...withAttachments(made.attachments ?? []) }, reply],
     };
     const nextState = charge(withApp(state, next), calls);
     if (running !== undefined) {
@@ -177,25 +189,27 @@ export function createEngine({ store, deployer, observer, identity, models, buil
   }
 
   const engine: Engine = {
-    async create(description, { model: chosen = null, watch = UNWATCHED } = {}) {
+    async create(description, { model: chosen = null, watch = UNWATCHED, files: attached = [] } = {}) {
       const started = Date.now();
       const taken = (await store.load()).apps.map((app) => app.name);
       const model = models(chosen);
-      const generation = await generate({ description, taken }, model, watch);
-      return record(description, generation, { base: null, by: { kind: "model", name: model.name }, model: chosen, started, runs: true }, watch);
+      const attachments = await keep(attached);
+      const generation = await generate({ description, taken, files: attached }, model, watch);
+      return record(description, generation, { base: null, by: { kind: "model", name: model.name }, model: chosen, started, runs: true, attachments }, watch);
     },
 
-    async change(name, request, watch = UNWATCHED) {
+    async change(name, request, watch = UNWATCHED, attached = []) {
       const started = Date.now();
       const state = await store.load();
       const app = existingApp(state, name);
-      // Kept before anything can fail, so a request that does can be sent again.
-      await store.save(withApp(state, { ...app, lastRequest: request }));
-      return recording(name, request, async () => {
+      const attachments = await keep(attached);
+      // Kept before anything can fail, so a request that does can be sent again, with its files.
+      await store.save(withApp(state, { ...app, lastRequest: request, lastAttachments: attachments }));
+      return recording(name, request, attachments, async () => {
         const base = startingPoint(app);
         const model = models(app.model);
-        const generation = await generate({ change: request, app: { name, routes: base?.routes ?? "" } }, model, watch);
-        return record(request, generation, { base: base?.id ?? null, by: { kind: "model", name: model.name }, model: app.model, started, runs: true }, watch);
+        const generation = await generate({ change: request, app: { name, routes: base?.routes ?? "" }, files: attached }, model, watch);
+        return record(request, generation, { base: base?.id ?? null, by: { kind: "model", name: model.name }, model: app.model, started, runs: true, attachments }, watch);
       });
     },
 
@@ -211,7 +225,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       // Apps kept before the last request was remembered have their model's last version's.
       const request = app.lastRequest ?? app.versions.findLast((version) => version.by.kind === "model")?.request;
       if (request === undefined) throw new Error(`${name} has no request to retry.`);
-      return engine.change(name, request, watch);
+      return engine.change(name, request, watch, await loaded(app.lastAttachments ?? []));
     },
 
     async undo(name, watch = UNWATCHED) {
@@ -226,7 +240,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     },
 
     async start(name, watch = UNWATCHED) {
-      return recording(name, "Start the app", async () => {
+      return recording(name, "Start the app", [], async () => {
         const state = withOwner(await store.load());
         const app = existingApp(state, name);
         const running = runningVersion(app);
@@ -241,19 +255,20 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       });
     },
 
-    async ask(name, question, watch = UNWATCHED) {
-      return recording(name, question, async () => {
+    async ask(name, question, watch = UNWATCHED, attached = []) {
+      const attachments = await keep(attached);
+      return recording(name, question, attachments, async () => {
         const started = Date.now();
         const app = existingApp(await store.load(), name);
         const model = models(app.model);
         const meter = metered(model);
-        const { text } = await meter.model.complete(ASK_PROMPT, [{ role: "user", content: questionFor({ name, routes: startingPoint(app)?.routes ?? "" }, question) }], listenFor(watch));
+        const { text } = await meter.model.complete(ASK_PROMPT, [{ role: "user", content: withFiles(questionFor({ name, routes: startingPoint(app)?.routes ?? "" }, question), attached) }], listenFor(watch));
         const calls = meter.spending().map(({ at, took, spent }): ModelCall => ({ at, took, app: name, provider: model.provider, model: model.name, spent, question: true }));
         // Loaded again, as anything else that changed while the model answered stays.
         const state = await store.load();
         const now = existingApp(state, name);
         const turns: Turn[] = [
-          { from: "person", text: question, at: started },
+          { from: "person", text: question, at: started, ...withAttachments(attachments) },
           { from: "mayfly", text: text.trim(), versions: [], took: Date.now() - started, at: Date.now() },
         ];
         const next = charge(withApp(state, { ...now, conversation: [...now.conversation, ...turns] }), calls);
@@ -263,7 +278,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     },
 
     async rename(name, to, watch = UNWATCHED) {
-      return recording(name, `Rename to \`${to}\``, async () => {
+      return recording(name, `Rename to \`${to}\``, [], async () => {
         const started = Date.now();
         const state = await store.load();
         const app = existingApp(state, name);
@@ -312,7 +327,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     },
 
     async save(name, from, routes, message, watch = UNWATCHED) {
-      return recording(name, message || "Manual edit", async () => {
+      return recording(name, message || "Manual edit", [], async () => {
         const started = Date.now();
         const state = withOwner(await store.load());
         if (findVersion(existingApp(state, name), from) === undefined) throw new Error(`${name} has no version ${from}`);
@@ -329,7 +344,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     },
 
     async deploy(name, id, watch = UNWATCHED) {
-      return recording(name, `Deploy version \`${id}\``, async () => {
+      return recording(name, `Deploy version \`${id}\``, [], async () => {
         const started = Date.now();
         const state = withOwner(await store.load());
         const app = existingApp(state, name);
@@ -352,6 +367,13 @@ export function createEngine({ store, deployer, observer, identity, models, buil
         await store.save(nextState);
         return appView(next);
       });
+    },
+
+    async attachment(name, id) {
+      const app = existingApp(await store.load(), name);
+      const found = app.conversation.flatMap((turn) => (turn.from === "person" ? (turn.attachments ?? []) : [])).find((file) => file.id === id);
+      if (found === undefined) throw new Error(`${name} has no file ${id}`);
+      return { name: found.name, type: found.type, data: await files.get(id) };
     },
 
     async written(name, id) {
@@ -430,11 +452,18 @@ interface Made {
   readonly started: number;
   /** Whether an attempt that passes replaces the running version, or is only kept. */
   readonly runs: boolean;
+  /** The files the person attached to the request. */
+  readonly attachments?: readonly Attachment[];
 }
 
 /** Where a change starts: the running code, or for an app that never ran, its latest attempt that had any. */
 function startingPoint(app: App): Version | undefined {
   return runningVersion(app) ?? app.versions.findLast((version) => version.routes !== "");
+}
+
+/** A turn's attachments, when it has any. */
+function withAttachments(attachments: readonly Attachment[]): { readonly attachments?: readonly Attachment[] } {
+  return attachments.length === 0 ? {} : { attachments };
 }
 
 /** Whether every container of a pod runs. A pod with none does not. */

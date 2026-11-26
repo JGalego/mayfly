@@ -14,6 +14,15 @@ export interface Work {
   readonly request: string;
   /** For a new app, the model to write it, or the default one. */
   readonly model?: string;
+  /** Files the person attached. */
+  readonly files?: readonly Upload[];
+}
+
+/** A file on its way from the page: its name, type, and contents in base64. */
+export interface Upload {
+  readonly name: string;
+  readonly type: string;
+  readonly data: string;
 }
 
 /** A request Mayfly is working on, and what it has done so far. */
@@ -55,7 +64,9 @@ export type FromUi =
   | { readonly type: "activity" }
   | { readonly type: "logs"; readonly pod: string; readonly container: string }
   | { readonly type: "code"; readonly app: string; readonly version: string }
-  | { readonly type: "ask"; readonly app: string; readonly question: string }
+  | { readonly type: "ask"; readonly app: string; readonly question: string; readonly files?: readonly Upload[] }
+  /** A file from an app's conversation, for the page to show. */
+  | { readonly type: "attachment"; readonly app: string; readonly id: string }
   | { readonly type: "fix" | "retry" | "undo" | "start"; readonly app: string }
   | { readonly type: "autostart"; readonly on: boolean }
   /** Whether the page has the focus, which it loses when Podman Desktop's window goes to the background. */
@@ -86,6 +97,8 @@ export type ToUi =
   | { readonly type: "created"; readonly name: string }
   /** An app's new name, so the page follows it. */
   | { readonly type: "renamed"; readonly from: string; readonly to: string }
+  /** A file from an app's conversation: its name, type, and contents in base64. */
+  | { readonly type: "attachment"; readonly app: string; readonly id: string; readonly name: string; readonly mediaType: string; readonly data: string }
   /** The version a hand edit was saved as, so the editor carries on from it. */
   | { readonly type: "saved"; readonly app: string; readonly version: string }
   | { readonly type: "health"; readonly services: readonly ServiceHealth[] }

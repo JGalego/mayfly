@@ -1278,6 +1278,63 @@ pre.problem {
 /* Commands, and then what they take, as the person types a slash. */
 #composer {
   position: relative;
+  flex-wrap: wrap;
+}
+
+/* Attached files: chips in the composer while they wait, and in a person's turn once sent. */
+.pending-files,
+.turn-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pending-files {
+  flex-basis: 100%;
+}
+
+.turn-files {
+  align-items: flex-start;
+  justify-content: flex-end;
+  margin-top: 0.35rem;
+}
+
+.file-chip {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  max-width: 16rem;
+  padding: 0.25rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  background: var(--panel);
+}
+
+.file-chip .file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thumbnail {
+  width: 2.5rem;
+  height: 2.5rem;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.file-image .thumbnail {
+  display: block;
+  width: auto;
+  max-width: 12rem;
+  height: auto;
+  max-height: 9rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
 }
 
 .command-menu {

@@ -26,7 +26,7 @@ describe("generateApp", () => {
     await generateApp(newNotes, { model, builder });
 
     assert.equal(conversations[0]?.system, SYSTEM_PROMPT);
-    assert.match(conversations[0]?.messages[0]?.content ?? "", /keep notes/);
+    assert.match(String(conversations[0]?.messages[0]?.content ?? ""), /keep notes/);
   });
 
   it("names a new app so it never replaces one that exists", async () => {
@@ -43,7 +43,7 @@ describe("generateApp", () => {
 
     const generated = await generateApp({ change: "add a search box", app }, { model, builder });
 
-    const request = conversations[0]?.messages[0]?.content ?? "";
+    const request = String(conversations[0]?.messages[0]?.content ?? "");
     assert.match(request, /export default 0;/);
     assert.match(request, /add a search box/);
     assert.equal(generated.name, "my-notes");
@@ -67,7 +67,7 @@ describe("generateApp", () => {
 
     await generateApp({ change: "make it zero", app }, { model, builder });
 
-    const repair = conversations[1]?.messages[2]?.content ?? "";
+    const repair = String(conversations[1]?.messages[2]?.content ?? "");
     assert.match(repair, /edit 1 are not in routes\.ts/);
     assert.match(repair, /const a = 1;/);
   });
@@ -86,7 +86,7 @@ describe("generateApp", () => {
     );
     const repair = conversations[1]?.messages;
     assert.equal(repair?.[1]?.content, broken);
-    assert.match(repair?.[2]?.content ?? "", /boom at start/);
+    assert.match(String(repair?.[2]?.content ?? ""), /boom at start/);
   });
 
   it("tells the model when its reply is not in the expected format", async () => {
@@ -95,7 +95,7 @@ describe("generateApp", () => {
     await generateApp(newNotes, { model, builder });
 
     assert.equal(built.length, 1);
-    assert.match(conversations[1]?.messages[2]?.content ?? "", /name/);
+    assert.match(String(conversations[1]?.messages[2]?.content ?? ""), /name/);
   });
 
   it("tells a watcher each step: writing, the code, building, trying it, and why it failed", async () => {

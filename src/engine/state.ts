@@ -1,3 +1,4 @@
+import type { Attachment } from "./attachments.ts";
 import { NO_USAGE, type Usage } from "./usage.ts";
 
 /** The person on this machine. Every app lets them in. */
@@ -42,7 +43,7 @@ export interface Author {
 
 /** One message in an app's conversation. Mayfly's replies name the versions made for the request before them. */
 export type Turn =
-  | { readonly from: "person"; readonly text: string; readonly at: number }
+  | { readonly from: "person"; readonly text: string; readonly at: number; readonly attachments?: readonly Attachment[] }
   | {
       readonly from: "mayfly";
       readonly text: string;
@@ -69,8 +70,9 @@ export interface App {
   readonly head: string | null;
   /** The version that ran before the one running now, for putting it back. */
   readonly previous?: string;
-  /** The last change asked of the model, whether or not it went through, for sending it again. */
+  /** The last change asked of the model, whether or not it went through, and the files sent with it, for sending them again. */
   readonly lastRequest?: string;
+  readonly lastAttachments?: readonly Attachment[];
   readonly conversation: readonly Turn[];
   readonly spent: Usage;
 }

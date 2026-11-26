@@ -1,5 +1,6 @@
 import type { Builder, Listener, Message, ModelProvider } from "./ports.ts";
-import { changeFor, repairFor, requestFor, SYSTEM_PROMPT } from "./prompt.ts";
+import { changeFor, repairFor, requestFor, SYSTEM_PROMPT, withFiles } from "./prompt.ts";
+import type { FileData } from "./attachments.ts";
 import { applyEdits, type Applied } from "./edits.ts";
 import { parseReply, type Code } from "./reply.ts";
 import { UNWATCHED, type Watcher } from "./step.ts";
@@ -12,9 +13,13 @@ const MAX_NAME_LENGTH = 40;
 const UNNAMED = "new-app";
 
 /** A new app, which must not take the name of one that exists, or a change to an app, which keeps its name. */
-export type Ask =
+export type Ask = (
   | { readonly description: string; readonly taken: readonly string[] }
-  | { readonly change: string; readonly app: { readonly name: string; readonly routes: string } };
+  | { readonly change: string; readonly app: { readonly name: string; readonly routes: string } }
+) & {
+  /** Files the person attached, which go with the request, so every attempt sees them. */
+  readonly files?: readonly FileData[];
+};
 
 type Outcome = { readonly problem: null; readonly image: string } | { readonly problem: string; readonly image: null };
 
@@ -35,7 +40,8 @@ export async function generateApp(
   ask: Ask,
   { model, builder, watch = UNWATCHED }: { model: ModelProvider; builder: Builder; watch?: Watcher },
 ): Promise<Generation> {
-  const messages: Message[] = [{ role: "user", content: "change" in ask ? changeFor(ask.app, ask.change) : requestFor(ask.description) }];
+  const request = "change" in ask ? changeFor(ask.app, ask.change) : requestFor(ask.description);
+  const messages: Message[] = [{ role: "user", content: withFiles(request, ask.files ?? []) }];
   const taken = "change" in ask ? [] : ask.taken;
   let name = "change" in ask ? ask.app.name : undefined;
   const nameFor = (proposed: string): string => (name ??= unusedName(proposed, taken));

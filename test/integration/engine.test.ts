@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { buildDex } from "../../src/adapters/dex/dex.ts";
 import { dexIdentity } from "../../src/adapters/dex/dex-identity.ts";
 import { jsonFileStore } from "../../src/adapters/json-file/json-file-store.ts";
+import { fileStore } from "../../src/adapters/files/file-store.ts";
 import { podmanBuilder } from "../../src/adapters/podman/podman-builder.ts";
 import { down, podmanDeployer, podmanObserver } from "../../src/adapters/podman/podman.ts";
 import { createEngine } from "../../src/engine/engine.ts";
@@ -15,8 +16,9 @@ import { removeImages, replyWith, RUNTIME_IMAGE, waitUntilUp } from "./support.t
 
 // A scripted model, so this test needs no API key: it always writes the hello app.
 const model: ModelProvider = { name: "a scripted model", provider: "a script", complete: async () => ({ text: replyWith("hello", "hello-app"), thinking: "", usage: { input: 0, output: 0, thinking: 0 } }) };
-const store = jsonFileStore(join(await mkdtemp(join(tmpdir(), "mayfly-")), "state.json"));
-const engine = createEngine({ store, deployer: podmanDeployer, observer: podmanObserver, identity: dexIdentity(), models: () => model, builder: podmanBuilder(RUNTIME_IMAGE) });
+const folder = await mkdtemp(join(tmpdir(), "mayfly-"));
+const store = jsonFileStore(join(folder, "state.json"));
+const engine = createEngine({ store, deployer: podmanDeployer, observer: podmanObserver, identity: dexIdentity(), models: () => model, builder: podmanBuilder(RUNTIME_IMAGE), files: fileStore(join(folder, "files")) });
 const images: string[] = [];
 
 after(async () => {

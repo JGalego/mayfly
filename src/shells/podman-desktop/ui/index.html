@@ -2,8 +2,8 @@
 <html lang="en">
   <head>
     <meta charset="utf-8">
-    <!-- Podman Desktop injects its theme as inline CSS. -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src {{cspSource}}; script-src {{cspSource}}; style-src {{cspSource}} 'unsafe-inline'">
+    <!-- Podman Desktop injects its theme as inline CSS. Images may also be blobs, which only the page can make: attached images' thumbnails. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src {{cspSource}} blob:; script-src {{cspSource}}; style-src {{cspSource}} 'unsafe-inline'">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="ui.css">
     <title>Mayfly</title>
@@ -117,8 +117,11 @@
       </div>
       <form id="composer">
         <ul id="command-menu" class="command-menu" role="listbox" aria-label="Commands" hidden></ul>
+        <ul id="pending-files" class="pending-files" aria-label="Attached files" hidden></ul>
         <textarea id="request" rows="2" maxlength="2000" aria-label="Your request" aria-autocomplete="list" aria-controls="command-menu" aria-expanded="false"></textarea>
         <div class="composer-actions">
+          <input id="file-input" type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif,.txt,.md,.csv,.tsv,.json" hidden>
+          <button id="attach" class="quiet-button" type="button" aria-label="Attach images or text files" title="Attach images or text files: a mockup, or data for the app" data-icon="paperclip"></button>
           <select id="composer-model" aria-label="App model" title="App model"></select>
           <button id="send" class="primary" type="submit" data-icon="rocket">Send</button>
         </div>

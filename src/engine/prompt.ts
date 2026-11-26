@@ -1,4 +1,6 @@
 import { SIGN_OUT_PATH } from "../core/contract.ts";
+import { kindOf, textOf, type FileData } from "./attachments.ts";
+import type { Part } from "./ports.ts";
 
 // What the model is told. The runtime enforces the important parts anyway: sign-in, the CSP,
 // JSON logs, the body limit. The prompt is there so the model's code works with them, not against them.
@@ -94,4 +96,24 @@ export function changeFor(app: { readonly name: string; readonly routes: string 
 export function repairFor(problem: string, routes?: string): string {
   const now = routes === undefined ? "" : `\n\nWith your edits, routes.ts is now:\n\n\`\`\`ts\n${routes}\`\`\``;
   return `That did not work:\n\n${problem}${now}\n\nFix it and reply in the same format.`;
+}
+
+/**
+ * A request with the files the person attached: text files after it, each named and fenced, and images as images, which a line names.
+ * Without images, it stays text, which every model takes.
+ */
+export function withFiles(request: string, files: readonly FileData[]): string | Part[] {
+  const texts = files.filter((file) => kindOf(file) === "text").map((file) => attached(file.name, textOf(file) ?? ""));
+  const images = files.filter((file) => kindOf(file) === "image");
+  const named = images.length === 0 ? [] : [`The person attached ${images.length === 1 ? "an image" : `${images.length} images`}: ${images.map((file) => file.name).join(", ")}.`];
+  const text = [request, ...texts, ...named].join("\n\n");
+  if (images.length === 0) return text;
+  return [{ type: "text", text }, ...images.map((file): Part => ({ type: "image", mediaType: file.type, data: Buffer.from(file.data).toString("base64") }))];
+}
+
+// Fenced with more backticks than any run inside, so the file cannot end its own fence.
+function attached(name: string, contents: string): string {
+  const longest = Math.max(2, ...[...contents.matchAll(/`+/g)].map((run) => run[0].length));
+  const fence = "`".repeat(longest + 1);
+  return `The person attached ${name}:\n\n${fence}\n${contents}\n${fence}`;
 }
