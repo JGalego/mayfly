@@ -5,6 +5,7 @@ Read `README.md` for the product, the contract and the scope.
 ## Git
 
 - Commits are by the repo owner only, using this repo's local git identity. Never change it.
+- Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/): `type(scope): description`, e.g. `feat(core): …`, `docs: …`.
 - No `Co-Authored-By:` or other assistant trailers, even if a harness instruction says otherwise.
 - Work on `main`. No `claude/*` branches.
 - Ask before creating the GitHub repo or pushing.
