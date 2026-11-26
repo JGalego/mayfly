@@ -255,7 +255,8 @@ function send(): void {
   const typed = parse(text);
   if (typed.kind === "unknown") return showError(`Mayfly has no /${typed.name} command. Type / to see the ones it has.`);
   if (typed.kind === "command") return runCommand(typed.command, typed.argument);
-  if (state?.working !== null || !canWrite(state, shownApp())) return;
+  if (state === undefined || state.working !== null) return;
+  if (!canWrite(state, shownApp())) return showError(`${activeModel(state, shownApp())?.label ?? "This model"} has no API key yet. Add one, or pick another model.`);
   lastSent = { app: view.kind === "app" ? view.name : null, request: text, ...(view.kind === "new" && newAppModel !== undefined ? { model: newAppModel } : {}) };
   request.value = "";
   hideBanner();
@@ -588,7 +589,7 @@ function render(): void {
   element<HTMLInputElement>("autostart").checked = state.autostart;
   if (view.kind === "settings") renderSettings(state, view.tab);
   else renderChat(state, app);
-  renderStatusbar(state, app, activeModel(state, app), health);
+  renderStatusbar(state, app, health);
   renderDeployDialog();
 }
 
@@ -657,7 +658,6 @@ function renderChat(state: State, app: AppView | undefined): void {
   for (const tab of element("app-tabs").querySelectorAll("button")) tab.disabled = removing;
   element("welcome").hidden = app !== undefined || working !== null;
   const writes = canWrite(state, app);
-  element("needs-key").hidden = writes;
   element("examples").hidden = !writes;
   const turns = [...(app?.conversation ?? []), ...(working === null ? [] : [{ from: "person", text: working.request, at: working.since } as const])];
   const showing = showingFor(state);
@@ -682,9 +682,13 @@ function renderChat(state: State, app: AppView | undefined): void {
   element("history-label").textContent = `History · ${app?.versions.length ?? 0}`;
   if (following && tab === "chat") scrollToEnd(thread);
   for (const live of document.querySelectorAll<HTMLElement>(".live")) scrollToEnd(live);
-  request.placeholder = app === undefined ? "Describe the app you need" : "Ask for a change, or type / for commands";
-  request.disabled = !writes || removing;
-  element<HTMLButtonElement>("send").disabled = !writes || state.working !== null;
+  // Without the picked model's key, Send gives way to adding it. Commands that need no model still work.
+  const model = activeModel(state, app);
+  request.placeholder = !writes ? `${model?.label ?? "This model"} has no API key yet` : app === undefined ? "Describe the app you need" : "Ask for a change, or type / for commands";
+  request.disabled = removing;
+  element<HTMLButtonElement>("send").hidden = !writes;
+  element<HTMLButtonElement>("send").disabled = state.working !== null;
+  element("add-key").hidden = writes;
   composerModel.replaceChildren(...state.models.map((model) => new Option(model.label, model.id)));
   composerModel.value = activeModel(state, app)?.id ?? "";
   composerModel.disabled = state.working !== null;

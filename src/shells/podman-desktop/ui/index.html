@@ -52,7 +52,6 @@
             <h1>What do you need?</h1>
             <p class="quiet">Describe a small app in your own words. Mayfly writes it, tries it, and runs it on this computer, behind sign-in.</p>
             <ul id="examples" aria-label="Examples"></ul>
-            <p id="needs-key" hidden><button id="add-key" class="primary" type="button">Add your API key</button></p>
           </section>
           <ol id="turns"></ol>
           <div id="history" hidden></div>
@@ -103,6 +102,7 @@
         <div class="composer-actions">
           <select id="composer-model" aria-label="The model that writes this app" title="The model that writes this app"></select>
           <button id="send" class="primary" type="submit" data-icon="rocket">Send</button>
+          <button id="add-key" class="primary" type="button" title="The model picked has no API key yet. Add one in Settings." data-icon="key" hidden>Add API key</button>
         </div>
       </form>
     </main>
@@ -192,7 +192,6 @@
 
     <p id="banner" role="status" hidden></p>
     <footer id="statusbar">
-      <button id="status-model" class="status-item" type="button" title="The model that writes this app. Change models in Settings." data-icon="bot"><span id="model-info"></span><span id="model-warning" class="status-warning" hidden> · no API key</span></button>
       <button id="status-apps" class="status-item" type="button" title="How your apps are doing. More in Settings."></button>
       <span class="status-spacer"></span>
       <button id="status-tokens" class="status-item" type="button" aria-expanded="false" title="Tokens sent to the model (↑) and written by it (↓). Click for each app's." data-icon="coins"><span id="token-info"></span></button>

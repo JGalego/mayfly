@@ -1,6 +1,6 @@
 import type { AppView, ServiceHealth } from "../../../engine/engine.ts";
 import type { Usage } from "../../../engine/usage.ts";
-import type { ModelView, ToUi } from "../messages.ts";
+import type { ToUi } from "../messages.ts";
 import { h } from "./dom.ts";
 import { compact } from "./format.ts";
 import { icon } from "./icons.ts";
@@ -19,16 +19,13 @@ const COUNTED: readonly [Colour, string][] = [
   ["grey", "never ran"],
 ];
 
-/** Wires the status bar: the model leads to the models in Settings, the apps to how they are running, the tokens open a breakdown by app. */
-export function setUpStatusbar(openSettings: (tab: "models" | "logs") => void): void {
-  element("status-model").addEventListener("click", () => openSettings("models"));
+/** Wires the status bar: the apps lead to how they are running, the tokens open a breakdown by app. */
+export function setUpStatusbar(openSettings: (tab: "logs") => void): void {
   element("status-apps").addEventListener("click", () => openSettings("logs"));
   popover(element("status-tokens"), element("token-popover"));
 }
 
-export function renderStatusbar(state: State, app: AppView | undefined, model: ModelView | undefined, health: readonly ServiceHealth[] | undefined): void {
-  element("model-info").textContent = model === undefined ? "No model" : model.label;
-  element("model-warning").hidden = model?.hasApiKey !== false;
+export function renderStatusbar(state: State, app: AppView | undefined, health: readonly ServiceHealth[] | undefined): void {
   const apps = appCounts(state, health);
   element("status-apps").replaceChildren(...apps.shown);
   element("status-apps").title = apps.said === "" ? "No apps yet" : `${apps.said}. Click for their health and logs.`;

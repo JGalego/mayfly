@@ -1722,10 +1722,6 @@ dialog .version-id {
   flex: 1;
 }
 
-.status-warning {
-  color: var(--error);
-}
-
 .status-count {
   display: inline-flex;
   align-items: center;
