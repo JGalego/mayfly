@@ -10,12 +10,13 @@ const broken = 'name: notes\n```ts\nthrow new Error("boom");\n```';
 const newNotes: Ask = { description: "keep notes", taken: [] };
 
 describe("generateApp", () => {
-  it("builds and trials the app the model wrote, and returns it with what the model said", async () => {
+  it("builds and trials the app the model wrote, and returns it with what the model said and spent", async () => {
     const { model, builder, built } = fakes([good], [{ ok: true }]);
 
-    const generated = await generateApp(newNotes, { model, builder });
+    const { name, attempts } = await generateApp(newNotes, { model, builder });
 
-    assert.deepEqual(generated, { name: "notes", image: "image-1", routes: "export default 1;\n", summary: "Keeps your notes." });
+    assert.equal(name, "notes");
+    assert.partialDeepStrictEqual(attempts, [{ routes: "export default 1;\n", summary: "Keeps your notes.", problem: null, image: "image-1", spent: { input: 10, output: 5 } }]);
     assert.deepEqual(built, [{ name: "notes", routes: "export default 1;\n" }]);
   });
 
@@ -51,9 +52,15 @@ describe("generateApp", () => {
   it("sends a failed trial's problem back to the model and tries again", async () => {
     const { model, builder, conversations } = fakes([broken, good], [{ ok: false, problem: "boom at start" }, { ok: true }]);
 
-    const generated = await generateApp(newNotes, { model, builder });
+    const { attempts } = await generateApp(newNotes, { model, builder });
 
-    assert.equal(generated.image, "image-2");
+    assert.deepEqual(
+      attempts.map((attempt) => [attempt.problem, attempt.image]),
+      [
+        ["boom at start", null],
+        [null, "image-2"],
+      ],
+    );
     const repair = conversations[1]?.messages;
     assert.equal(repair?.[1]?.content, broken);
     assert.match(repair?.[2]?.content ?? "", /boom at start/);
@@ -102,11 +109,28 @@ describe("generateApp", () => {
     assert.deepEqual(drafts, ["name: notes\n", "name: notes\n```ts\nexport default 1;\n```"]);
   });
 
-  it("gives up after three attempts, saying what went wrong last", async () => {
+  it("stops after three attempts, keeping each one and why it failed", async () => {
     const trials: Trial[] = [1, 2, 3].map((n) => ({ ok: false, problem: `failure ${n}` }));
     const { model, builder } = fakes([broken, broken, broken], trials);
 
-    await assert.rejects(generateApp(newNotes, { model, builder }), /3 attempts.*failure 3/s);
+    const { attempts } = await generateApp(newNotes, { model, builder });
+
+    assert.deepEqual(
+      attempts.map((attempt) => attempt.problem),
+      ["failure 1", "failure 2", "failure 3"],
+    );
+  });
+
+  it("keeps an attempt with no usable code, and names an app the model never named", async () => {
+    const { model, builder } = fakes(["Sorry.", "No.", "Still no."], []);
+
+    const { name, attempts } = await generateApp(newNotes, { model, builder });
+
+    assert.equal(name, "new-app");
+    assert.deepEqual(
+      attempts.map((attempt) => attempt.routes),
+      ["", "", ""],
+    );
   });
 });
 

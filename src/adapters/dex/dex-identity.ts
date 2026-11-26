@@ -25,5 +25,5 @@ function clientOf(app: App): DexClient {
 }
 
 function clientId(app: App): string {
-  return mayflyName(app.manifest.name);
+  return mayflyName(app.name);
 }

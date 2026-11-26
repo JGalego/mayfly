@@ -28,7 +28,7 @@ after(async () => {
 describe("the engine on Podman with Dex", () => {
   it("creates an app from a description that the owner can sign in to, then removes it", async () => {
     const app = await engine.create("greet whoever signs in");
-    images.push(...(await store.load()).apps.map((a) => a.manifest.image));
+    images.push(...(await store.load()).apps.flatMap((a) => a.versions.flatMap((v) => v.image ?? [])));
     await waitUntilUp("http://localhost:5556/dex/healthz");
     await waitUntilUp(`${app.url}ping`);
 

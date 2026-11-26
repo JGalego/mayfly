@@ -2,56 +2,60 @@ import type { Builder, Message, ModelProvider } from "./ports.ts";
 import { changeFor, repairFor, requestFor, SYSTEM_PROMPT } from "./prompt.ts";
 import { parseReply } from "./reply.ts";
 import { UNWATCHED, type Watcher } from "./step.ts";
+import type { Usage } from "./usage.ts";
 
 // Enough for the model to fix what a trial shows it. A model looping on a problem it cannot solve stops here.
 const ATTEMPTS = 3;
 const MAX_NAME_LENGTH = 40;
+// What a new app is called when the model never gave it a usable name.
+const UNNAMED = "new-app";
 
 /** A new app, which must not take the name of one that exists, or a change to an app, which keeps its name. */
 export type Ask =
   | { readonly description: string; readonly taken: readonly string[] }
   | { readonly change: string; readonly app: { readonly name: string; readonly routes: string } };
 
-/** An app that passed its trial, and what the model said about it. */
-export interface Generated {
+type Outcome = { readonly problem: null; readonly image: string } | { readonly problem: string; readonly image: null };
+
+/** One go at the code: what the model wrote, and whether it passed its trial. */
+export type Attempt = { readonly routes: string; readonly summary: string; readonly spent: Usage; readonly at: number } & Outcome;
+
+/** The app's name and every attempt at it. The last attempt is the one that passed, if any did. */
+export interface Generation {
   readonly name: string;
-  readonly image: string;
-  readonly routes: string;
-  readonly summary: string;
+  readonly attempts: readonly Attempt[];
 }
 
-type Outcome = { readonly ok: true; readonly generated: Generated } | { readonly ok: false; readonly problem: string };
-
-/** Has the model write the app, then builds and trials it, feeding each failure back until it passes. */
+/** Has the model write the app, then builds and trials it, feeding each failure back until one passes or the attempts run out. */
 export async function generateApp(
   ask: Ask,
   { model, builder, watch = UNWATCHED }: { model: ModelProvider; builder: Builder; watch?: Watcher },
-): Promise<Generated> {
+): Promise<Generation> {
   const messages: Message[] = [{ role: "user", content: "change" in ask ? changeFor(ask.app, ask.change) : requestFor(ask.description) }];
-  let problem = "";
+  const taken = "change" in ask ? [] : ask.taken;
+  let name = "change" in ask ? ask.app.name : undefined;
+  const attempts: Attempt[] = [];
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
     watch({ kind: "writing", attempt });
     let draft = "";
-    const reply = (await model.complete(SYSTEM_PROMPT, messages, (text) => watch({ kind: "draft", text: (draft += text) }))).text;
-    const outcome = await tryReply(reply, ask, builder, watch);
-    if (outcome.ok) return outcome.generated;
-    problem = outcome.problem;
-    watch({ kind: "failed", problem });
-    messages.push({ role: "assistant", content: reply }, { role: "user", content: repairFor(problem) });
+    const { text: reply, usage } = await model.complete(SYSTEM_PROMPT, messages, (text) => watch({ kind: "draft", text: (draft += text) }));
+    const parsed = parseReply(reply);
+    const outcome: Outcome = parsed.ok ? await tryCode((name ??= unusedName(parsed.name, taken)), parsed.routes, builder, watch) : { problem: parsed.problem, image: null };
+    attempts.push({ routes: parsed.ok ? parsed.routes : "", summary: parsed.ok ? parsed.summary : "", spent: usage, at: Date.now(), ...outcome });
+    if (outcome.problem === null) break;
+    watch({ kind: "failed", problem: outcome.problem });
+    messages.push({ role: "assistant", content: reply }, { role: "user", content: repairFor(outcome.problem) });
   }
-  throw new Error(`The app still failed after ${ATTEMPTS} attempts. The last problem was:\n\n${problem}`);
+  return { name: name ?? unusedName(UNNAMED, taken), attempts };
 }
 
-async function tryReply(reply: string, ask: Ask, builder: Builder, watch: Watcher): Promise<Outcome> {
-  const parsed = parseReply(reply);
-  if (!parsed.ok) return parsed;
-  watch({ kind: "wrote", routes: parsed.routes });
-  const name = "change" in ask ? ask.app.name : unusedName(parsed.name, ask.taken);
+async function tryCode(name: string, routes: string, builder: Builder, watch: Watcher): Promise<Outcome> {
+  watch({ kind: "wrote", routes });
   watch({ kind: "building" });
-  const image = await builder.build(name, parsed.routes);
+  const image = await builder.build(name, routes);
   watch({ kind: "trying" });
   const trial = await builder.trial(image);
-  return trial.ok ? { ok: true, generated: { name, image, routes: parsed.routes, summary: parsed.summary } } : trial;
+  return trial.ok ? { problem: null, image } : { problem: trial.problem, image: null };
 }
 
 /** Models pick obvious names, and a second "notes" must not replace the first. */

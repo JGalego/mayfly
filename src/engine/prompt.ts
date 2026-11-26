@@ -40,6 +40,8 @@ export function requestFor(description: string): string {
 
 /** Asks for a change to an app that is already in use, so its stored data has to survive the change. */
 export function changeFor(app: { readonly name: string; readonly routes: string }, change: string): string {
+  // An app whose every attempt failed before it had any code starts over.
+  if (app.routes === "") return requestFor(change);
   return [
     `This is routes.ts of the app ${app.name} now:`,
     "",

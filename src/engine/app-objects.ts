@@ -4,12 +4,12 @@ import type { KubeObject } from "../core/kube.ts";
 import { buildPod } from "../core/pod.ts";
 import { OWNER_ROLE, type App } from "./state.ts";
 
-/** What runs an app: its sign-in settings, its secrets and its pod. */
-export function appObjects(app: App, idp: IdpSettings): KubeObject[] {
-  const appName = app.manifest.name;
+/** What runs an app's image: its sign-in settings, its secrets and its pod. */
+export function appObjects(app: App, image: string, idp: IdpSettings): KubeObject[] {
+  const appName = app.name;
   return [
     buildAuthConfigMap({ appName, policy: { roles: [OWNER_ROLE] }, idp }),
     buildAuthSecret({ appName, clientSecret: app.clientSecret, cookieSecret: app.cookieSecret }),
-    buildPod({ manifest: app.manifest, hostPort: app.hostPort }),
+    buildPod({ manifest: { name: appName, image }, hostPort: app.hostPort }),
   ];
 }

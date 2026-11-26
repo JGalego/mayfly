@@ -10,7 +10,8 @@ const lunch: AppView = {
   name: "lunch-split",
   url: "http://localhost:18100/",
   conversation: [{ from: "person", text: "split lunch bills" }],
-  routes: "export default 1;\n",
+  head: "v1",
+  versions: [],
   spent: { input: 100, output: 20 },
 };
 const owner = { email: "owner@mayfly.local", username: "owner", password: "s3cret-pass" };
@@ -88,6 +89,15 @@ describe("the Mayfly panel's controller", () => {
     await handle({ type: "peek", on: true });
 
     assert.equal(stateOf(posted.at(-1))?.peek, true);
+  });
+
+  it("opens a new app only once an attempt at it passed", async () => {
+    const { handle, opened, posted } = setUp({ apps: [], created: { ...lunch, head: null } });
+
+    await handle({ type: "send", app: null, request: "split lunch bills" });
+
+    assert.deepEqual(opened, []);
+    assert.ok(posted.some((m) => m.type === "created"));
   });
 
   it("changes an app in its own conversation, without opening another browser tab", async () => {
@@ -200,6 +210,7 @@ function stateOf(message: ToUi | undefined) {
 
 interface Options {
   apps: AppView[];
+  created?: AppView;
   steps?: Step[];
   peek?: boolean;
   keyFor?: string[];
@@ -207,7 +218,7 @@ interface Options {
   waitForCreate?: boolean;
 }
 
-function setUp({ apps, steps = [], peek: peeking = false, keyFor = [OPENAI_ENDPOINT], createFails, waitForCreate = false }: Options) {
+function setUp({ apps, created: made = lunch, steps = [], peek: peeking = false, keyFor = [OPENAI_ENDPOINT], createFails, waitForCreate = false }: Options) {
   const posted: ToUi[] = [];
   const opened: string[] = [];
   const copied: string[] = [];
@@ -225,9 +236,10 @@ function setUp({ apps, steps = [], peek: peeking = false, keyFor = [OPENAI_ENDPO
       steps.forEach((step) => watch(step));
       if (waitForCreate) await created;
       if (createFails) throw new Error(createFails);
-      apps.push(lunch);
-      return lunch;
+      apps.push(made);
+      return made;
     },
+    code: async () => "export default 1;\n",
     change: async (name, request) => {
       calls.push(`change ${name} ${request}`);
       return lunch;

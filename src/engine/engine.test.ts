@@ -6,9 +6,10 @@ import type { Builder, Deployer, IdentitySource, Message, ModelProvider, StateSt
 import { EMPTY_STATE, type State } from "./state.ts";
 
 const COST = { input: 100, output: 20 };
+const crashed: Trial = { ok: false, problem: "crashed" };
 
 describe("the engine", () => {
-  it("creates an app from a description and deploys it behind sign-in at a loopback URL", async () => {
+  it("creates an app from a description and runs it behind sign-in at a loopback URL", async () => {
     const { engine, deployed } = setUp([reply("lunch")]);
 
     const app = await engine.create("split the team's lunch bills");
@@ -33,7 +34,7 @@ describe("the engine", () => {
     await engine.create("split lunch bills");
 
     assert.deepEqual(log, ["sync", "deploy"]);
-    assert.deepEqual(synced[0]?.apps.map((app) => app.manifest.name), ["lunch"]);
+    assert.deepEqual(synced[0]?.apps.map((app) => app.name), ["lunch"]);
   });
 
   it("gives each app its own port, even when the model picks a name already in use", async () => {
@@ -46,18 +47,27 @@ describe("the engine", () => {
     assert.notEqual(first.url, second.url);
   });
 
-  it("keeps the conversation: what the person asked and what the model said", async () => {
+  it("keeps the conversation: what the person asked, and what the model said with the version it made", async () => {
     const { engine } = setUp([reply("lunch", "Splits bills and shows who owes whom.")]);
 
     const app = await engine.create("split lunch bills");
 
-    assert.deepEqual(app.conversation, [
-      { from: "person", text: "split lunch bills" },
-      { from: "mayfly", text: "Splits bills and shows who owes whom." },
-    ]);
+    assert.deepEqual(app.conversation[0], { from: "person", text: "split lunch bills" });
+    assert.partialDeepStrictEqual(app.conversation[1], { from: "mayfly", text: "Splits bills and shows who owes whom.", versions: [app.head] });
   });
 
-  it("changes an app from its current code, at the same URL and with the same secrets", async () => {
+  it("keeps every attempt as a version, failed ones too, each starting from the one it repairs", async () => {
+    const { engine } = setUp([reply("lunch"), reply("lunch")], [crashed, { ok: true }]);
+
+    const app = await engine.create("split lunch bills");
+
+    const [failed, passed] = app.versions;
+    assert.deepEqual([failed?.problem, passed?.problem], ["crashed", null]);
+    assert.deepEqual([failed?.parent, passed?.parent], [null, failed?.id]);
+    assert.equal(app.head, passed?.id);
+  });
+
+  it("changes an app from its running code, at the same URL and with the same secrets", async () => {
     const { engine, deployed, asked } = setUp([reply("lunch", "Made it.", "v1"), reply("whatever", "Added totals.", "v2")]);
     const before = await engine.create("split lunch bills");
 
@@ -66,19 +76,31 @@ describe("the engine", () => {
     assert.match(asked.at(-1) ?? "", /v1/);
     assert.equal(after.url, before.url);
     assert.deepEqual(secretOf(deployed[1]), secretOf(deployed[0]));
-    assert.deepEqual(after.conversation.slice(2), [
-      { from: "person", text: "add a monthly total" },
-      { from: "mayfly", text: "Added totals." },
-    ]);
+    assert.equal(after.versions[1]?.parent, before.head);
+    assert.equal(await engine.code("lunch", after.head ?? ""), "v2\n");
   });
 
-  it("says when it starts the app, after the model's code passed its trial", async () => {
-    const { engine } = setUp([reply("lunch")]);
-    const steps: string[] = [];
+  it("leaves a running app as it was when every attempt at a change fails, and says so", async () => {
+    const { engine, deployed } = setUp([reply("lunch"), reply("lunch"), reply("lunch"), reply("lunch")], [{ ok: true }, crashed, crashed, crashed]);
+    const before = await engine.create("split lunch bills");
 
-    await engine.create("split lunch bills", (step) => steps.push(step.kind));
+    const after = await engine.change("lunch", "break it");
 
-    assert.deepEqual(steps, ["writing", "wrote", "building", "trying", "deploying"]);
+    assert.equal(after.head, before.head);
+    assert.equal(after.versions.length, 4);
+    assert.match(after.conversation.at(-1)?.text ?? "", /as it was.*crashed/s);
+    assert.equal(deployed.length, 1);
+  });
+
+  it("keeps a new app whose every attempt failed, without running it, so the person can carry on", async () => {
+    const { engine, deployed, removed } = setUp([reply("lunch"), reply("lunch"), reply("lunch")], [crashed, crashed, crashed]);
+
+    const app = await engine.create("split lunch bills");
+    await engine.remove("lunch");
+
+    assert.equal(app.head, null);
+    assert.equal(app.versions.length, 3);
+    assert.deepEqual([deployed.length, removed.length], [0, 0]);
   });
 
   it("refuses to change an app it does not know", async () => {
@@ -88,15 +110,23 @@ describe("the engine", () => {
   });
 
   it("counts the tokens each app spent, and all of them, including failed attempts and removed apps", async () => {
-    const failing: Trial = { ok: false, problem: "crashed" };
-    const { engine } = setUp([reply("lunch"), reply("lunch"), reply("lunch"), reply("lunch")], [{ ok: true }, failing, failing, failing]);
+    const { engine } = setUp([reply("lunch"), reply("lunch"), reply("lunch"), reply("lunch")], [{ ok: true }, crashed, crashed, crashed]);
     await engine.create("split lunch bills");
 
-    await assert.rejects(engine.change("lunch", "break it"));
+    await engine.change("lunch", "break it");
 
     assert.deepEqual((await engine.list())[0]?.spent, { input: 400, output: 80 });
     await engine.remove("lunch");
     assert.deepEqual(await engine.spent(), { input: 400, output: 80 });
+  });
+
+  it("says when it starts the app, after the model's code passed its trial", async () => {
+    const { engine } = setUp([reply("lunch")]);
+    const steps: string[] = [];
+
+    await engine.create("split lunch bills", (step) => steps.push(step.kind));
+
+    assert.deepEqual(steps, ["writing", "wrote", "building", "trying", "deploying"]);
   });
 
   it("remembers the apps it created", async () => {
@@ -119,7 +149,7 @@ describe("the engine", () => {
     await engine.remove("lunch");
 
     assert.deepEqual(names(removed[0]), names(deployed[0]));
-    assert.deepEqual(synced.at(-1)?.apps.map((app) => app.manifest.name), ["notes"]);
+    assert.deepEqual(synced.at(-1)?.apps.map((app) => app.name), ["notes"]);
     assert.deepEqual(
       (await engine.list()).map((app) => app.name),
       ["notes"],

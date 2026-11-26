@@ -73,7 +73,7 @@ async function send(work: Work, session: Session): Promise<void> {
   await showState(session);
   if (work.app !== null) return;
   await session.post({ type: "created", name: app.name });
-  await session.openExternal(app.url);
+  if (app.head !== null) await session.openExternal(app.url);
 }
 
 function showProgress(step: Step, session: Session): void {

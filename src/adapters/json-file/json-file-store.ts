@@ -1,15 +1,15 @@
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import type { StateStore } from "../../engine/ports.ts";
-import { EMPTY_STATE, type State } from "../../engine/state.ts";
+import { upgradeState } from "../../engine/saved-state.ts";
+import { EMPTY_STATE } from "../../engine/state.ts";
 
 /** Keeps the state in one JSON file that only its owner can read, since it holds secrets. */
 export function jsonFileStore(path: string): StateStore {
   return {
     async load() {
       try {
-        // Fills in what a file saved by an earlier version lacks.
-        return { ...EMPTY_STATE, ...(JSON.parse(await readFile(path, "utf8")) as Partial<State>) };
+        return upgradeState(JSON.parse(await readFile(path, "utf8")));
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === "ENOENT") return EMPTY_STATE;
         throw error;

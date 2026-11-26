@@ -3,7 +3,6 @@ import type { Turn } from "../../../engine/state.ts";
 import type { Usage } from "../../../engine/usage.ts";
 import type { FromUi, ToUi, Work } from "../messages.ts";
 import { isProvider, PROVIDERS } from "../settings.ts";
-import { codeDetails } from "./code.ts";
 import { h, keepTime } from "./dom.ts";
 import { progressView, tickClocks } from "./progress.ts";
 
@@ -215,15 +214,16 @@ function renderChat(state: State, app: AppView | undefined): void {
   element("app-header").hidden = app === undefined;
   element("owner").textContent = state.owner;
   element("app-name").textContent = app?.name ?? "";
+  const openApp = element<HTMLButtonElement>("open-app");
+  openApp.disabled = app?.head === null;
+  openApp.title = app?.head === null ? "No attempt has passed yet, so nothing is running." : "";
   element("remove-app").textContent = removeArmed ? "Remove for good?" : "Remove";
   element("remove-app").classList.toggle("armed", removeArmed);
   element("welcome").hidden = app !== undefined || working !== null;
   element("needs-key").hidden = state.hasApiKey;
   element("examples").hidden = !state.hasApiKey;
   const turns = [...(app?.conversation ?? []), ...(working === null ? [] : [{ from: "person", text: working.request } as const])];
-  // Behind the curtain, the last reply shows the code running now.
-  const lastReply = turns.findLastIndex((turn) => turn.from === "mayfly");
-  const items = turns.map((turn, index) => turnItem(turn, app !== undefined && state.peek && index === lastReply ? [codeDetails(app.routes, false)] : []));
+  const items = turns.map((turn) => turnItem(turn));
   const pending = working === null ? [] : [turn("mayfly", progressView(working, app === undefined ? "Writing your app" : "Changing your app", state.peek))];
   const thread = element("thread");
   const following = thread.scrollHeight - thread.scrollTop - thread.clientHeight < FOLLOW_PX;

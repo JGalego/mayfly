@@ -1,31 +1,39 @@
+import { randomBytes } from "node:crypto";
 import { appUrl } from "../core/app-url.ts";
 import { appObjects } from "./app-objects.ts";
-import { generateApp, type Ask, type Generated } from "./generate.ts";
+import { generateApp, type Ask, type Attempt, type Generation } from "./generate.ts";
 import type { Ports } from "./ports.ts";
 import { newPassword, newSecret } from "./secrets.ts";
-import { findApp, withApp, withoutApp, type App, type Owner, type State, type Turn } from "./state.ts";
+import { findApp, findVersion, runningVersion, withApp, withoutApp, type App, type Owner, type State, type Turn, type Version } from "./state.ts";
 import { UNWATCHED, type Watcher } from "./step.ts";
 import { addUsage, metered, NO_USAGE, type Usage } from "./usage.ts";
 
 const FIRST_PORT = 18100;
-// What the conversation says when the model said nothing after the code.
+// What Mayfly says when the model said nothing after the code.
 const MADE = "Your app is ready.";
 const CHANGED = "Done. Your app has the change.";
+
+/** A version as a shell shows it, without its code, which the shell asks for when it needs it. */
+export type VersionView = Omit<Version, "routes" | "image">;
 
 /** What a shell shows of an app. Never its secrets. */
 export interface AppView {
   readonly name: string;
   readonly url: string;
+  /** The version running now, or null while no attempt has passed. */
+  readonly head: string | null;
+  readonly versions: readonly VersionView[];
   readonly conversation: readonly Turn[];
-  readonly routes: string;
   readonly spent: Usage;
 }
 
 export interface Engine {
-  /** Has the model write an app for the description, proves it runs, and deploys it behind sign-in. */
+  /** Has the model write an app for the description, and runs it behind sign-in once an attempt passes. Every attempt is kept. */
   create(description: string, watch?: Watcher): Promise<AppView>;
-  /** Has the model change an app as asked, proves the new version runs, and swaps it in at the same URL. */
+  /** Has the model change an app as asked. An attempt that passes replaces the running one at the same URL. Every attempt is kept. */
   change(name: string, request: string, watch?: Watcher): Promise<AppView>;
+  /** The code of one version of an app. */
+  code(name: string, version: string): Promise<string>;
   list(): Promise<AppView[]>;
   remove(name: string): Promise<void>;
   /** Who signs in to the apps. Created on first use. */
@@ -34,45 +42,64 @@ export interface Engine {
   spent(): Promise<Usage>;
 }
 
-type Result = { readonly generated: Generated; readonly spent: Usage };
-
 export function createEngine({ store, deployer, identity, model, builder }: Ports): Engine {
-  /** Generates an app, counting what the model spends even when it fails. */
-  async function generate(ask: Ask, watch: Watcher): Promise<Result> {
+  async function generate(ask: Ask, watch: Watcher): Promise<Generation> {
     const meter = metered(model);
     try {
-      return { generated: await generateApp(ask, { model: meter.model, builder, watch }), spent: meter.spent() };
+      return await generateApp(ask, { model: meter.model, builder, watch });
     } catch (error) {
-      const state = await store.load();
-      const app = "change" in ask ? findApp(state, ask.app.name) : undefined;
-      await store.save(withSpent(app === undefined ? state : withApp(state, charged(app, meter.spent())), meter.spent()));
+      // Cut short by the model's service or by Podman, the attempts still cost what the model wrote.
+      await store.save(spend(await store.load(), meter.spent(), "change" in ask ? ask.app.name : undefined));
       throw error;
     }
   }
 
-  async function deploy({ generated, spent }: Result, turns: readonly Turn[], watch: Watcher): Promise<AppView> {
-    watch({ kind: "deploying" });
+  /** Keeps every attempt as a version and the exchange in the conversation, then runs the attempt that passed. */
+  async function record(request: string, { name, attempts }: Generation, base: string | null, started: number, watch: Watcher): Promise<AppView> {
     const state = withOwner(await store.load());
-    const app = charged(placeApp(state, generated, turns), spent);
-    const next = withSpent(withApp(state, app), spent);
-    await identity.sync(next);
-    await deployer.deploy(appObjects(app, identity.settingsFor(app)));
-    await store.save(next);
-    return appView(app);
+    const app = findApp(state, name) ?? newApp(state, name);
+    const versions = chain(attempts, request, base);
+    const last = versions.at(-1);
+    const passed = last?.problem === null ? last : undefined;
+    const spent = attempts.reduce((sum, attempt) => addUsage(sum, attempt.spent), NO_USAGE);
+    const reply: Turn = { from: "mayfly", text: replyFor(app, versions), versions: versions.map((version) => version.id), took: Date.now() - started };
+    const next: App = {
+      ...app,
+      versions: [...app.versions, ...versions],
+      head: passed?.id ?? app.head,
+      conversation: [...app.conversation, { from: "person", text: request }, reply],
+      spent: addUsage(app.spent, spent),
+    };
+    const nextState = spend(withApp(state, next), spent);
+    if (passed !== undefined) {
+      watch({ kind: "deploying" });
+      await identity.sync(nextState);
+      await deployer.deploy(appObjects(next, passed.image, identity.settingsFor(next)));
+    }
+    await store.save(nextState);
+    return appView(next);
   }
 
   return {
     async create(description, watch = UNWATCHED) {
-      const taken = (await store.load()).apps.map((app) => app.manifest.name);
-      const result = await generate({ description, taken }, watch);
-      return deploy(result, [said("person", description), said("mayfly", result.generated.summary || MADE)], watch);
+      const started = Date.now();
+      const taken = (await store.load()).apps.map((app) => app.name);
+      return record(description, await generate({ description, taken }, watch), null, started, watch);
     },
 
     async change(name, request, watch = UNWATCHED) {
-      const app = findApp(await store.load(), name);
-      if (app === undefined) throw new Error(`no app named ${name}`);
-      const result = await generate({ change: request, app: { name, routes: app.routes } }, watch);
-      return deploy(result, [said("person", request), said("mayfly", result.generated.summary || CHANGED)], watch);
+      const started = Date.now();
+      const app = existingApp(await store.load(), name);
+      // The running code, or for an app that never ran, its latest attempt that had any.
+      const base = runningVersion(app) ?? app.versions.findLast((version) => version.routes !== "");
+      const generation = await generate({ change: request, app: { name, routes: base?.routes ?? "" } }, watch);
+      return record(request, generation, base?.id ?? null, started, watch);
+    },
+
+    async code(name, id) {
+      const version = findVersion(existingApp(await store.load(), name), id);
+      if (version === undefined) throw new Error(`${name} has no version ${id}`);
+      return version.routes;
     },
 
     async list() {
@@ -81,9 +108,9 @@ export function createEngine({ store, deployer, identity, model, builder }: Port
 
     async remove(name) {
       const state = await store.load();
-      const app = findApp(state, name);
-      if (app === undefined) throw new Error(`no app named ${name}`);
-      await deployer.remove(appObjects(app, identity.settingsFor(app)));
+      const app = existingApp(state, name);
+      const running = runningVersion(app);
+      if (running !== undefined) await deployer.remove(appObjects(app, running.image, identity.settingsFor(app)));
       const next = withoutApp(state, name);
       await identity.sync(next);
       await store.save(next);
@@ -103,21 +130,21 @@ export function createEngine({ store, deployer, identity, model, builder }: Port
   };
 }
 
+function existingApp(state: State, name: string): App {
+  const app = findApp(state, name);
+  if (app === undefined) throw new Error(`no app named ${name}`);
+  return app;
+}
+
 function withOwner(state: State): State & { readonly owner: Owner } {
   const owner = state.owner ?? { email: "owner@mayfly.local", username: "owner", password: newPassword() };
   return { ...state, owner };
 }
 
-/** A changed app keeps its port, secrets and conversation, so its URL and sessions survive. */
-function placeApp(state: State, { name, image, routes }: Generated, turns: readonly Turn[]): App {
-  const existing = findApp(state, name) ?? {
-    hostPort: freePort(state),
-    clientSecret: newSecret(),
-    cookieSecret: newSecret(),
-    conversation: [],
-    spent: NO_USAGE,
-  };
-  return { ...existing, manifest: { name, image }, routes, conversation: [...existing.conversation, ...turns] };
+/** A new app gets its own port and secrets, which it keeps for good, so its URL and sessions survive changes. */
+function newApp(state: State, name: string): App {
+  const port = { hostPort: freePort(state), clientSecret: newSecret(), cookieSecret: newSecret() };
+  return { name, ...port, versions: [], head: null, conversation: [], spent: NO_USAGE };
 }
 
 function freePort(state: State): number {
@@ -127,18 +154,30 @@ function freePort(state: State): number {
   return port;
 }
 
-function charged(app: App, spent: Usage): App {
-  return { ...app, spent: addUsage(app.spent, spent) };
+/** The attempts as versions, each starting from the one before, and the first from the base. */
+function chain(attempts: readonly Attempt[], request: string, base: string | null): Version[] {
+  const versions: Version[] = [];
+  for (const [index, attempt] of attempts.entries()) {
+    versions.push({ id: randomBytes(4).toString("hex"), parent: versions.at(-1)?.id ?? base, request, attempt: index + 1, ...attempt });
+  }
+  return versions;
 }
 
-function withSpent(state: State, spent: Usage): State {
-  return { ...state, spent: addUsage(state.spent, spent) };
+function replyFor(app: App, versions: readonly Version[]): string {
+  const last = versions.at(-1);
+  if (last?.problem === null) return last.summary || (app.head === null ? MADE : CHANGED);
+  const unchanged = app.head === null ? "" : " Your app is as it was.";
+  return `It still failed after ${versions.length} attempts.${unchanged} The last problem was:\n\n${last?.problem ?? ""}`;
 }
 
-function said(from: Turn["from"], text: string): Turn {
-  return { from, text };
+/** Counts tokens against the total and, when it names one, against an app. */
+function spend(state: State, spent: Usage, name?: string): State {
+  const app = name === undefined ? undefined : findApp(state, name);
+  const charged = app === undefined ? state : withApp(state, { ...app, spent: addUsage(app.spent, spent) });
+  return { ...charged, spent: addUsage(state.spent, spent) };
 }
 
 function appView(app: App): AppView {
-  return { name: app.manifest.name, url: appUrl(app.hostPort), conversation: app.conversation, routes: app.routes, spent: app.spent };
+  const versions = app.versions.map(({ routes: _routes, image: _image, ...view }) => view);
+  return { name: app.name, url: appUrl(app.hostPort), head: app.head, versions, conversation: app.conversation, spent: app.spent };
 }
