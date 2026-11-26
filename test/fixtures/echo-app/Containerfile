@@ -1,3 +1,3 @@
-FROM docker.io/library/node:24-alpine
-COPY server.mjs /app/server.mjs
-CMD ["node", "/app/server.mjs"]
+# A stand-in generated app: the runtime plus one routes file.
+FROM localhost/mayfly-runtime:dev
+COPY routes.ts /app/routes.ts

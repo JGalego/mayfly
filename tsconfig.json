@@ -16,6 +16,11 @@
   },
   "include": [
     "src",
-    "test"
+    "test",
+    "runtime/src",
+    "policy"
+  ],
+  "exclude": [
+    "test/fixtures"
   ]
 }

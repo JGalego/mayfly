@@ -8,7 +8,7 @@ import { buildAuthSecret } from "../../src/core/auth-secret.ts";
 import type { KubeObject } from "../../src/core/kube.ts";
 import { buildPod } from "../../src/core/pod.ts";
 import { Browser } from "./browser.ts";
-import { buildEchoImage, secret, waitUntilUp } from "./support.ts";
+import { buildEchoImage, runHealthCheck, secret, waitUntilUp } from "./support.ts";
 
 const HOST_PORT = 18137;
 const APP = appUrl(HOST_PORT);
@@ -50,7 +50,13 @@ describe("an app behind Mayfly's sign-in, on Podman", () => {
     const page = await signIn(owner);
 
     assert.equal(page.status, 200);
-    assert.deepEqual(JSON.parse(page.body), { email: owner.email, groups: "owner" });
+    assert.equal(JSON.parse(page.body).email, owner.email);
+    assert.deepEqual(JSON.parse(page.body).groups, ["owner"]);
+  });
+
+  it("keeps the app and Dex passing their own liveness probes, with no shell or curl", () => {
+    runHealthCheck("mayfly-echo-app");
+    runHealthCheck("mayfly-dex-dex");
   });
 
   it("turns away a signed-in user without an allowed role", async () => {

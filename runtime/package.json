@@ -1,0 +1,11 @@
+{
+  "name": "@mayfly/runtime",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The fixed part of every Mayfly app: sign-in identity, JSON logs, health checks, security headers.",
+  "type": "module",
+  "dependencies": {
+    "@hono/node-server": "2.1.11",
+    "hono": "4.13.22"
+  }
+}

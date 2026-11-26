@@ -8,9 +8,10 @@
     "node": ">=24"
   },
   "scripts": {
-    "test": "node --test \"src/**/*.test.ts\"",
+    "test": "node --test \"src/**/*.test.ts\" \"runtime/src/**/*.test.ts\"",
     "test:integration": "node --test --test-concurrency=1 \"test/integration/*.test.ts\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:runtime": "runtime/build.sh"
   },
   "devDependencies": {
     "@types/node": "24.19.4",

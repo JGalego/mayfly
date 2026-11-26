@@ -1,11 +1,16 @@
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 
-/** Builds the stand-in app and returns its image. */
+/** Builds the stand-in app on the runtime image, which `npm run build:runtime` makes. */
 export function buildEchoImage(): string {
-  const image = "localhost/mayfly-test-echo:latest";
-  execFileSync("podman", ["build", "--quiet", "--tag", image, "test/fixtures/echo-app"]);
+  const image = "localhost/mayfly-test-echo:1";
+  execFileSync("podman", ["build", "--quiet", "--pull=never", "--tag", image, "test/fixtures/echo-app"]);
   return image;
+}
+
+/** Runs a container's liveness probe now, the way Podman does on its schedule. Throws if it fails. */
+export function runHealthCheck(container: string): void {
+  execFileSync("podman", ["healthcheck", "run", container]);
 }
 
 export async function waitUntilUp(url: string): Promise<void> {

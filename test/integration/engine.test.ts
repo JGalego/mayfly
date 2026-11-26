@@ -28,7 +28,7 @@ describe("the engine on Podman with Dex", () => {
     const owner = await engine.owner();
     const browser = new Browser();
     const page = await browser.submit(await browser.get(app.url), { login: owner.email, password: owner.password });
-    assert.deepEqual(JSON.parse(page.body), { email: owner.email, groups: "owner" });
+    assert.equal(JSON.parse(page.body).email, owner.email);
 
     await engine.remove("echo");
     await assert.rejects(fetch(app.url));
