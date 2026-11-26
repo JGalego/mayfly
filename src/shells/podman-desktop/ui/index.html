@@ -153,8 +153,11 @@
 
     <p id="banner" role="status" hidden></p>
     <footer id="statusbar">
-      <span id="model-info"></span>
-      <span id="tokens"></span>
+      <button id="status-model" class="status-item" type="button" title="The model that writes this app. Change models in Settings.">🤖 <span id="model-info"></span><span id="model-warning" class="status-warning" hidden> · no API key</span></button>
+      <button id="status-apps" class="status-item" type="button" title="How your apps are doing. More in Settings."></button>
+      <span class="status-spacer"></span>
+      <button id="status-tokens" class="status-item" type="button" aria-expanded="false" title="Tokens sent to the model (↑) and written by it (↓). Click for each app's."><span id="token-info"></span></button>
+      <div id="token-popover" class="popover" hidden></div>
     </footer>
     <dialog id="remove-dialog" aria-labelledby="remove-title">
       <form method="dialog">

@@ -1295,15 +1295,102 @@ dialog .editor-actions {
 }
 
 #statusbar {
+  position: relative;
   grid-area: status;
   display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.3rem 0.9rem;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.5rem;
   border-top: 1px solid var(--line);
   font-size: 0.8rem;
   color: var(--muted);
   background: var(--panel);
+}
+
+/* Each part of the status bar is a button that leads somewhere. */
+.status-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+  font-size: inherit;
+  color: inherit;
+}
+
+.status-item:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.status-spacer {
+  flex: 1;
+}
+
+.status-warning {
+  color: var(--error);
+}
+
+.status-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.status-count + .status-count {
+  margin-left: 0.5rem;
+}
+
+.status-divider {
+  margin: 0 0.4rem;
+}
+
+.token-in {
+  color: light-dark(#1d4ed8, #93c5fd);
+}
+
+.token-out {
+  color: light-dark(#7c3aed, #c4b5fd);
+}
+
+.popover {
+  position: absolute;
+  z-index: 5;
+  right: 0.5rem;
+  bottom: calc(100% + 0.4rem);
+  min-width: 18rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-size: 0.85rem;
+  color: var(--text);
+  background: var(--bg);
+  box-shadow: 0 8px 24px light-dark(#0002, #0008);
+}
+
+.popover-title {
+  font-weight: 600;
+}
+
+.token-table {
+  width: 100%;
+  margin-top: 0.5rem;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.token-table td {
+  padding: 0.2rem 0;
+}
+
+.token-table td + td {
+  padding-left: 1rem;
+  text-align: right;
+}
+
+.token-table .total td {
+  border-top: 1px solid var(--line);
+  font-weight: 600;
 }
 
 @keyframes spin {

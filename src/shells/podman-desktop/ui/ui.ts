@@ -4,13 +4,13 @@ import type { FromUi, Progress, ToUi, Work } from "../messages.ts";
 import type { Check } from "../doctor.ts";
 import type { ModelView } from "../messages.ts";
 import { h, keepTime } from "./dom.ts";
-import { tokens } from "./format.ts";
 import { codeView } from "./code.ts";
 import { doctorView } from "./doctor-view.ts";
 import { healthView } from "./health.ts";
 import { lightFor, type Light } from "./lights.ts";
 import { logViewer } from "./logs.ts";
 import { historyView } from "./history.ts";
+import { renderStatusbar, setUpStatusbar } from "./statusbar.ts";
 import { openForm, renderModels, savedModel, setUpModels } from "./models.ts";
 import { makingOf, progressView, tickClocks, whatChanged, type Showing } from "./progress.ts";
 
@@ -70,6 +70,7 @@ let health: readonly ServiceHealth[] | undefined;
 let newAppModel: string | undefined;
 
 setUpModels(post, () => render());
+setUpStatusbar(() => go({ kind: "settings" }));
 // One log reader in Settings for everything, Mayfly's activity included, and one for the app on screen.
 const settingsLogs = logViewer(post, { activity: true });
 const appLogs = logViewer(post, { activity: false });
@@ -389,7 +390,7 @@ function render(): void {
     element("doctor").replaceChildren(...doctorView(checks));
   }
   else renderChat(state, app);
-  renderStatusbar(state, app);
+  renderStatusbar(state, app, activeModel(state, app), health);
 }
 
 function renderSidebar({ apps, working }: State): void {
@@ -532,13 +533,6 @@ function avatar(): HTMLImageElement {
   return image;
 }
 
-function renderStatusbar(current: State, app: AppView | undefined): void {
-  const { spent } = current;
-  const model = activeModel(current, app);
-  element("model-info").textContent = model === undefined ? "No model" : `${model.label}${model.hasApiKey ? "" : " · no API key"}`;
-  const all = `All apps: ${tokens(spent)}`;
-  element("tokens").textContent = app === undefined ? all : `${app.name}: ${tokens(app.spent)} · ${all}`;
-}
 
 
 function showError(text: string): void {
