@@ -68,7 +68,10 @@
               <div id="code-current"></div>
             </div>
             <form id="code-editor" hidden>
-              <textarea id="code-text" spellcheck="false" aria-label="routes.ts"></textarea>
+              <div class="code-input">
+                <pre id="code-shadow" aria-hidden="true"></pre>
+                <textarea id="code-text" spellcheck="false" wrap="off" aria-label="routes.ts"></textarea>
+              </div>
               <input id="code-message" type="text" maxlength="200" placeholder="What did you change? (optional)" aria-label="What you changed">
               <div class="editor-actions">
                 <button id="cancel-edit" class="quiet-button" type="button">Cancel</button>

@@ -5,6 +5,7 @@ import type { Examination } from "../doctor.ts";
 import type { ModelView } from "../messages.ts";
 import { h, keepTime } from "./dom.ts";
 import { codeView } from "./code.ts";
+import { codeEditor } from "./editor.ts";
 import { doctorView } from "./doctor-view.ts";
 import { healthView } from "./health.ts";
 import { lightFor, type Light } from "./lights.ts";
@@ -89,6 +90,7 @@ popover(element("show-sign-in"), element("sign-in-popover"));
 const settingsLogs = logViewer(post, { activity: true });
 const ledger = ledgerView();
 const appLogs = logViewer(post, { activity: false });
+const loadEditor = codeEditor(element<HTMLTextAreaElement>("code-text"), element("code-shadow"));
 element("settings-logs").append(settingsLogs.element);
 element("ledger").append(ledger.element);
 element("app-logs").append(appLogs.element);
@@ -113,7 +115,6 @@ element("code-editor").addEventListener("submit", (event) => {
   event.preventDefault();
   saveEdit();
 });
-element("code-text").addEventListener("keydown", indentWithTab);
 document.addEventListener("keydown", (event) => event.key === "Escape" && picked !== undefined && pick(undefined));
 element("remove-app").addEventListener("click", removeApp);
 for (const what of ["email", "password"] as const) element(`copy-${what}`).addEventListener("click", () => copySignIn(what));
@@ -291,10 +292,9 @@ function startEditing(): void {
   const code = app === undefined ? undefined : startingCode(app);
   if (app === undefined || code === undefined) return;
   editing = app.name;
-  element<HTMLTextAreaElement>("code-text").value = code;
   element<HTMLInputElement>("code-message").value = "";
   render();
-  element("code-text").focus();
+  loadEditor(code);
 }
 
 function saveEdit(): void {
@@ -304,14 +304,6 @@ function saveEdit(): void {
   editing = undefined;
   codeShown = "";
   go({ kind: "app", name: app, tab: "chat" });
-}
-
-// A code editor indents with Tab rather than leaving the field.
-function indentWithTab(event: KeyboardEvent): void {
-  if (event.key !== "Tab" || event.shiftKey) return;
-  event.preventDefault();
-  const field = event.currentTarget as HTMLTextAreaElement;
-  field.setRangeText("  ", field.selectionStart, field.selectionEnd, "end");
 }
 
 // Going back rebuilds and restarts the app, which the conversation shows as it happens.

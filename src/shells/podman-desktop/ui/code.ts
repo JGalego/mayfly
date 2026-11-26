@@ -13,10 +13,15 @@ hljs.registerLanguage("css", css);
 /** The code, highlighted. */
 export function codeView(code: string, className: string): HTMLPreElement {
   const inner = h("code", "hljs");
+  highlightInto(inner, code);
+  return h("pre", className, inner);
+}
+
+/** Fills an element with the code, highlighted. */
+export function highlightInto(target: HTMLElement, code: string): void {
   // The one place the page takes markup from a string. highlight.js escapes the code it is given,
   // and the page's CSP would stop any script regardless.
-  inner.innerHTML = hljs.highlight(code, { language: "typescript", ignoreIllegals: true }).value;
-  return h("pre", className, inner);
+  target.innerHTML = hljs.highlight(code, { language: "typescript", ignoreIllegals: true }).value;
 }
 
 const LINE_CLASS: Readonly<Record<string, string>> = { "+": "diff-added", "-": "diff-removed", "\\": "diff-note" };

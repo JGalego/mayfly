@@ -733,7 +733,28 @@ pre.editable {
   gap: 0.6rem;
 }
 
+/* The textarea takes the typing; a highlighted copy of its text shows through it from underneath, set and scrolled the same. */
+.code-input {
+  position: relative;
+}
+
+#code-shadow {
+  position: absolute;
+  inset: 0;
+  max-height: none;
+  margin: 0;
+  /* Room past the end, so the copy scrolls as far as the textarea does beside its scrollbars. */
+  padding-right: 3rem;
+  padding-bottom: 3rem;
+  overflow: hidden;
+  tab-size: 2;
+}
+
 #code-text {
+  position: relative;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
   min-height: 28rem;
   padding: 0.75rem;
   border: 1px solid var(--field-line);
@@ -742,8 +763,14 @@ pre.editable {
   font-variant-ligatures: none;
   white-space: pre;
   tab-size: 2;
-  background: var(--field);
+  color: transparent;
+  caret-color: var(--text);
+  background: transparent;
   resize: vertical;
+}
+
+#code-text::selection {
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 #code-text:focus {
