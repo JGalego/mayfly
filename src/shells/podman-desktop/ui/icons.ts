@@ -19,6 +19,7 @@ const ICONS = {
   history: [circle(6, 6, 2), circle(6, 18, 2), circle(18, 6, 2), path("M6 8v8M18 8v5a5 5 0 0 1-5 5H8")],
   key: [circle(8, 15, 4), path("M11 12l9-9M16 7l3 3M14 9l2 2")],
   logs: [path("M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01")],
+  menu: [path("M4 6h16M4 12h16M4 18h16")],
   pencil: [path("M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"), path("M13.5 6.5l4 4")],
   play: [path("M8 5l11 7-11 7z")],
   plus: [path("M12 5v14M5 12h14")],

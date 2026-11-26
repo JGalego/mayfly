@@ -2053,3 +2053,72 @@ dialog .version-id {
     opacity: 0;
   }
 }
+
+/* Narrow windows. Below 900px the version panel covers the history rather than squeezing it, and the editor's files go above the code. */
+#show-sidebar {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  #workspace {
+    position: relative;
+  }
+
+  #version-panel {
+    position: absolute;
+    z-index: 2;
+    inset: 0;
+    width: auto;
+    border-left: 0;
+  }
+
+  #code-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .editor-files ul {
+    display: flex;
+    gap: 0.5rem;
+  }
+}
+
+/* Below 720px the sidebar is a drawer over the page, opened from the menu button at the top left. */
+@media (max-width: 720px) {
+  body {
+    grid-template:
+      "main" 1fr
+      "banner" auto
+      "status" auto
+      / 1fr;
+  }
+
+  #show-sidebar {
+    position: fixed;
+    z-index: 6;
+    top: 0.7rem;
+    left: 0.5rem;
+    display: inline-flex;
+    padding: 0.4rem;
+  }
+
+  #sidebar {
+    position: fixed;
+    z-index: 5;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 15rem;
+    padding-top: 3.25rem;
+    box-shadow: 4px 0 24px light-dark(#0002, #0008);
+    transform: translateX(-100%);
+    transition: transform 0.15s ease-out;
+  }
+
+  body.sidebar-open #sidebar {
+    transform: none;
+  }
+
+  .page-header {
+    padding-left: 3rem;
+  }
+}

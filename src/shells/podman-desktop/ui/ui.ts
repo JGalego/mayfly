@@ -100,6 +100,13 @@ let newAppModel: string | undefined;
 setUpModels(post, () => render());
 setUpStatusbar((tab) => go({ kind: "settings", tab }));
 popover(element("show-sign-in"), element("sign-in-popover"));
+// In a narrow window the sidebar is a drawer: the menu button opens it, and Esc, a click elsewhere or going anywhere closes it.
+element("show-sidebar").addEventListener("click", () => showSidebar(!document.body.classList.contains("sidebar-open")));
+document.addEventListener("keydown", (event) => event.key === "Escape" && showSidebar(false));
+document.addEventListener("click", (event) => {
+  const target = event.target as Node;
+  if (!element("sidebar").contains(target) && !element("show-sidebar").contains(target)) showSidebar(false);
+});
 commandMenu(request, element("command-menu"), (text) => suggestions(text, { app: view.kind === "app", models: state?.models.map((model) => model.label) ?? [] }));
 // One log reader in Settings for everything, Mayfly's activity included, and one for the app on screen.
 const settingsLogs = logViewer(post, { activity: true });
@@ -234,6 +241,7 @@ function receiveState(next: State): void {
 }
 
 function go(next: View): void {
+  showSidebar(false);
   const arriving = next.kind === "settings" && view.kind !== "settings";
   drafts.set(draftKey(view), request.value);
   view = next;
@@ -355,6 +363,11 @@ function startEditing(app: AppView, from: string): void {
   pick(undefined);
   go({ kind: "app", name: app.name, tab: "code" });
   editor.load(code);
+}
+
+function showSidebar(open: boolean): void {
+  document.body.classList.toggle("sidebar-open", open);
+  element("show-sidebar").setAttribute("aria-expanded", String(open));
 }
 
 /** Does something that closes the editor or loads other code into it, asking first when that would lose changes not saved yet. */
