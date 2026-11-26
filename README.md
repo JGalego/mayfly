@@ -28,7 +28,7 @@ Describe a small app for a short or routine task. Mayfly builds it and runs it o
 
 ## Why not Dyad?
 
-[Dyad](https://www.dyad.sh/) and [Lovable](https://lovable.dev/) generate the whole app, including login and logging, so those parts are only as good as the model is that day. Mayfly moves them into a fixed contract that the model cannot weaken, and the model writes business logic only. Every app is production-shaped by construction and can be handed to someone else to run.
+[Dyad](https://www.dyad.sh/) and [Lovable](https://lovable.dev/) generate the whole app, login and logging included, so those parts are only as good as the model was that day. In Mayfly the model writes the business logic and nothing else. Sign-in, health checks, logging and the container setup come from a fixed contract the model can't change, so every app runs the same way and you can hand it to someone else to run.
 
 ## The contract
 
@@ -47,6 +47,8 @@ Every container runs as a non-root user with all capabilities dropped, a read-on
 
 ## Architecture
 
+Mayfly is a TypeScript library with a small API and no UI of its own. The core holds the contract, turns a manifest into a pod spec and applies expiry rules, and it imports nothing outside itself. Everything else (storage, identity, the model and the deployer) plugs in through small interfaces, the ports below.
+
 ```mermaid
 flowchart LR
   shell["Podman Desktop extension"] --> api
@@ -58,7 +60,7 @@ flowchart LR
   model["OpenAI-compatible model provider<br/>your own key"] -. implements .-> ports
 ```
 
-Each app runs as one pod:
+Each app runs as one pod with two containers: oauth2-proxy and the app. The proxy is the only way in, and you reach it on 127.0.0.1. It signs you in with OIDC, checks your roles against the app's policy and passes the request on with your identity in headers. The app has no port on the host, so it only ever sees people who are signed in and allowed.
 
 ```mermaid
 flowchart LR
@@ -71,11 +73,11 @@ flowchart LR
 
 ## Offerings
 
-💻 **Individual** (being built). Local-first, on your own Podman. Power users can later deploy the same image and manifests to their own cloud.
+💻 **Individual** (being built). Runs on your own machine with Podman. Later you'll be able to deploy the same image and manifests to your own cloud.
 
-🏢 **Enterprise** (not now). IT configures a deployment target and the company IdP once, and creators get a deploy button. The engine and the contract stay the same. A web control plane holds the target, the IdP configuration and each app's policy, and runs the engine on a server. Apps move from a laptop to the company cluster without rewrites because they were cluster-shaped from the start.
+🏢 **Enterprise** (not now). IT sets up a deployment target and the company IdP once, and after that anyone making an app gets a deploy button. A web control plane runs the same engine on a server and keeps the target, the IdP settings and each app's policy. An app made on a laptop moves to the company cluster unchanged, because it already ships as an image and Kubernetes manifests.
 
-☁️ **SaaS** (later). Mayfly hosts apps for many customers. This is a different security problem: running untrusted, model-written code for many tenants on shared infrastructure needs strong tenant isolation, abuse controls and billing. Out of scope until Individual and Enterprise work.
+☁️ **SaaS** (later). Mayfly hosts apps for many customers. That's a harder security problem: running model-written code from many customers on shared machines needs strong isolation between them, abuse controls and billing. We won't start it until Individual and Enterprise work.
 
 ## Non-goals
 

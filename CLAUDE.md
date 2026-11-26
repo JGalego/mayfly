@@ -2,6 +2,10 @@
 
 Read `README.md` for the product, the contract and the scope.
 
+## Taste
+
+A sense of taste is non-negotiable in everything we do: code, docs, design, names and commit messages. Working is not the same as done.
+
 ## Git
 
 - Commits are by the repo owner only, using this repo's local git identity. Never change it.
@@ -22,6 +26,7 @@ Read `README.md` for the product, the contract and the scope.
 ## Docs
 
 - Minimal. One line per paragraph or list item, with no hard wrapping.
+- Plain, human prose, the way you'd explain it to a colleague: short sentences, ordinary words, concrete claims. No sales or consulting language (seamless, leverage, empower, best-in-class, "X-shaped", "X-first"). If a sentence would fit in a pitch deck, rewrite it.
 - Prefer visuals over text: if a diagram (Mermaid) can replace a paragraph, use the diagram.
 - Comments say why, not what, and only when the code can't.
 
