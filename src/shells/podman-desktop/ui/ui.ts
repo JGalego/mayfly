@@ -7,6 +7,7 @@ import { h, keepTime } from "./dom.ts";
 import { changes, codeView } from "./code.ts";
 import { codeEditor } from "./editor.ts";
 import { findBar } from "./find-bar.ts";
+import { threadFind } from "./thread-find.ts";
 import { commandMenu } from "./command-menu.ts";
 import { parse, suggestions, type Command } from "./commands.ts";
 import { nameChip, withChips } from "./chips.ts";
@@ -45,6 +46,7 @@ const CONFIRM_MS = 4000;
 const COPIED_MS = 1500;
 // Long enough to read what removing does before the button lets you.
 const REMOVE_WAIT_S = 2;
+const FIND_APPS_FROM = 6;
 const HEALTH_MS = 10_000;
 // How close to the bottom of a conversation counts as following it.
 const FOLLOW_PX = 48;
@@ -132,6 +134,28 @@ findBar({
   replaceOne: element("replace-one"),
   replaceAll: element("replace-all"),
   close: element("find-close"),
+});
+const conversationFind = threadFind({
+  bar: element("thread-find"),
+  find: element<HTMLInputElement>("thread-find-text"),
+  count: element("thread-find-count"),
+  previous: element("thread-find-previous"),
+  next: element("thread-find-next"),
+  close: element("thread-find-close"),
+  turns: element("turns"),
+});
+// Ctrl+F or Cmd+F finds in the conversation on screen. The editor has its own.
+document.addEventListener("keydown", (event) => {
+  if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "f" || event.defaultPrevented) return;
+  if (view.kind === "settings" || element("turns").hidden) return;
+  event.preventDefault();
+  conversationFind.open();
+});
+const appFilter = element<HTMLInputElement>("app-filter");
+appFilter.addEventListener("input", () => state !== undefined && renderSidebar(state));
+appFilter.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  element("apps").querySelector<HTMLButtonElement>("button.nav-item")?.click();
 });
 element("settings-logs").append(settingsLogs.element);
 element("ledger").append(ledger.element);
@@ -656,7 +680,12 @@ function renderSettings(current: State, wanted: SettingsTab): void {
 function renderSidebar({ apps, working }: State): void {
   // Favourites first, each group in the order the apps were made.
   const ordered = [...apps.filter((app) => app.starred), ...apps.filter((app) => !app.starred)];
-  element("apps").replaceChildren(...ordered.map((app) => appItem(app, lightFor(app, health, working?.app))));
+  // Past a handful, the apps can be found by name.
+  const filter = element<HTMLInputElement>("app-filter");
+  filter.hidden = apps.length < FIND_APPS_FROM;
+  const wanted = filter.hidden ? "" : filter.value.trim().toLowerCase();
+  const shown = ordered.filter((app) => app.name.toLowerCase().includes(wanted));
+  element("apps").replaceChildren(...shown.map((app) => appItem(app, lightFor(app, health, working?.app))));
   element("apps-heading").hidden = apps.length === 0;
   const newApp = element("new-app");
   markCurrent(newApp, view.kind === "new");
@@ -727,6 +756,7 @@ function renderChat(state: State, app: AppView | undefined): void {
   element("composer").hidden = tab === "code" && editing !== undefined && editing.app === app?.name;
   element("turns").hidden = tab !== "chat";
   element("turns").replaceChildren(...(tab === "chat" ? [...items, ...pending] : []));
+  conversationFind.mark();
   element("history").hidden = tab !== "history";
   renderHistory(tab === "history" ? app : undefined, showing, state.working === null);
   for (const name of ["chat", "history", "code", "logs"] as const) element(`tab-${name}`).setAttribute("aria-selected", String(tab === name));

@@ -14,6 +14,7 @@
       <div class="brand"><img id="logo" src="logo.svg" alt=""><span>Mayfly</span></div>
       <button id="new-app" class="nav-item" type="button" data-icon="plus">New app</button>
       <h2 id="apps-heading" class="label" hidden>Your apps</h2>
+      <input id="app-filter" class="app-filter" type="search" placeholder="Find an app" aria-label="Find an app" hidden>
       <ul id="apps" aria-labelledby="apps-heading"></ul>
       <button id="show-settings" class="nav-item" type="button" data-icon="settings">Settings</button>
     </nav>
@@ -48,6 +49,13 @@
       </header>
       <div id="workspace">
         <div id="thread">
+          <div id="thread-find" class="find-bar thread-find" role="search" hidden>
+            <input id="thread-find-text" type="text" placeholder="Find in this conversation" aria-label="Find in this conversation">
+            <span id="thread-find-count" class="quiet" aria-live="polite"></span>
+            <button id="thread-find-previous" class="quiet-button" type="button" aria-label="Earlier match" title="Earlier match (Shift+Enter)">↑</button>
+            <button id="thread-find-next" class="quiet-button" type="button" aria-label="Later match" title="Later match (Enter)">↓</button>
+            <button id="thread-find-close" class="quiet-button" type="button" aria-label="Close find" title="Close (Esc)" data-icon="close"></button>
+          </div>
           <section id="welcome">
             <img src="logo.svg" alt="" class="hero">
             <h1>New app</h1>

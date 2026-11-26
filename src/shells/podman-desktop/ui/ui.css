@@ -820,6 +820,31 @@ pre.editable {
   gap: 0.6rem;
 }
 
+/* Finding in a conversation: the bar stays at the top as the conversation scrolls, and the turns that match are marked. */
+.thread-find {
+  position: sticky;
+  z-index: 3;
+  top: -1.5rem;
+  max-width: var(--column);
+  margin: -1.5rem auto 0.75rem;
+  padding: 0.6rem 0;
+  background: var(--bg);
+}
+
+.turn.found {
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.turn.found-current {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.app-filter {
+  margin: 0 0.25rem 0.35rem;
+}
+
 /* Find and replace in the editor, in one row above the code. */
 .find-bar {
   display: flex;
