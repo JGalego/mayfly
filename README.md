@@ -28,14 +28,19 @@ Describe a small app for a short or routine task. Mayfly builds it and runs it o
 
 ## Use it
 
-You need [Podman Desktop](https://podman-desktop.io/) with a Podman 5 machine running, and an API key for [OpenAI](https://platform.openai.com/api-keys) or another service that speaks OpenAI's API.
+### Prerequisites
+
+- [Podman Desktop](https://podman-desktop.io/) with a Podman 5 machine running
+- An API key for [OpenAI](https://platform.openai.com/api-keys), or for another service that speaks OpenAI's API
+
+### Steps
 
 1. In Podman Desktop, open **Extensions**, choose **Install custom…**, and enter `ghcr.io/jgalego/mayfly-extension:main`.
 2. Open **Mayfly** in the navigation bar. In **Settings**, pick the provider and model and paste your API key. The default is OpenAI with `gpt-6.2-sol`. Podman Desktop keeps the key in its secret storage, and Mayfly sends it only to the endpoint it was saved for.
 3. Choose **New app** and say what you need. About a minute later the app opens in your browser. Sign in as the owner shown above the conversation; **Copy password** puts the password on your clipboard.
 4. Each app is a conversation. Ask for a change there, and the new version replaces the old one at the same address.
 
-The status bar shows the model and the tokens it has spent, on the app you're looking at and in all. To watch the code being written as it happens, turn on **Peek behind the curtain** in Settings.
+The status bar shows the model, and the tokens in and out on the app you're looking at and on all apps. To watch the code being written as it happens, turn on **Peek behind the curtain** in Settings.
 
 ## Why not Dyad?
 
