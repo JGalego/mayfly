@@ -90,9 +90,15 @@ flowchart LR
 
 ## Development
 
+Needs Node 24 and, for the integration tests, Podman 5.
+
 ```sh
-nvm use            # Node 24
+nvm use                    # Node 24
 npm install
-npm test
+pre-commit install         # hygiene, Conventional Commits, typecheck and unit tests on every commit
+npm test                   # unit tests
 npm run typecheck
+npm run test:integration   # signs in through Dex to a real app on Podman
 ```
+
+CI runs the hooks, checks every commit message, and runs the integration tests on Podman 5.

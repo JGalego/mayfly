@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Hooks, typecheck and unit tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: pipx run pre-commit run --all-files --show-diff-on-failure
+
+  commits:
+    name: Commit messages
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Check each new commit message
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          range="$BASE..$HEAD"
+          # A new branch has no "before": check its whole history.
+          [[ "$BASE" =~ ^0+$ ]] && range="$HEAD"
+          for sha in $(git rev-list --no-merges "$range"); do
+            git log -1 --format=%B "$sha" > "$RUNNER_TEMP/message"
+            pipx run pre-commit run --hook-stage commit-msg --commit-msg-filename "$RUNNER_TEMP/message"
+          done
+
+  integration:
+    name: Integration tests on Podman 5
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - uses: prefix-dev/setup-pixi@v0.11.3
+        with:
+          run-install: false
+      - name: Install Podman 5
+        run: |
+          pixi global install "podman>=5"
+          echo "$HOME/.pixi/bin" >> "$GITHUB_PATH"
+          env="$HOME/.pixi/envs/podman"
+          # Use the env's runtime and conmon, not the runner's older ones.
+          cat > "$env/etc/containers/containers.conf.d/20-use-env-runtime.conf" <<EOF
+          [engine]
+          runtime = "runc"
+          conmon_path = ["$env/bin/conmon"]
+          [engine.runtimes]
+          runc = ["$env/bin/runc"]
+          EOF
+          # Ubuntu blocks user namespaces for binaries without an AppArmor profile, which rootless Podman needs.
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          "$HOME/.pixi/bin/podman" --version
+      - run: npm ci
+      - run: npm run test:integration
