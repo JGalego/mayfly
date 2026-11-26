@@ -11,16 +11,10 @@
   <body>
     <nav id="sidebar" aria-label="Mayfly">
       <div class="brand"><img id="logo" src="logo.svg" alt=""><span>Mayfly</span></div>
-      <button id="new-app" class="nav-item" type="button"><span class="plus" aria-hidden="true">+</span>New app</button>
+      <button id="new-app" class="nav-item" type="button" data-icon="plus">New app</button>
       <h2 id="apps-heading" class="label" hidden>Your apps</h2>
       <ul id="apps" aria-labelledby="apps-heading"></ul>
-      <button id="show-settings" class="nav-item" type="button">
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="12" cy="12" r="8" stroke-width="3" stroke-dasharray="3.14 3.14" />
-          <circle cx="12" cy="12" r="6" stroke-width="2" />
-          <circle cx="12" cy="12" r="2.5" stroke-width="2" />
-        </svg>Settings
-      </button>
+      <button id="show-settings" class="nav-item" type="button" data-icon="settings">Settings</button>
     </nav>
 
     <div id="loading" role="status" aria-label="Loading">
@@ -33,10 +27,10 @@
         <div class="app-title">
           <h1 id="app-name"></h1>
           <div class="sign-in">
-            <span class="quiet">🔑 Sign in with</span>
-            <button id="copy-email" class="chip" type="button" title="Copy the email"><span id="owner"></span><span class="chip-note">Copy</span></button>
-            <button id="copy-password" class="chip" type="button" title="Copy the password"><span class="dots" aria-label="password">••••••••</span><span class="chip-note">Copy</span></button>
-            <button id="sign-out" class="link" type="button" title="Opens the app's sign-out page in your browser">Sign out ↗</button>
+            <span class="quiet" data-icon="key">Sign in with</span>
+            <button id="copy-email" class="chip" type="button" title="Copy the email"><span id="owner"></span><span class="chip-note"><span class="to-copy" data-icon="copy">Copy</span><span class="copied-note" data-icon="check">Copied</span></span></button>
+            <button id="copy-password" class="chip" type="button" title="Copy the password"><span class="dots" aria-label="password">••••••••</span><span class="chip-note"><span class="to-copy" data-icon="copy">Copy</span><span class="copied-note" data-icon="check">Copied</span></span></button>
+            <button id="sign-out" class="link" type="button" title="Opens the app's sign-out page in your browser" data-icon="sign-out">Sign out</button>
           </div>
         </div>
         <div id="app-tabs" class="tabs" role="tablist" aria-label="App">
@@ -46,7 +40,7 @@
           <button id="tab-logs" role="tab" type="button">Logs</button>
         </div>
         <button id="remove-app" class="quiet-button" type="button">Remove</button>
-        <button id="open-app" class="primary" type="button" title="Opens in your browser">Open app <span aria-hidden="true">↗</span></button>
+        <button id="open-app" class="primary" type="button" title="Opens in your browser" data-icon-after="external">Open app</button>
       </header>
       <div id="workspace">
         <div id="thread">
@@ -87,7 +81,7 @@
         <textarea id="request" rows="2" maxlength="2000" aria-label="Your request"></textarea>
         <div class="composer-actions">
           <select id="composer-model" aria-label="The model that writes this app" title="The model that writes this app"></select>
-          <button id="send" class="primary" type="submit"><span aria-hidden="true">🚀</span> Send</button>
+          <button id="send" class="primary" type="submit" data-icon="rocket">Send</button>
         </div>
       </form>
     </main>
@@ -161,10 +155,10 @@
 
     <p id="banner" role="status" hidden></p>
     <footer id="statusbar">
-      <button id="status-model" class="status-item" type="button" title="The model that writes this app. Change models in Settings.">🤖 <span id="model-info"></span><span id="model-warning" class="status-warning" hidden> · no API key</span></button>
+      <button id="status-model" class="status-item" type="button" title="The model that writes this app. Change models in Settings." data-icon="bot"><span id="model-info"></span><span id="model-warning" class="status-warning" hidden> · no API key</span></button>
       <button id="status-apps" class="status-item" type="button" title="How your apps are doing. More in Settings."></button>
       <span class="status-spacer"></span>
-      <button id="status-tokens" class="status-item" type="button" aria-expanded="false" title="Tokens sent to the model (↑) and written by it (↓). Click for each app's."><span id="token-info"></span></button>
+      <button id="status-tokens" class="status-item" type="button" aria-expanded="false" title="Tokens sent to the model (↑) and written by it (↓). Click for each app's." data-icon="coins"><span id="token-info"></span></button>
       <div id="token-popover" class="popover" hidden></div>
     </footer>
     <dialog id="remove-dialog" aria-labelledby="remove-title">

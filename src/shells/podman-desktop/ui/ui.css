@@ -152,17 +152,25 @@ select {
   background: var(--hover);
 }
 
-.plus {
-  font-size: 1.1rem;
-  line-height: 1;
-}
-
+/* Every icon is a line drawing in the colour of its label, sized to it. See icons.ts. */
 .icon {
   flex: none;
-  width: 16px;
-  height: 16px;
+  width: 1.15em;
+  height: 1.15em;
   fill: none;
   stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  /* In running text, on the text's middle rather than its baseline. */
+  vertical-align: -0.2em;
+}
+
+/* An icon sits beside its label, unless the element lays itself out already. */
+:where([data-icon], [data-icon-after], .with-icon) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
 }
 
 .nav-item .spinner.small {
@@ -199,6 +207,10 @@ select {
 
 .star.starred {
   color: #eab308;
+}
+
+.star.starred .icon {
+  fill: currentColor;
 }
 
 .app-item .nav-item {
@@ -323,10 +335,6 @@ main {
   background: var(--hover);
 }
 
-.chip-note::before {
-  content: "⧉ ";
-}
-
 .chip.copied {
   border-color: var(--success);
 }
@@ -336,21 +344,13 @@ main {
   background: var(--success);
 }
 
-.chip.copied .chip-note::before {
-  content: "✓ ";
+.chip .copied-note,
+.chip.copied .to-copy {
+  display: none;
 }
 
-.chip.copied .chip-note {
-  font-size: 0;
-}
-
-.chip.copied .chip-note::before {
-  font-size: 0.8rem;
-}
-
-.chip.copied .chip-note::after {
-  content: "Copied";
-  font-size: 0.8rem;
+.chip.copied .copied-note {
+  display: inline-flex;
 }
 
 #app-name {

@@ -11,6 +11,7 @@ import { lightFor, type Light } from "./lights.ts";
 import { ledgerView } from "./ledger-view.ts";
 import { logViewer } from "./logs.ts";
 import { historyView, versionPanel } from "./history.ts";
+import { addIcons, icon } from "./icons.ts";
 import { renderStatusbar, setUpStatusbar } from "./statusbar.ts";
 import { openForm, renderModels, savedModel, setUpModels } from "./models.ts";
 import { makingOf, progressView, tickClocks, whatChanged, type Showing } from "./progress.ts";
@@ -39,6 +40,8 @@ const EXAMPLES = [
   "Scale a recipe's quantities for any number of people",
   "A packing list for a weekend trip that I can tick off",
 ];
+
+addIcons(document);
 
 const podmanDesktop = acquirePodmanDesktopApi();
 const request = element<HTMLTextAreaElement>("request");
@@ -439,7 +442,7 @@ function appItem(app: AppView, { colour, meaning }: Light): HTMLLIElement {
   control.append(light, h("span", "app-name", app.name));
   markCurrent(control, view.kind === "app" && view.name === app.name);
   control.addEventListener("click", () => go({ kind: "app", name: app.name, tab: "chat" }));
-  const star = h("button", `star${app.starred ? " starred" : ""}`, app.starred ? "★" : "☆");
+  const star = h("button", `star${app.starred ? " starred" : ""}`, icon("star"));
   star.type = "button";
   star.title = app.starred ? "Remove from favourites" : "Add to favourites";
   star.setAttribute("aria-pressed", String(app.starred));

@@ -1,5 +1,6 @@
 import type { AppView, VersionView } from "../../../engine/engine.ts";
 import { h } from "./dom.ts";
+import { icon } from "./icons.ts";
 import { tokens, when } from "./format.ts";
 import { graph, type GraphRow, type Lane } from "./graph.ts";
 import { versionDetails, type Showing } from "./progress.ts";
@@ -19,7 +20,7 @@ export function historyView(app: AppView, picked: string | undefined, pick: (ver
 /** One version in full: what was asked, how it went, who made it and when, what it cost and changed, and a way back to it. */
 export function versionPanel(app: AppView, version: VersionView, showing: Showing, actions: { pick(version: string): void; close(): void; restore?: (version: string) => void }): Node[] {
   const status = statusOf(app, version);
-  const close = h("button", "quiet-button panel-close", "✕");
+  const close = h("button", "quiet-button panel-close", icon("close"));
   close.type = "button";
   close.setAttribute("aria-label", "Close");
   close.addEventListener("click", actions.close);
@@ -40,13 +41,13 @@ export function versionPanel(app: AppView, version: VersionView, showing: Showin
 function historyRow(app: AppView, row: GraphRow, width: number, picked: boolean, pick: (version: string) => void): HTMLLIElement {
   const { version } = row;
   const status = statusOf(app, version);
-  const author = version.by.kind === "person" ? "✏️ " : "";
+  const byHand = version.by.kind === "person" ? [icon("pencil")] : [];
   const item = h(
     "button",
     "history-item",
     h("code", "version-id", version.id),
     h("span", "history-request", version.request === "" ? "No request" : version.request),
-    h("span", "history-when", `${author}${MARK[status]} ${when(version.at)}`),
+    h("span", "history-when with-icon", ...byHand, `${MARK[status]} ${when(version.at)}`),
   );
   item.type = "button";
   item.title = `${STATUS[status]}, by ${version.by.name}`;
@@ -56,7 +57,7 @@ function historyRow(app: AppView, row: GraphRow, width: number, picked: boolean,
 }
 
 function facts(version: VersionView, pick: (version: string) => void): HTMLElement {
-  const made = version.by.kind === "model" ? `🤖 ${version.by.name}` : `✏️ ${version.by.name}, by hand`;
+  const made = h("span", "", ...(version.by.kind === "model" ? [icon("bot"), ` ${version.by.name}`] : [icon("pencil"), ` ${version.by.name}, by hand`]));
   const at = h("span", "", when(version.at));
   if (version.at !== 0) at.title = new Date(version.at).toLocaleString();
   const rows: [string, Node | string][] = [

@@ -2,6 +2,7 @@ import type { VersionView } from "../../../engine/engine.ts";
 import type { Progress } from "../messages.ts";
 import { changes, codeView } from "./code.ts";
 import { h, keepTime } from "./dom.ts";
+import { icon } from "./icons.ts";
 import { elapsed, lineCount, stagesOf, stagesOfVersions, wordCount, type Stage, type StageKind } from "./stages.ts";
 
 const STAGES: Record<StageKind, (attempt: number) => readonly [icon: string, label: string]> = {
@@ -124,7 +125,7 @@ function thinkingFold(stage: Stage, showing: Showing, { key, latest, app }: Fold
   const text = stage.thinking ?? (isOpen && app !== undefined && stage.version !== undefined ? showing.thinking(app, stage.version) : undefined);
   const words = stage.thinkingWords ?? wordCount(stage.thinking ?? "");
   const body = text === undefined ? h("p", "quiet", "Fetching the thinking…") : h("pre", stillThinking ? "thinking live" : "thinking", text);
-  const summary = h("summary", "", `💭 The model's thinking · ${words.toLocaleString()} words`);
+  const summary = h("summary", "", icon("thinking"), ` The model's thinking · ${words.toLocaleString()} words`);
   return disclosure(h("details", "code", summary, body), `thinking:${key}`, stillThinking, showing);
 }
 

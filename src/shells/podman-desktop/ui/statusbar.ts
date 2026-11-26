@@ -2,6 +2,7 @@ import type { AppView, ServiceHealth } from "../../../engine/engine.ts";
 import type { Usage } from "../../../engine/usage.ts";
 import type { ModelView, ToUi } from "../messages.ts";
 import { h } from "./dom.ts";
+import { icon } from "./icons.ts";
 import { lightFor, type Colour } from "./lights.ts";
 
 type State = Extract<ToUi, { type: "state" }>;
@@ -45,13 +46,13 @@ function appCounts(state: State, health: readonly ServiceHealth[] | undefined): 
 
 function tokenSummary(app: AppView | undefined, spent: Usage): (Node | string)[] {
   const all = [h("span", "quiet", "All apps"), ...counts(spent)];
-  return app === undefined ? ["🪙 ", ...all] : ["🪙 ", h("span", "", app.name), ...counts(app.spent), h("span", "status-divider", "·"), ...all];
+  return app === undefined ? all : [h("span", "", app.name), ...counts(app.spent), h("span", "status-divider", "·"), ...all];
 }
 
 // Thinking shows only once a provider has counted some: most never do.
 function counts({ input, output, thinking }: Usage): Node[] {
   const spent = [h("span", "token-in", ` ↑ ${input.toLocaleString()}`), h("span", "token-out", ` ↓ ${output.toLocaleString()}`)];
-  return thinking === 0 ? spent : [...spent, h("span", "token-thinking", ` 💭 ${thinking.toLocaleString()}`)];
+  return thinking === 0 ? spent : [...spent, h("span", "token-thinking", " ", icon("thinking"), ` ${thinking.toLocaleString()}`)];
 }
 
 /** Every app's tokens, the hungriest first, and the total, removed apps included. */
@@ -62,14 +63,14 @@ function tokenBreakdown({ apps, spent }: State): HTMLElement {
     "div",
     "",
     h("p", "popover-title", "Tokens by app"),
-    h("p", "quiet", thinking ? "↑ sent to the model, ↓ written in its replies, 💭 spent thinking" : "↑ sent to the model, ↓ written by it"),
+    h("p", "quiet", ...(thinking ? ["↑ sent to the model, ↓ written in its replies, ", icon("thinking"), " spent thinking"] : ["↑ sent to the model, ↓ written by it"])),
     h("table", "token-table", h("tbody", "", ...rows, tokenRow("All, removed apps too", spent, "total", thinking))),
   );
 }
 
 function tokenRow(name: string, usage: Usage, className: string, thinking: boolean): HTMLTableRowElement {
   const cells = [h("td", "", name), h("td", "token-in", `↑ ${usage.input.toLocaleString()}`), h("td", "token-out", `↓ ${usage.output.toLocaleString()}`)];
-  if (thinking) cells.push(h("td", "token-thinking", `💭 ${usage.thinking.toLocaleString()}`));
+  if (thinking) cells.push(h("td", "token-thinking", icon("thinking"), ` ${usage.thinking.toLocaleString()}`));
   return h("tr", className, ...cells);
 }
 
