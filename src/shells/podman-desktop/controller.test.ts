@@ -36,7 +36,7 @@ describe("the Mayfly panel's controller", () => {
       defaultModel: "openai",
       spent: { input: 500, output: 80 },
       working: null,
-      peek: false,
+      developer: false,
     });
   });
 
@@ -61,9 +61,9 @@ describe("the Mayfly panel's controller", () => {
     assert.deepEqual(progress, [["writing"], ["writing", "wrote"]]);
   });
 
-  it("passes on the model's latest draft a few times a second to someone peeking", async (t) => {
+  it("passes on the model's latest draft a few times a second to a developer", async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
-    const { handle, posted, finish } = setUp({ apps: [], steps: [writing, draft("a"), draft("ab"), draft("abc")], peek: true, waitForCreate: true });
+    const { handle, posted, finish } = setUp({ apps: [], steps: [writing, draft("a"), draft("ab"), draft("abc")], developer: true, waitForCreate: true });
 
     const sending = handle({ type: "send", app: null, request: "split lunch bills" });
     await new Promise((resolve) => setImmediate(resolve));
@@ -75,7 +75,7 @@ describe("the Mayfly panel's controller", () => {
     assert.deepEqual(progress, [[writing], [writing, draft("abc")]]);
   });
 
-  it("keeps the draft to itself when nobody is peeking", async (t) => {
+  it("keeps the draft to itself when developer mode is off", async (t) => {
     t.mock.timers.enable({ apis: ["setTimeout"] });
     const { handle, posted } = setUp({ apps: [], steps: [writing, draft("a")] });
 
@@ -151,12 +151,12 @@ describe("the Mayfly panel's controller", () => {
     assert.deepEqual(posted, [{ type: "code", app: "lunch-split", version: "v1", routes: "export default 1;\n" }]);
   });
 
-  it("remembers whether to peek behind the curtain", async () => {
+  it("remembers whether developer mode is on", async () => {
     const { handle, posted } = setUp({ apps: [] });
 
-    await handle({ type: "peek", on: true });
+    await handle({ type: "developer", on: true });
 
-    assert.equal(stateOf(posted.at(-1))?.peek, true);
+    assert.equal(stateOf(posted.at(-1))?.developer, true);
   });
 
   it("opens a new app only once an attempt at it passed", async () => {
@@ -314,13 +314,13 @@ interface Options {
   apps: AppView[];
   created?: AppView;
   steps?: Step[];
-  peek?: boolean;
+  developer?: boolean;
   keyFor?: string[];
   createFails?: string;
   waitForCreate?: boolean;
 }
 
-function setUp({ apps, created: made = lunch, steps = [], peek: peeking = false, keyFor = [OPENAI_ENDPOINT], createFails, waitForCreate = false }: Options) {
+function setUp({ apps, created: made = lunch, steps = [], developer: developing = false, keyFor = [OPENAI_ENDPOINT], createFails, waitForCreate = false }: Options) {
   const posted: ToUi[] = [];
   const opened: string[] = [];
   const copied: string[] = [];
@@ -328,7 +328,7 @@ function setUp({ apps, created: made = lunch, steps = [], peek: peeking = false,
   const savedKeys: [string, string][] = [];
   const keys = new Set(keyFor);
   let models: Models = { models: [openai], default: "openai" };
-  let peek = peeking;
+  let developer = developing;
   let finish = (): void => {};
   const created = new Promise<void>((resolve) => (finish = resolve));
   const engine: Engine = {
@@ -373,8 +373,8 @@ function setUp({ apps, created: made = lunch, steps = [], peek: peeking = false,
     settings: {
       models: () => models,
       saveModels: async (next) => void (models = next),
-      peek: () => peek,
-      savePeek: async (on) => void (peek = on),
+      developer: () => developer,
+      saveDeveloper: async (on) => void (developer = on),
     },
     keys: {
       has: async (endpoint) => keys.has(endpoint),

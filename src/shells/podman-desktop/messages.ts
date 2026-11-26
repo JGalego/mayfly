@@ -42,7 +42,7 @@ export type FromUi =
   | { readonly type: "remove-model"; readonly id: string }
   | { readonly type: "default-model"; readonly id: string }
   | { readonly type: "use-model"; readonly app: string; readonly model: string }
-  | { readonly type: "peek"; readonly on: boolean }
+  | { readonly type: "developer"; readonly on: boolean }
   | { readonly type: "health" }
   | { readonly type: "doctor" }
   | { readonly type: "activity" }
@@ -62,8 +62,8 @@ export type ToUi =
       readonly defaultModel: string;
       readonly spent: Usage;
       readonly working: Progress | null;
-      /** Whether to show the code and each step of making an app. */
-      readonly peek: boolean;
+      /** Whether to show what developers want: code, versions, history, health and logs. */
+      readonly developer: boolean;
     }
   | { readonly type: "progress"; readonly working: Progress }
   | { readonly type: "created"; readonly name: string }

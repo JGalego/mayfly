@@ -40,7 +40,7 @@ Describe a small app for a short or routine task. Mayfly builds it and runs it o
 3. Choose **New app** and say what you need. About a minute later the app opens in your browser. Sign in as the owner shown above the conversation; **Copy password** puts the password on your clipboard.
 4. Each app is a conversation. Ask for a change there, and the new version replaces the old one at the same address.
 
-The status bar shows the model, and the tokens in and out on the app you're looking at and on all apps. To watch the code being written as it happens, turn on **Peek behind the curtain** in Settings.
+The status bar shows the model, and the tokens in and out on the app you're looking at and on all apps. To see under the hood, turn on **Settings → Advanced → Enable developer mode**: the code as Mayfly writes it, what each change did, every version with a way back to it, a code editor, and each app's health and logs.
 
 ## Why not Dyad?
 

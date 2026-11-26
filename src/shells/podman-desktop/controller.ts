@@ -24,8 +24,9 @@ export interface ControllerPorts {
   readonly settings: {
     models(): Models;
     saveModels(models: Models): Promise<void>;
-    peek(): boolean;
-    savePeek(on: boolean): Promise<void>;
+    /** Whether the person works with the code too: versions, history, the editor, health and logs. */
+    developer(): boolean;
+    saveDeveloper(on: boolean): Promise<void>;
   };
   /** Checks that Mayfly has everything it needs. */
   readonly doctor: () => Promise<readonly Check[]>;
@@ -73,8 +74,8 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       return settle(makeDefault(request.id, session), session);
     case "use-model":
       return useModel(request.app, request.model, session);
-    case "peek":
-      return savePeek(request.on, session);
+    case "developer":
+      return saveDeveloper(request.on, session);
     case "code":
       return sendCode(request.app, request.version, session);
     case "health":
@@ -165,8 +166,8 @@ function showProgress(step: Step, session: Session): void {
   if (session.working === null) return;
   session.working = { ...session.working, steps: withStep(session.working.steps, step) };
   if (step.kind !== "draft") return postProgress(session);
-  // Only someone peeking sees the draft, and they see it a few times a second rather than on every word.
-  if (session.draftDue || !session.settings.peek()) return;
+  // Only a developer sees the draft, and a few times a second rather than on every word.
+  if (session.draftDue || !session.settings.developer()) return;
   session.draftDue = true;
   setTimeout(() => {
     session.draftDue = false;
@@ -213,8 +214,8 @@ async function sendCode(app: string, version: string, session: Session): Promise
   await session.post({ type: "code", app, version, routes: await session.engine.code(app, version) });
 }
 
-async function savePeek(on: boolean, session: Session): Promise<void> {
-  await session.settings.savePeek(on);
+async function saveDeveloper(on: boolean, session: Session): Promise<void> {
+  await session.settings.saveDeveloper(on);
   await showState(session);
 }
 
@@ -227,7 +228,7 @@ async function showState(session: Session): Promise<void> {
     defaultModel: session.settings.models().default,
     spent: await session.engine.spent(),
     working: session.working,
-    peek: session.settings.peek(),
+    developer: session.settings.developer(),
   });
 }
 
@@ -257,7 +258,7 @@ function readRequest(message: unknown): FromUi | undefined {
     case "open":
     case "remove":
       return typeof name === "string" ? { type, name } : undefined;
-    case "peek":
+    case "developer":
       return typeof on === "boolean" ? { type, on } : undefined;
     case "edit":
       return typeof app === "string" && typeof routes === "string" && typeof words === "string" ? { type, app, routes, message: words } : undefined;

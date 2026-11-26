@@ -21,7 +21,7 @@ function historyRow(app: AppView, row: GraphRow, width: number, showing: Showing
   const title = h("p", "history-title", h("code", "version-id", version.id), " ", version.request === "" ? "No request" : version.request);
   const cost = version.by.kind === "model" ? [tokens(version.spent)] : [];
   const facts = h("p", "quiet", [STATUS[status], `by ${version.by.name}`, when(version.at), ...cost].join(" · "));
-  const problem = version.problem === null ? [] : [showing.peek ? h("pre", "problem", version.problem) : h("p", "quiet", version.problem.split("\n")[0] ?? "")];
+  const problem = version.problem === null ? [] : [showing.developer ? h("pre", "problem", version.problem) : h("p", "quiet", version.problem.split("\n")[0] ?? "")];
   const body = h("div", "history-body", title, facts, ...problem, ...versionDetails(app.name, version, showing));
   return h("li", `history-row ${status}`, lanes(row, width), body, ...action(version, status, restore));
 }

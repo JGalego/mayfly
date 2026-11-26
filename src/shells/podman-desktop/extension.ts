@@ -62,8 +62,9 @@ async function openPanel(context: api.ExtensionContext, engine: Engine, keys: Ke
       }),
     settings: {
       ...models,
-      peek: () => api.configuration.getConfiguration("mayfly").get<boolean>("peek") ?? false,
-      savePeek: (on) => api.configuration.getConfiguration("mayfly").update("peek", on),
+      // Peek behind the curtain was developer mode's first name; whoever turned it on keeps it on.
+      developer: () => settings().get<boolean>("developerMode") ?? settings().get<boolean>("peek") ?? false,
+      saveDeveloper: (on) => settings().update("developerMode", on),
     },
     keys,
   });
@@ -108,6 +109,10 @@ function configuredModel(setting: ModelSetting, keys: KeyStore): ModelProvider {
 }
 
 type ModelStore = ModelPorts["settings"];
+
+function settings(): api.Configuration {
+  return api.configuration.getConfiguration("mayfly");
+}
 
 /** A model the doctor can try: its key is checked by listing the provider's models, which costs nothing. */
 async function probe(setting: ModelSetting, keys: KeyStore): Promise<ModelProbe> {

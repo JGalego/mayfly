@@ -14,7 +14,7 @@ const STAGES: Record<StageKind, (attempt: number) => readonly [icon: string, lab
 
 /** What the page knows about showing things: whether to show code, which sections are open, and the code it has fetched. */
 export interface Showing {
-  readonly peek: boolean;
+  readonly developer: boolean;
   isOpen(key: string, byDefault: boolean): boolean;
   setOpen(key: string, open: boolean): void;
   /** A version's code, or undefined while it is being fetched. */
@@ -90,12 +90,12 @@ function liveNote({ kind, code }: Stage): string {
 /** The code and the problem a stage shows. Code shows behind the curtain only. */
 function details(stage: Stage, showing: Showing, code?: { key: string; open: boolean; app?: string }): Node[] {
   const shown: Node[] = [];
-  if (showing.peek && stage.code !== undefined && stage.live === true) shown.push(codeView(stage.code, "listing live"));
-  else if (showing.peek && code !== undefined && (stage.code !== undefined || stage.version !== undefined)) shown.push(codeFold(stage, showing, code));
-  if (showing.peek && code?.app !== undefined && stage.version !== undefined && stage.parent !== undefined) {
+  if (showing.developer && stage.code !== undefined && stage.live === true) shown.push(codeView(stage.code, "listing live"));
+  else if (showing.developer && code !== undefined && (stage.code !== undefined || stage.version !== undefined)) shown.push(codeFold(stage, showing, code));
+  if (showing.developer && code?.app !== undefined && stage.version !== undefined && stage.parent !== undefined) {
     shown.push(diffFold(code.app, stage.parent, stage.version, { key: `diff:${code.app}:${stage.version}`, label: "Changes from the version before" }, showing));
   }
-  if (stage.problem !== undefined) shown.push(showing.peek ? h("pre", "problem", stage.problem) : h("p", "quiet", "It didn't pass, so Mayfly tried again."));
+  if (stage.problem !== undefined) shown.push(showing.developer ? h("pre", "problem", stage.problem) : h("p", "quiet", "It didn't pass, so Mayfly tried again."));
   return shown;
 }
 

@@ -40,7 +40,7 @@ const EXAMPLES = [
 const podmanDesktop = acquirePodmanDesktopApi();
 const request = element<HTMLTextAreaElement>("request");
 const composerModel = element<HTMLSelectElement>("composer-model");
-const peek = element<HTMLInputElement>("peek");
+const developer = element<HTMLInputElement>("developer");
 
 let state: State | undefined;
 let view: View = { kind: "new" };
@@ -102,7 +102,7 @@ request.addEventListener("keydown", (event) => {
 composerModel.addEventListener("change", pickModel);
 element("refresh-health").addEventListener("click", askHealth);
 element("run-doctor").addEventListener("click", askDoctor);
-peek.addEventListener("change", () => post({ type: "peek", on: peek.checked }));
+developer.addEventListener("change", () => post({ type: "developer", on: developer.checked }));
 
 window.setInterval(tickClocks, 1000);
 post({ type: "ready" });
@@ -323,7 +323,9 @@ function render(): void {
   renderSidebar(state);
   element("chat").hidden = view.kind === "settings";
   element("settings").hidden = view.kind !== "settings";
-  peek.checked = state.peek;
+  developer.checked = state.developer;
+  // What only developers see, Settings' health and logs among it.
+  for (const part of document.querySelectorAll<HTMLElement>(".developer-only")) part.hidden = !state.developer;
   if (view.kind === "settings") {
     renderModels(state, post, () => render());
     element("health").replaceChildren(...healthView(health));
@@ -380,13 +382,14 @@ function renderChat(state: State, app: AppView | undefined): void {
   const thread = element("thread");
   const following = thread.scrollHeight - thread.scrollTop - thread.clientHeight < FOLLOW_PX;
   // The Code tab is behind the curtain.
-  const tab = view.kind !== "app" || (view.tab === "code" && !state.peek) ? "chat" : view.tab;
+  // History and Code are for developers.
+  const tab = view.kind !== "app" || !state.developer ? "chat" : view.tab;
   element("turns").hidden = tab !== "chat";
   element("turns").replaceChildren(...(tab === "chat" ? [...items, ...pending] : []));
   element("history").hidden = tab !== "history";
   element("history").replaceChildren(...(tab === "history" && app !== undefined ? [historyView(app, showing, { restore: (version) => goBack(app.name, version), busy: state.working !== null })] : []));
   for (const name of ["chat", "history", "code"] as const) element(`tab-${name}`).setAttribute("aria-selected", String(tab === name));
-  element("tab-code").hidden = !state.peek;
+  element("app-tabs").hidden = !state.developer;
   element("code-tab").hidden = tab !== "code";
   if (tab === "code" && app !== undefined) renderCode(app, showing);
   element("tab-history").textContent = `History · ${app?.versions.length ?? 0}`;
@@ -406,13 +409,13 @@ function madeOf(said: Turn, app: AppView, showing: Showing): Node[] {
   const versions = said.versions.flatMap((id) => app.versions.find((version) => version.id === id) ?? []);
   const made = makingOf(app.name, versions, said.took, showing);
   const [first, last] = [versions[0], versions.at(-1)];
-  const changed = showing.peek && first?.parent != null && last?.problem === null;
+  const changed = showing.developer && first?.parent != null && last?.problem === null;
   return changed ? [whatChanged(app.name, first.parent, last.id, showing), made] : [made];
 }
 
-function showingFor({ peek }: State): Showing {
+function showingFor({ developer }: State): Showing {
   return {
-    peek,
+    developer,
     isOpen: (key, byDefault) => folds.get(key) ?? byDefault,
     setOpen: (key, open) => {
       folds.set(key, open);

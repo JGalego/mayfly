@@ -20,10 +20,10 @@
     "configuration": {
       "title": "Mayfly",
       "properties": {
-        "mayfly.peek": {
+        "mayfly.developerMode": {
           "type": "boolean",
           "default": false,
-          "description": "Peek behind the curtain: show the code Mayfly writes, and each step of making an app"
+          "description": "Developer mode: show the code Mayfly writes, every version with a way back to it, a code editor, and each app's health and logs"
         }
       }
     }

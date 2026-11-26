@@ -38,10 +38,10 @@
             <button id="copy-password" class="chip" type="button" title="Copy the password"><span class="dots" aria-label="password">••••••••</span><span class="chip-note">Copy</span></button>
           </div>
         </div>
-        <div class="tabs" role="tablist" aria-label="App">
+        <div id="app-tabs" class="tabs" role="tablist" aria-label="App">
           <button id="tab-chat" role="tab" type="button">Conversation</button>
           <button id="tab-history" role="tab" type="button">History</button>
-          <button id="tab-code" role="tab" type="button" hidden>Code</button>
+          <button id="tab-code" role="tab" type="button">Code</button>
         </div>
         <button id="remove-app" class="quiet-button" type="button">Remove</button>
         <button id="open-app" class="primary" type="button">Open app</button>
@@ -116,7 +116,7 @@
             </div>
           </form>
         </section>
-        <section>
+        <section class="developer-only">
           <div class="section-head">
             <h2>Health</h2>
             <button id="refresh-health" class="quiet-button" type="button">Refresh</button>
@@ -124,7 +124,7 @@
           <p class="quiet">Whether each app and the sign-in service are running, as Podman sees them.</p>
           <ul id="health" class="health-list"></ul>
         </section>
-        <section id="logs">
+        <section id="logs" class="developer-only">
           <div class="section-head">
             <h2>Logs</h2>
             <div>
@@ -153,9 +153,9 @@
           <ol id="log-lines" class="log-lines"></ol>
         </section>
         <section>
-          <h2>Code</h2>
-          <label class="check"><input id="peek" type="checkbox"> Peek behind the curtain</label>
-          <p class="quiet">Show the code Mayfly writes, and each step of making an app: writing it, trying it, and fixing what failed.</p>
+          <h2>Advanced</h2>
+          <label class="check"><input id="developer" type="checkbox"> Enable developer mode</label>
+          <p class="quiet">For people who want to see under the hood: the code as Mayfly writes it, what each change did, every version with a way back to it, a code editor, and how each app is running, with its logs.</p>
         </section>
       </div>
     </main>
