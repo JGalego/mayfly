@@ -1269,6 +1269,11 @@ pre.problem {
   font-size: 1rem;
 }
 
+/* Each option after the first in a section starts a little apart from the description above it. */
+.settings-page .quiet + .check {
+  margin-top: 0.6rem;
+}
+
 .settings-page section,
 #model-form {
   display: flex;

@@ -140,14 +140,11 @@
             </div>
           </section>
           <section>
-            <h2>When Podman Desktop starts</h2>
-            <label class="check"><input id="autostart" type="checkbox"> Start the apps that stopped</label>
-            <p class="quiet">Once Podman is up, Mayfly starts every app that should be running but isn't, and the sign-in service with them.</p>
-          </section>
-          <section>
             <h2>Advanced</h2>
             <label class="check"><input id="developer" type="checkbox"> Enable developer mode</label>
             <p class="quiet">For people who want to see under the hood: the code as Mayfly writes it, what each change did, every version, a code editor to try changes from any of them, a way to deploy any that passed, and how each app is running, with its logs.</p>
+            <label class="check"><input id="autostart" type="checkbox"> Start stopped apps when Podman Desktop starts</label>
+            <p class="quiet">Once Podman is up, Mayfly starts every app that should be running but isn't, and the sign-in service with them.</p>
           </section>
         </div>
         <div id="settings-models-tab" class="settings-page">
