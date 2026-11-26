@@ -17,8 +17,16 @@ export function historyView(app: AppView, picked: string | undefined, pick: (ver
   return h("ol", "history", ...rows.map((row) => historyRow(app, row, width, row.version.id === picked, pick)));
 }
 
-/** One version in full: what was asked, how it went, who made it and when, what it cost and changed, and a way back to it. */
-export function versionPanel(app: AppView, version: VersionView, showing: Showing, actions: { pick(version: string): void; close(): void; restore?: (version: string) => void }): Node[] {
+/** What can be done with a version, when nothing else is under way: deploy it, or edit its code once it is fetched. */
+export interface VersionActions {
+  pick(version: string): void;
+  close(): void;
+  deploy?: (version: string) => void;
+  edit?: (version: string) => void;
+}
+
+/** One version in full: what was asked, how it went, who made it and when, what it cost and changed, and what can be done with it. */
+export function versionPanel(app: AppView, version: VersionView, showing: Showing, actions: VersionActions): Node[] {
   const status = statusOf(app, version);
   const close = h("button", "quiet-button panel-close", icon("close"));
   close.type = "button";
@@ -33,7 +41,7 @@ export function versionPanel(app: AppView, version: VersionView, showing: Showin
     facts(version, actions.pick),
     ...said,
     ...problem,
-    ...goBack(version, status, actions.restore),
+    ...versionButtons(version, status, actions),
     ...versionDetails(app.name, version, showing, { changesOpen: true }),
   ];
 }
@@ -78,14 +86,21 @@ function parentLink(parent: string, pick: (version: string) => void): HTMLButton
   return link;
 }
 
-function goBack(version: VersionView, status: Status, restore?: (version: string) => void): Node[] {
-  if (status !== "passed") return [];
-  const button = h("button", "primary with-icon", icon("rewind"), "Go back to this");
-  button.type = "button";
-  button.disabled = restore === undefined;
-  button.title = "Run this version again. Your next change starts from it, and nothing is lost.";
-  button.addEventListener("click", () => restore?.(version.id));
-  return [h("p", "panel-actions", button)];
+// Any version with code can start an experiment; one that passed and is not running can be deployed. Nothing is lost either way.
+function versionButtons(version: VersionView, status: Status, { deploy, edit }: VersionActions): Node[] {
+  const buttons = [];
+  if (status === "passed") buttons.push(button("primary", "rocket", "Deploy", "Run this version at the app's address. Your next change starts from it.", deploy && (() => deploy(version.id))));
+  if (version.lines > 0) buttons.push(button("secondary", "pencil", "Edit from here", "Change this version's code by hand. Each save adds a version on top of it.", edit && (() => edit(version.id))));
+  return buttons.length === 0 ? [] : [h("p", "panel-actions", ...buttons)];
+}
+
+function button(kind: string, name: "rocket" | "pencil", label: string, title: string, act: (() => void) | undefined): HTMLButtonElement {
+  const control = h("button", `${kind} with-icon`, icon(name), label);
+  control.type = "button";
+  control.title = title;
+  control.disabled = act === undefined;
+  if (act !== undefined) control.addEventListener("click", act);
+  return control;
 }
 
 function statusOf(app: AppView, version: VersionView): Status {

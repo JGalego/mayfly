@@ -17,6 +17,7 @@ const EMAIL = /^[^\s@]+@[^\s@]+$/;
 // What Mayfly says when the model said nothing after the code.
 const MADE = "Your app is ready.";
 const CHANGED = "Done. Your app has the change.";
+const SAVED = "Saved. It passed its trial. Deploy it when you want it running; until then your app is as it was.";
 
 /** A version as a shell shows it: how long its code and the model's thinking are, but not them, which the shell asks for when it needs them. */
 export type VersionView = Omit<Version, "routes" | "image" | "thinking"> & { readonly lines: number; readonly thinkingWords: number };
@@ -58,10 +59,10 @@ export interface Engine {
   star(name: string, starred: boolean): Promise<void>;
   /** Has another model write the app's changes from now on, or the default one for null. */
   useModel(name: string, model: string | null): Promise<AppView>;
-  /** Builds, tries and runs code the person wrote by hand, kept as a version of theirs. The message says what they changed. */
-  edit(name: string, routes: string, message: string, watch?: Watcher): Promise<AppView>;
-  /** Runs an earlier version that passed again, at the same URL. The next change starts from it, so history branches rather than being lost. */
-  restore(name: string, version: string, watch?: Watcher): Promise<AppView>;
+  /** Builds and tries code the person wrote by hand from one of the app's versions, and keeps it as theirs, next to that one. It runs only once they deploy it. The message says what they changed. */
+  save(name: string, from: string, routes: string, message: string, watch?: Watcher): Promise<AppView>;
+  /** Runs any version that passed, at the same URL. The next change starts from it, so history branches rather than being lost. */
+  deploy(name: string, version: string, watch?: Watcher): Promise<AppView>;
   /** The code of one version of an app, and what the model thought writing it. */
   written(name: string, version: string): Promise<Written>;
   list(): Promise<AppView[]>;
@@ -108,18 +109,19 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     const versions = chain(attempts, request, made);
     const last = versions.at(-1);
     const passed = last?.problem === null ? last : undefined;
-    const reply: Turn = { from: "mayfly", text: replyFor(app, versions), versions: versions.map((version) => version.id), took: Date.now() - made.started, at: Date.now() };
+    const running = made.runs ? passed : undefined;
+    const reply: Turn = { from: "mayfly", text: replyFor(app, versions, made.runs), versions: versions.map((version) => version.id), took: Date.now() - made.started, at: Date.now() };
     const next: App = {
       ...app,
       versions: [...app.versions, ...versions],
-      head: passed?.id ?? app.head,
+      head: running?.id ?? app.head,
       conversation: [...app.conversation, { from: "person", text: request, at: made.started }, reply],
     };
     const nextState = charge(withApp(state, next), calls);
-    if (passed !== undefined) {
+    if (running !== undefined) {
       watch({ kind: "deploying" });
       await identity.sync(nextState);
-      await deployer.deploy(appObjects(next, passed.image, identity.settingsFor(next)));
+      await deployer.deploy(appObjects(next, running.image, identity.settingsFor(next)));
     }
     await store.save(nextState);
     return appView(existingApp(nextState, name));
@@ -140,7 +142,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       const taken = (await store.load()).apps.map((app) => app.name);
       const model = models(chosen);
       const generation = await generate({ description, taken }, model, watch);
-      return record(description, generation, { base: null, by: { kind: "model", name: model.name }, model: chosen, started }, watch);
+      return record(description, generation, { base: null, by: { kind: "model", name: model.name }, model: chosen, started, runs: true }, watch);
     },
 
     async change(name, request, watch = UNWATCHED) {
@@ -149,7 +151,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       const base = startingPoint(app);
       const model = models(app.model);
       const generation = await generate({ change: request, app: { name, routes: base?.routes ?? "" } }, model, watch);
-      return record(request, generation, { base: base?.id ?? null, by: { kind: "model", name: model.name }, model: app.model, started }, watch);
+      return record(request, generation, { base: base?.id ?? null, by: { kind: "model", name: model.name }, model: app.model, started, runs: true }, watch);
     },
 
     async star(name, starred) {
@@ -171,21 +173,22 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       return appView(next);
     },
 
-    async edit(name, routes, message, watch = UNWATCHED) {
+    async save(name, from, routes, message, watch = UNWATCHED) {
       const started = Date.now();
       const state = withOwner(await store.load());
-      const base = startingPoint(existingApp(state, name));
+      if (findVersion(existingApp(state, name), from) === undefined) throw new Error(`${name} has no version ${from}`);
       watch({ kind: "building" });
       const image = await builder.build(name, routes);
       watch({ kind: "trying" });
       const trial = await builder.trial(image);
       if (!trial.ok) watch({ kind: "failed", problem: trial.problem });
       const outcome = trial.ok ? { problem: null, image } : { problem: trial.problem, image: null };
-      const attempt: Attempt = { routes, summary: trial.ok ? "Your edit is running." : "", spent: NO_USAGE, at: Date.now(), ...outcome };
-      return record(message || "Edit the code by hand", { name, attempts: [attempt], calls: [] }, { base: base?.id ?? null, by: { kind: "person", name: state.owner.email }, model: null, started }, watch);
+      const attempt: Attempt = { routes, summary: "", spent: NO_USAGE, at: Date.now(), ...outcome };
+      const by: Author = { kind: "person", name: state.owner.email };
+      return record(message || "Edit the code by hand", { name, attempts: [attempt], calls: [] }, { base: from, by, model: null, started, runs: false }, watch);
     },
 
-    async restore(name, id, watch = UNWATCHED) {
+    async deploy(name, id, watch = UNWATCHED) {
       const started = Date.now();
       const state = withOwner(await store.load());
       const app = existingApp(state, name);
@@ -194,9 +197,9 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       // It passed its trial when it was made, on the same runtime, so it is built again but not tried again.
       watch({ kind: "building" });
       const image = await builder.build(name, version.routes);
-      const note = `Back to the version made for “${version.request}”. Ask for a change to carry on from here.`;
+      const note = `Version ${id} is running now: “${version.request}”. Ask for a change to carry on from here.`;
       const conversation: Turn[] = [
-        { from: "person", text: `Go back to version ${id}`, at: started },
+        { from: "person", text: `Deploy version ${id}`, at: started },
         { from: "mayfly", text: note, versions: [], took: Date.now() - started, at: Date.now() },
       ];
       const next: App = { ...app, head: id, conversation: [...app.conversation, ...conversation] };
@@ -281,6 +284,8 @@ interface Made {
   readonly by: Author;
   readonly model: string | null;
   readonly started: number;
+  /** Whether an attempt that passes replaces the running version, or is only kept. */
+  readonly runs: boolean;
 }
 
 /** Where a change starts: the running code, or for an app that never ran, its latest attempt that had any. */
@@ -321,8 +326,9 @@ function chain(attempts: readonly Attempt[], request: string, { base, by }: Made
   return versions;
 }
 
-function replyFor(app: App, versions: readonly Version[]): string {
+function replyFor(app: App, versions: readonly Version[], runs: boolean): string {
   const last = versions.at(-1);
+  if (last?.problem === null && !runs) return SAVED;
   if (last?.problem === null) return last.summary || (app.head === null ? MADE : CHANGED);
   const unchanged = app.head === null ? "" : " Your app is as it was.";
   const failed = versions.length === 1 ? "It didn't pass its trial." : `It still failed after ${versions.length} attempts.`;

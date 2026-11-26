@@ -40,7 +40,7 @@ Describe a small app for a short or routine task. Mayfly builds it and runs it o
 3. Choose **New app** and say what you need. About a minute later the app opens in your browser. Sign in with the email and password under **Sign-in details**, next to **Open app**; each has a **Copy** button.
 4. Each app is a conversation. Ask for a change there, and the new version replaces the old one at the same address.
 
-The status bar shows the model, and the tokens in, out and spent thinking on the app you're looking at and on all apps. To see under the hood, turn on **Settings → General → Enable developer mode**: the code as Mayfly writes it and the model's thinking where its provider shares it, what each change did, every version with a way back to it, a code editor, each app's health and logs, and in **Settings → Usage** the tokens each call to a model spent, whether its code passed and how long it took, by day, week or month, for any app, model or provider.
+The status bar shows the model, and the tokens in, out and spent thinking on the app you're looking at and on all apps. To see under the hood, turn on **Settings → General → Enable developer mode**: the code as Mayfly writes it and the model's thinking where its provider shares it, what each change did, every version as a graph of branches, a code editor that saves your edits from any version as new ones without running them, a way to deploy any version that passed, each app's health and logs, and in **Settings → Usage** the tokens each call to a model spent, whether its code passed and how long it took, by day, week or month, for any app, model or provider.
 
 ## Why not Dyad?
 

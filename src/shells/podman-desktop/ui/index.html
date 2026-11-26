@@ -74,17 +74,22 @@
                   <li aria-current="true"><span data-icon="file">routes.ts</span><span id="file-changed" class="file-changed" title="Changed" hidden>M</span></li>
                 </ul>
               </nav>
-              <div class="code-input">
-                <div id="code-gutter" aria-hidden="true"></div>
-                <div class="code-area">
-                  <pre id="code-shadow" aria-hidden="true"></pre>
-                  <textarea id="code-text" spellcheck="false" wrap="off" aria-label="routes.ts"></textarea>
+              <div class="editor-main">
+                <p id="editor-base" class="quiet"></p>
+                <div class="code-input">
+                  <div id="code-gutter" aria-hidden="true"></div>
+                  <div class="code-area">
+                    <pre id="code-shadow" aria-hidden="true"></pre>
+                    <textarea id="code-text" spellcheck="false" wrap="off" aria-label="routes.ts"></textarea>
+                  </div>
                 </div>
-              </div>
-              <input id="code-message" type="text" maxlength="200" placeholder="What did you change? (optional)" aria-label="What you changed">
-              <div class="editor-actions">
-                <button id="cancel-edit" class="quiet-button" type="button">Cancel</button>
-                <button id="save-edit" class="primary" type="submit">Save and deploy</button>
+                <div id="editor-status" class="editor-status" hidden></div>
+                <input id="code-message" type="text" maxlength="200" placeholder="What did you change? (optional)" aria-label="What you changed">
+                <div class="editor-actions">
+                  <button id="close-editor" class="quiet-button" type="button">Close</button>
+                  <button id="save-edit" class="secondary" type="submit">Save</button>
+                  <button id="deploy-edit" class="primary" type="button" data-icon="rocket">Deploy</button>
+                </div>
               </div>
             </form>
           </div>
@@ -135,7 +140,7 @@
           <section>
             <h2>Advanced</h2>
             <label class="check"><input id="developer" type="checkbox"> Enable developer mode</label>
-            <p class="quiet">For people who want to see under the hood: the code as Mayfly writes it, what each change did, every version with a way back to it, a code editor, and how each app is running, with its logs.</p>
+            <p class="quiet">For people who want to see under the hood: the code as Mayfly writes it, what each change did, every version, a code editor to try changes from any of them, a way to deploy any that passed, and how each app is running, with its logs.</p>
           </section>
         </div>
         <div id="settings-models-tab" class="settings-page">
@@ -203,9 +208,9 @@
       <form method="dialog">
         <h2 id="deploy-title"></h2>
         <div id="deploy-changes"></div>
-        <p class="deploy-note quiet">Mayfly builds the new version and tries it first. The running app changes only if it passes.</p>
+        <p id="deploy-note" class="deploy-note quiet"></p>
         <div class="editor-actions">
-          <button value="keep" class="quiet-button" autofocus>Keep editing</button>
+          <button value="keep" class="quiet-button" autofocus>Cancel</button>
           <button id="confirm-deploy" value="deploy" class="primary">Deploy</button>
         </div>
       </form>

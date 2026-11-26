@@ -14,7 +14,7 @@ const BUSY = "Mayfly is still working on your last request. Wait for it to finis
 const DRAFT_MS = 150;
 // Enough to see the last few hours of work, and small enough to keep in memory.
 const ACTIVITY = 200;
-const DONE: Record<Exclude<Progress["kind"], "remove">, string> = { create: "Made", change: "Changed", restore: "Went back on", edit: "Tried a hand edit on" };
+const DONE: Record<Exclude<Progress["kind"], "remove">, string> = { create: "Made", change: "Changed", deploy: "Deployed a version of", save: "Saved a hand edit to" };
 
 export interface ControllerPorts {
   readonly engine: Engine;
@@ -99,10 +99,10 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       return session.post({ type: "doctor", ...(await session.doctor()) });
     case "logs":
       return session.post({ type: "logs", pod: request.pod, container: request.container, lines: await session.engine.logs(request.pod, request.container) });
-    case "restore":
-      return restore(request.app, request.version, session);
-    case "edit":
-      return editByHand(request.app, request.routes, request.message.trim(), session);
+    case "deploy":
+      return deploy(request.app, request.version, session);
+    case "save":
+      return saveByHand(request.app, request.from, request.routes, request.message.trim(), session);
   }
 }
 
@@ -135,15 +135,17 @@ async function settle(change: Promise<string | undefined | void>, session: Sessi
   await showState(session);
 }
 
-async function restore(app: string, version: string, session: Session): Promise<void> {
+async function deploy(app: string, version: string, session: Session): Promise<void> {
   if (session.working !== null) return void (await session.post({ type: "error", text: BUSY }));
-  await run({ app, request: `Go back to version ${version}`, kind: "restore" }, session, (watch) => session.engine.restore(app, version, watch));
+  await run({ app, request: `Deploy version ${version}`, kind: "deploy" }, session, (watch) => session.engine.deploy(app, version, watch));
 }
 
-async function editByHand(app: string, routes: string, message: string, session: Session): Promise<void> {
+async function saveByHand(app: string, from: string, routes: string, message: string, session: Session): Promise<void> {
   const problem = problemWithEdit(routes, message, session);
   if (problem !== undefined) return void (await session.post({ type: "error", text: problem }));
-  await run({ app, request: message || "Edit the code by hand", kind: "edit" }, session, (watch) => session.engine.edit(app, routes, message, watch));
+  const saved = await run({ app, request: message || "Edit the code by hand", kind: "save" }, session, (watch) => session.engine.save(app, from, routes, message, watch));
+  const version = saved.versions.at(-1);
+  if (version !== undefined) await session.post({ type: "saved", app, version: version.id });
 }
 
 function problemWithEdit(routes: string, message: string, session: Session): string | undefined {
@@ -167,9 +169,9 @@ async function run(work: Omit<Progress, "since" | "steps"> & { kind: keyof typeo
   const app = await job((step) => showProgress(step, session)).finally(() => {
     session.working = null;
   });
-  // Going back runs a version that passed; anything else passed if its last attempt did.
+  // Deploying runs a version that passed; anything else passed if its last attempt did.
   const last = app.versions.at(-1);
-  const passed = work.kind === "restore" || last === undefined || last.problem === null;
+  const passed = work.kind === "deploy" || last === undefined || last.problem === null;
   note(session, passed ? "info" : "error", `${DONE[work.kind]} ${app.name}${passed ? "" : ", but it did not pass its trial"}`);
   await showState(session);
   return app;
@@ -256,7 +258,7 @@ async function showState(session: Session): Promise<void> {
 // Messages come from the page, so each is checked for its shape before anything acts on it.
 function readRequest(message: unknown): FromUi | undefined {
   if (typeof message !== "object" || message === null) return undefined;
-  const { type, app, request, name, apiKey, on, version, what, routes, message: words, model, id, pod, container, starred, email } = message as Record<string, unknown>;
+  const { type, app, request, name, apiKey, on, version, what, from, routes, message: words, model, id, pod, container, starred, email } = message as Record<string, unknown>;
   switch (type) {
     case "ready":
     case "new-password":
@@ -287,10 +289,10 @@ function readRequest(message: unknown): FromUi | undefined {
       return typeof name === "string" ? { type, name } : undefined;
     case "developer":
       return typeof on === "boolean" ? { type, on } : undefined;
-    case "edit":
-      return typeof app === "string" && typeof routes === "string" && typeof words === "string" ? { type, app, routes, message: words } : undefined;
+    case "save":
+      return typeof app === "string" && typeof from === "string" && typeof routes === "string" && typeof words === "string" ? { type, app, from, routes, message: words } : undefined;
     case "code":
-    case "restore":
+    case "deploy":
       return typeof app === "string" && typeof version === "string" ? { type, app, version } : undefined;
     case "save-model": {
       const setting: ModelSetting | undefined = readModel(model);

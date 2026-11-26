@@ -460,6 +460,9 @@ main {
 }
 
 .panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   margin: 0.75rem 0;
 }
 
@@ -730,17 +733,30 @@ pre.editable {
 #code-editor {
   display: grid;
   grid-template-columns: 10rem minmax(0, 1fr);
-  gap: 0.6rem 0.75rem;
+  gap: 0.75rem;
   align-items: start;
+}
+
+.editor-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+/* What became of the last save: the work while it runs, or why it failed. */
+.editor-status {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.editor-status pre.problem {
+  margin: 0;
 }
 
 /* The editor: the files on the left, and the code with its line numbers and what changed in the gutter. */
 #code-tab.editing {
   max-width: calc(var(--column) + 12rem);
-}
-
-.editor-files {
-  grid-row: 1 / span 3;
 }
 
 .editor-files .label {

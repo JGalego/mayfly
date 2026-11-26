@@ -33,7 +33,7 @@ const SETTINGS_TABS: readonly SettingsTab[] = ["general", "models", "logs", "usa
 // Logs and usage are for developers.
 const DEVELOPER_TABS: readonly SettingsTab[] = ["logs", "usage"];
 
-const TITLES: Record<Exclude<Progress["kind"], "remove">, string> = { create: "Writing your app", change: "Changing your app", restore: "Going back", edit: "Trying your edit" };
+const TITLES: Record<Exclude<Progress["kind"], "remove">, string> = { create: "Writing your app", change: "Changing your app", deploy: "Deploying", save: "Trying your edit" };
 
 const NOTICE_MS = 4000;
 const CONFIRM_MS = 4000;
@@ -62,8 +62,12 @@ let view: View = { kind: "new" };
 const drafts = new Map<string, string>();
 /** What the person sent last, to give back if it fails. */
 let lastSent: Work | undefined;
-/** The app whose code the person is editing by hand. */
-let editing: string | undefined;
+/** The app whose code the person is editing by hand, and the version the edit carries on from. */
+let editing: { readonly app: string; readonly from: string } | undefined;
+/** Whether the editor holds changes not saved yet. */
+let unsaved = false;
+/** The version the deploy dialog asks about, and what it last showed, so a redraw leaves it alone. */
+let deploying: { readonly app: string; readonly version: string; shown: string } | undefined;
 /** The app whose logs the Logs tab last asked for, so a redraw does not ask again. */
 let appLogsShown: string | undefined;
 /** Which version the Code tab shows, so a redraw leaves it alone. */
@@ -93,8 +97,10 @@ const settingsLogs = logViewer(post, { activity: true });
 const ledger = ledgerView();
 const appLogs = logViewer(post, { activity: false });
 const editor = codeEditor({ field: element<HTMLTextAreaElement>("code-text"), shadow: element("code-shadow"), gutter: element("code-gutter"), changed: (changed) => {
+  unsaved = changed;
   element("file-changed").hidden = !changed;
-  element<HTMLButtonElement>("save-edit").disabled = !changed;
+  const app = shownApp();
+  if (app !== undefined) editorButtons(app);
 } });
 element("settings-logs").append(settingsLogs.element);
 element("ledger").append(ledger.element);
@@ -111,15 +117,20 @@ element("tab-chat").addEventListener("click", () => showTab("chat"));
 element("tab-history").addEventListener("click", () => showTab("history"));
 element("tab-code").addEventListener("click", () => showTab("code"));
 element("tab-logs").addEventListener("click", () => showTab("logs"));
-element("edit-code").addEventListener("click", startEditing);
-element("cancel-edit").addEventListener("click", () => {
+element("edit-code").addEventListener("click", () => {
+  const app = shownApp();
+  const base = app === undefined ? undefined : startingPoint(app);
+  if (app !== undefined && base !== undefined) startEditing(app, base.id);
+});
+element("close-editor").addEventListener("click", () => {
   editing = undefined;
   render();
 });
 element("code-editor").addEventListener("submit", (event) => {
   event.preventDefault();
-  confirmDeploy();
+  saveEdit();
 });
+element("deploy-edit").addEventListener("click", () => editing !== undefined && askToDeploy(editing.app, editing.from));
 document.addEventListener("keydown", (event) => event.key === "Escape" && picked !== undefined && pick(undefined));
 element("remove-app").addEventListener("click", removeApp);
 for (const what of ["email", "password"] as const) element(`copy-${what}`).addEventListener("click", () => copySignIn(what));
@@ -184,6 +195,9 @@ function receive(message: ToUi): void {
     case "created":
       if (view.kind === "new") go({ kind: "app", name: message.name, tab: "chat" });
       return;
+    case "saved":
+      carryOn(message.app, message.version);
+      return render();
     case "notice":
       return showBanner(message.text, "notice");
     case "error":
@@ -266,13 +280,13 @@ function renderAppLogs(app: AppView): void {
   appLogs.ask();
 }
 
-/** Behind the curtain: the code running now, and an editor to change it by hand. */
+/** Behind the curtain: the code running now, and an editor to change any version of it by hand. */
 function renderCode(app: AppView, showing: Showing): void {
-  const isEditing = editing === app.name;
-  element("code-tab").classList.toggle("editing", isEditing);
-  element("code-reading").hidden = isEditing;
-  element("code-editor").hidden = !isEditing;
-  if (isEditing) return;
+  const from = editing?.app === app.name ? editing.from : undefined;
+  element("code-tab").classList.toggle("editing", from !== undefined);
+  element("code-reading").hidden = from !== undefined;
+  element("code-editor").hidden = from === undefined;
+  if (from !== undefined) return renderEditor(app, from);
   const base = startingPoint(app);
   const code = base === undefined ? undefined : showing.code(app.name, base.id);
   element<HTMLButtonElement>("edit-code").disabled = code === undefined || state?.working !== null;
@@ -283,52 +297,102 @@ function renderCode(app: AppView, showing: Showing): void {
   element("code-current").replaceChildren(code === undefined ? h("p", "quiet", base === undefined ? "" : "Fetching the code…") : codeView(code, "listing editable"));
 }
 
+/** The editor's version, how its last save went, and what can be done now. */
+function renderEditor(app: AppView, from: string): void {
+  const version = app.versions.find((kept) => kept.id === from);
+  const saving = state?.working?.kind === "save" && state.working.app === app.name;
+  const status = version === undefined ? "" : version.id === app.head ? "running now" : version.problem === null ? "passed, not running" : "failed";
+  element("editor-base").textContent = `routes.ts · version ${from}${status === "" ? "" : `, ${status}`}`;
+  const problem = !saving && version?.problem != null ? [h("p", "", `Version ${from} didn't pass its trial. Fix it and save again:`), h("pre", "problem", version.problem)] : [];
+  element("editor-status").replaceChildren(...(saving ? [h("p", "", spinner(), " Building and trying it…")] : problem));
+  element("editor-status").hidden = !saving && problem.length === 0;
+  element<HTMLTextAreaElement>("code-text").readOnly = saving;
+  editorButtons(app);
+}
+
+// Saving needs changes; deploying needs none left unsaved, and a version that passed and is not running yet.
+function editorButtons(app: AppView): void {
+  if (editing?.app !== app.name) return;
+  const busy = state?.working !== null;
+  const version = app.versions.find((kept) => kept.id === editing?.from);
+  element<HTMLButtonElement>("save-edit").disabled = !unsaved || busy;
+  const why = unsaved ? "Save your changes first" : version?.problem != null ? "This version didn't pass its trial" : version?.id === app.head ? "This version is running now" : "";
+  const deploy = element<HTMLButtonElement>("deploy-edit");
+  deploy.disabled = why !== "" || busy;
+  deploy.title = why || "Run this version at the app's address";
+}
+
 /** What an edit starts from: the running version, or the latest attempt with code. */
 function startingPoint(app: AppView): AppView["versions"][number] | undefined {
   return app.versions.find((version) => version.id === app.head) ?? app.versions.findLast((version) => version.lines > 0);
 }
 
-function startingCode(app: AppView): string | undefined {
-  const base = startingPoint(app);
-  return base === undefined ? undefined : written.get(`${app.name}:${base.id}`)?.routes;
-}
-
-function startEditing(): void {
-  const app = shownApp();
-  const code = app === undefined ? undefined : startingCode(app);
-  if (app === undefined || code === undefined) return;
-  editing = app.name;
+/** Opens the editor on a version whose code has been fetched. The running version's code is fetched too, for the deploy dialog. */
+function startEditing(app: AppView, from: string): void {
+  const code = written.get(`${app.name}:${from}`)?.routes;
+  if (code === undefined) return;
+  if (app.head !== null) fetchWritten(app.name, app.head);
+  editing = { app: app.name, from };
   element<HTMLInputElement>("code-message").value = "";
-  render();
+  pick(undefined);
+  go({ kind: "app", name: app.name, tab: "code" });
   editor.load(code);
 }
 
-/** Shows what an edit changes before it goes out, and deploys it only when the person says so. */
-function confirmDeploy(): void {
-  const { before, after } = editor.edit();
-  if (editing === undefined || after === before) return;
-  const { view, added, removed } = changes(before, after);
-  element("deploy-title").textContent = `Deploy these changes to ${editing}?`;
-  element("deploy-changes").replaceChildren(h("p", "diff-file", icon("file"), "routes.ts", h("span", "diff-added", `+${added}`), h("span", "diff-removed", `−${removed}`)), view);
+function saveEdit(): void {
+  if (editing === undefined || !unsaved) return;
+  post({ type: "save", app: editing.app, from: editing.from, routes: editor.edit().after, message: element<HTMLInputElement>("code-message").value });
+}
+
+/** The editor carries on from the version it saved, whose code it already holds. */
+function carryOn(app: string, version: string): void {
+  if (editing?.app !== app) return;
+  written.set(`${app}:${version}`, { routes: editor.edit().after, thinking: "" });
+  editing = { app, from: version };
+  element<HTMLInputElement>("code-message").value = "";
+  editor.saved();
+}
+
+/** Shows how a version differs from the one running, and deploys it only when the person says so. */
+function askToDeploy(app: string, version: string): void {
+  deploying = { app, version, shown: "" };
   const dialog = element<HTMLDialogElement>("deploy-dialog");
   dialog.returnValue = "";
-  dialog.addEventListener("close", () => dialog.returnValue === "deploy" && saveEdit(), { once: true });
+  dialog.addEventListener(
+    "close",
+    () => {
+      if (dialog.returnValue === "deploy") deploy(app, version);
+      deploying = undefined;
+    },
+    { once: true },
+  );
+  renderDeployDialog();
   dialog.showModal();
 }
 
-function saveEdit(): void {
-  if (editing === undefined) return;
-  post({ type: "edit", app: editing, routes: editor.edit().after, message: element<HTMLInputElement>("code-message").value });
-  const app = editing;
-  editing = undefined;
-  codeShown = "";
-  go({ kind: "app", name: app, tab: "chat" });
+// Redrawn as the code of either version arrives, and only then, so a long diff keeps its place.
+function renderDeployDialog(): void {
+  const app = state?.apps.find((kept) => kept.name === deploying?.app);
+  if (deploying === undefined || app === undefined || state === undefined) return;
+  const showing = showingFor(state);
+  const before = app.head === null ? "" : showing.code(app.name, app.head);
+  const after = showing.code(app.name, deploying.version);
+  const ready = before !== undefined && after !== undefined;
+  const key = `${app.head ?? ""}:${String(ready)}`;
+  if (deploying.shown === key) return;
+  deploying.shown = key;
+  element("deploy-title").textContent = `Deploy version ${deploying.version} of ${app.name}?`;
+  element<HTMLButtonElement>("confirm-deploy").disabled = !ready;
+  element("deploy-note").textContent = app.head === null ? "Nothing is running yet. It passed its trial when it was made." : `It replaces version ${app.head}, running now, at the same address. It passed its trial when it was made.`;
+  if (!ready) return void element("deploy-changes").replaceChildren(h("p", "quiet", "Fetching the code…"));
+  const { view, added, removed } = changes(before, after);
+  element("deploy-changes").replaceChildren(h("p", "diff-file", icon("file"), "routes.ts", h("span", "diff-added", `+${added}`), h("span", "diff-removed", `−${removed}`)), view);
 }
 
-// Going back rebuilds and restarts the app, which the conversation shows as it happens.
-function goBack(app: string, version: string): void {
+// Deploying rebuilds and restarts the app, which the conversation shows as it happens.
+function deploy(app: string, version: string): void {
   pick(undefined);
-  post({ type: "restore", app, version });
+  post({ type: "deploy", app, version });
   go({ kind: "app", name: app, tab: "chat" });
 }
 
@@ -439,6 +503,7 @@ function render(): void {
   if (view.kind === "settings") renderSettings(state, view.tab);
   else renderChat(state, app);
   renderStatusbar(state, app, activeModel(state, app), health);
+  renderDeployDialog();
 }
 
 function renderSettings(current: State, wanted: SettingsTab): void {
@@ -576,8 +641,10 @@ function renderHistory(app: AppView | undefined, showing: Showing, idle: boolean
   const panel = element("version-panel");
   panel.hidden = version === undefined;
   if (app === undefined || version === undefined) return panel.replaceChildren();
-  const restore = idle ? { restore: (id: string) => goBack(app.name, id) } : {};
-  panel.replaceChildren(...versionPanel(app, version, showing, { pick: (id) => pick({ app: app.name, version: id }), close: () => pick(undefined), ...restore }));
+  // Editing needs the version's code, which the panel fetches to show what changed.
+  const editable = showing.code(app.name, version.id) !== undefined;
+  const actions = idle ? { deploy: (id: string) => askToDeploy(app.name, id), ...(editable ? { edit: (id: string) => startEditing(app, id) } : {}) } : {};
+  panel.replaceChildren(...versionPanel(app, version, showing, { pick: (id) => pick({ app: app.name, version: id }), close: () => pick(undefined), ...actions }));
 }
 
 function turnItem({ from, text, at }: Turn, extras: readonly Node[] = []): HTMLLIElement {

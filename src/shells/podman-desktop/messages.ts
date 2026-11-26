@@ -18,8 +18,8 @@ export interface Work {
 
 /** A request Mayfly is working on, and what it has done so far. */
 export interface Progress extends Work {
-  /** Making a new app, changing one, going back to an earlier version, editing it by hand, or removing it. */
-  readonly kind: "create" | "change" | "restore" | "edit" | "remove";
+  /** Making a new app, changing one, deploying one of its versions, saving a hand edit to it, or removing it. */
+  readonly kind: "create" | "change" | "deploy" | "save" | "remove";
   /** When Mayfly started on it, in milliseconds since the epoch. */
   readonly since: number;
   readonly steps: readonly Step[];
@@ -53,8 +53,8 @@ export type FromUi =
   | { readonly type: "activity" }
   | { readonly type: "logs"; readonly pod: string; readonly container: string }
   | { readonly type: "code"; readonly app: string; readonly version: string }
-  | { readonly type: "restore"; readonly app: string; readonly version: string }
-  | { readonly type: "edit"; readonly app: string; readonly routes: string; readonly message: string };
+  | { readonly type: "deploy"; readonly app: string; readonly version: string }
+  | { readonly type: "save"; readonly app: string; readonly from: string; readonly routes: string; readonly message: string };
 
 /** What the extension tells the page. Never a secret. */
 export type ToUi =
@@ -72,6 +72,8 @@ export type ToUi =
     }
   | { readonly type: "progress"; readonly working: Progress }
   | { readonly type: "created"; readonly name: string }
+  /** The version a hand edit was saved as, so the editor carries on from it. */
+  | { readonly type: "saved"; readonly app: string; readonly version: string }
   | { readonly type: "health"; readonly services: readonly ServiceHealth[] }
   | { readonly type: "ledger"; readonly calls: readonly ModelCall[] }
   | ({ readonly type: "doctor" } & Examination)

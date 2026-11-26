@@ -104,24 +104,25 @@ describe("the Mayfly panel's controller", () => {
     assert.equal(posted.filter((m) => m.type === "progress").length, 1);
   });
 
-  it("goes back to an earlier version, showing the work while it runs", async () => {
+  it("deploys a version, showing the work while it runs", async () => {
     const { handle, posted, calls } = setUp({ apps: [lunch] });
 
-    await handle({ type: "restore", app: "lunch-split", version: "v1" });
+    await handle({ type: "deploy", app: "lunch-split", version: "v1" });
 
-    assert.deepEqual(calls, ["restore lunch-split v1"]);
-    assert.equal(stateOf(posted[0])?.working?.kind, "restore");
+    assert.deepEqual(calls, ["deploy lunch-split v1"]);
+    assert.equal(stateOf(posted[0])?.working?.kind, "deploy");
     assert.equal(stateOf(posted.at(-1))?.working, null);
   });
 
-  it("builds and runs code edited by hand, and refuses empty code", async () => {
+  it("saves code edited by hand from a version, and refuses empty code", async () => {
     const { handle, posted, calls } = setUp({ apps: [lunch] });
 
-    await handle({ type: "edit", app: "lunch-split", routes: "export default 2;\n", message: " Say two " });
-    await handle({ type: "edit", app: "lunch-split", routes: "  ", message: "" });
+    await handle({ type: "save", app: "lunch-split", from: "v1", routes: "export default 2;\n", message: " Say two " });
+    await handle({ type: "save", app: "lunch-split", from: "v1", routes: "  ", message: "" });
 
-    assert.deepEqual(calls, ["edit lunch-split export default 2; Say two"]);
-    assert.equal(stateOf(posted[0])?.working?.kind, "edit");
+    assert.deepEqual(calls, ["save lunch-split v1 export default 2; Say two"]);
+    assert.equal(stateOf(posted[0])?.working?.kind, "save");
+    assert.deepEqual(posted.find((m) => m.type === "saved"), { type: "saved", app: "lunch-split", version: "v2" });
     assert.equal(posted.at(-1)?.type, "error");
   });
 
@@ -389,12 +390,14 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
       return made;
     },
     written: async () => ({ routes: "export default 1;\n", thinking: "One route will do." }),
-    edit: async (name, routes, message) => {
-      calls.push(`edit ${name} ${routes.trim()} ${message}`);
-      return lunch;
+    save: async (name, from, routes, message) => {
+      calls.push(`save ${name} ${from} ${routes.trim()} ${message}`);
+      const by = { kind: "person", name: "owner@mayfly.local" } as const;
+      const mine = { id: "v2", parent: from, request: message, by, attempt: 1, summary: "", problem: null, spent: { input: 0, output: 0, thinking: 0 }, at: 1, lines: 1, thinkingWords: 0 };
+      return { ...lunch, versions: [mine] };
     },
-    restore: async (name, version) => {
-      calls.push(`restore ${name} ${version}`);
+    deploy: async (name, version) => {
+      calls.push(`deploy ${name} ${version}`);
       return lunch;
     },
     star: async (name, starred) => void calls.push(`star ${name} ${starred}`),

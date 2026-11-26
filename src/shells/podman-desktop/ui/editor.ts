@@ -16,6 +16,8 @@ export interface CodeEditor {
   load(code: string): void;
   /** The code the edit started from, and the code now. */
   edit(): { readonly before: string; readonly after: string };
+  /** Takes the code now as the code the edit starts from, once it is saved. */
+  saved(): void;
 }
 
 /**
@@ -52,5 +54,9 @@ export function codeEditor({ field, shadow, gutter, changed }: EditorParts): Cod
       field.scrollTo(0, 0);
     },
     edit: () => ({ before, after: field.value }),
+    saved() {
+      before = field.value;
+      paint();
+    },
   };
 }
