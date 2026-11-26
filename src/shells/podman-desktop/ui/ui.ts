@@ -4,7 +4,7 @@ import type { FromUi, Progress, ToUi, Work } from "../messages.ts";
 import type { Examination } from "../doctor.ts";
 import type { ModelView } from "../messages.ts";
 import { h, keepTime } from "./dom.ts";
-import { codeView } from "./code.ts";
+import { changes, codeView } from "./code.ts";
 import { codeEditor } from "./editor.ts";
 import { doctorView } from "./doctor-view.ts";
 import { healthView } from "./health.ts";
@@ -113,7 +113,7 @@ element("cancel-edit").addEventListener("click", () => {
 });
 element("code-editor").addEventListener("submit", (event) => {
   event.preventDefault();
-  saveEdit();
+  confirmDeploy();
 });
 document.addEventListener("keydown", (event) => event.key === "Escape" && picked !== undefined && pick(undefined));
 element("remove-app").addEventListener("click", removeApp);
@@ -296,6 +296,22 @@ function startEditing(): void {
   element<HTMLInputElement>("code-message").value = "";
   render();
   editor.load(code);
+}
+
+/** Shows what an edit changes before it goes out, and deploys it only when the person says so. */
+function confirmDeploy(): void {
+  if (editing === undefined) return;
+  const { before, after } = editor.edit();
+  const { view, added, removed } = changes(before, after);
+  const same = added + removed === 0;
+  element("deploy-title").textContent = same ? "Nothing has changed" : `Deploy these changes to ${editing}?`;
+  element("deploy-changes").replaceChildren(...(same ? [] : [h("p", "diff-file", icon("file"), "routes.ts", h("span", "diff-added", `+${added}`), h("span", "diff-removed", `−${removed}`))]), view);
+  element("deploy-note").hidden = same;
+  element("confirm-deploy").hidden = same;
+  const dialog = element<HTMLDialogElement>("deploy-dialog");
+  dialog.returnValue = "";
+  dialog.addEventListener("close", () => dialog.returnValue === "deploy" && saveEdit(), { once: true });
+  dialog.showModal();
 }
 
 function saveEdit(): void {

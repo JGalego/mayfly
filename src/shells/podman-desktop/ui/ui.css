@@ -1524,6 +1524,32 @@ dialog .editor-actions {
   margin-top: 1.25rem;
 }
 
+/* The dialog that shows an edit before it goes out, as wide as code needs. */
+#deploy-dialog {
+  width: min(52rem, 90vw);
+  max-width: none;
+}
+
+#deploy-dialog pre.diff {
+  max-height: 55vh;
+}
+
+#deploy-note {
+  margin-top: 0.75rem;
+}
+
+.diff-file {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  font-weight: 600;
+}
+
+.diff-file .diff-added {
+  margin-left: 0.4rem;
+}
+
 .danger {
   color: #ffffff;
   background: var(--error);

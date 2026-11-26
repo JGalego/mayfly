@@ -197,6 +197,17 @@
         </div>
       </form>
     </dialog>
+    <dialog id="deploy-dialog" aria-labelledby="deploy-title">
+      <form method="dialog">
+        <h2 id="deploy-title"></h2>
+        <div id="deploy-changes"></div>
+        <p id="deploy-note" class="quiet">Mayfly builds the new version and tries it first. The running app changes only if it passes.</p>
+        <div class="editor-actions">
+          <button value="keep" class="quiet-button" autofocus>Keep editing</button>
+          <button id="confirm-deploy" value="deploy" class="primary">Deploy</button>
+        </div>
+      </form>
+    </dialog>
     <script src="ui.js"></script>
   </body>
 </html>
