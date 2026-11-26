@@ -1,5 +1,6 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { buildDex, dexSettings } from "../../src/adapters/dex/dex.ts";
 import { down, play } from "../../src/adapters/podman/podman.ts";
 import { appUrl, callbackUrl } from "../../src/core/app-url.ts";
@@ -22,7 +23,7 @@ let app: KubeObject[] = [];
 
 before(async () => {
   const image = buildEchoImage();
-  dex = await buildDex({ users: [owner, guest], clients: [client] });
+  dex = await buildDex({ users: [owner, guest], clients: [client], logo: readFileSync("assets/logo.svg", "utf8") });
   app = [
     buildAuthConfigMap({ appName: "echo", policy: { roles: ["owner"] }, idp: dexSettings(client.id) }),
     buildAuthSecret({ appName: "echo", clientSecret: client.secret, cookieSecret: secret() }),
@@ -44,6 +45,16 @@ describe("an app behind Mayfly's sign-in, on Podman", () => {
     const page = await new Browser().get(APP);
 
     assert.match(page.url, /^http:\/\/localhost:5556\/dex\/auth\/local/);
+  });
+
+  it("signs people in on a page with Mayfly's name and logo", async () => {
+    const page = await new Browser().get(APP);
+    const logo = await fetch("http://localhost:5556/dex/static/mayfly/logo.svg");
+
+    assert.match(page.body, /Mayfly/);
+    assert.match(page.body, /static\/mayfly\/logo\.svg/);
+    assert.equal(logo.status, 200);
+    assert.match(logo.headers.get("content-type") ?? "", /image\/svg\+xml/);
   });
 
   it("lets the owner in and tells the app who they are", async () => {

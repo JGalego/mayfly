@@ -4,7 +4,7 @@ export interface Pod {
   readonly apiVersion: "v1";
   readonly kind: "Pod";
   readonly metadata: { readonly name: string };
-  readonly spec: { readonly containers: readonly Container[]; readonly volumes?: readonly SecretVolume[] };
+  readonly spec: { readonly containers: readonly Container[]; readonly volumes?: readonly Volume[] };
 }
 
 export interface ConfigMap {
@@ -53,9 +53,16 @@ export interface ContainerPort {
   readonly hostIP: string;
 }
 
+export type Volume = SecretVolume | ConfigMapVolume;
+
 export interface SecretVolume {
   readonly name: string;
   readonly secret: { readonly secretName: string };
+}
+
+export interface ConfigMapVolume {
+  readonly name: string;
+  readonly configMap: { readonly name: string };
 }
 
 /** Always read-only, like the root filesystem. */

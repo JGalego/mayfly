@@ -18,10 +18,11 @@ type Panel = ReturnType<typeof api.window.createWebviewPanel>;
 
 export async function activate(context: api.ExtensionContext): Promise<void> {
   const keys = keyStore(context.secrets);
+  const logo = await readFile(api.Uri.joinPath(context.extensionUri, "media", "logo.svg").fsPath, "utf8");
   const engine = createEngine({
     store: jsonFileStore(join(context.storagePath, "state.json")),
     deployer: podmanDeployer,
-    identity: dexIdentity,
+    identity: dexIdentity(logo),
     model: configuredModel(keys),
     builder: podmanBuilder(RUNTIME_IMAGE),
   });

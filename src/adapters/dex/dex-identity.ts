@@ -5,16 +5,18 @@ import { OWNER_ROLE, type App, type State } from "../../engine/state.ts";
 import { play } from "../podman/podman.ts";
 import { buildDex, dexSettings, type DexClient, type DexUser } from "./dex.ts";
 
-/** Dex on Podman, with the owner as its one user and one client per app. */
-export const dexIdentity: IdentitySource = {
-  async sync(state) {
-    await play(await buildDex({ users: usersOf(state), clients: state.apps.map(clientOf) }));
-  },
+/** Dex on Podman, with the owner as its one user and one client per app, and the logo on its sign-in page. */
+export function dexIdentity(logo?: string): IdentitySource {
+  return {
+    async sync(state) {
+      await play(await buildDex({ users: usersOf(state), clients: state.apps.map(clientOf), ...(logo === undefined ? {} : { logo }) }));
+    },
 
-  settingsFor(app) {
-    return dexSettings(clientId(app));
-  },
-};
+    settingsFor(app) {
+      return dexSettings(clientId(app));
+    },
+  };
+}
 
 function usersOf({ owner }: State): DexUser[] {
   return owner === null ? [] : [{ ...owner, groups: [OWNER_ROLE] }];
