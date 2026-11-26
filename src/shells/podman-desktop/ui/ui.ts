@@ -9,7 +9,7 @@ import { codeView } from "./code.ts";
 import { doctorView } from "./doctor-view.ts";
 import { healthView } from "./health.ts";
 import { lightFor, type Light } from "./lights.ts";
-import { askLogs, offerSources, receiveActivity, receiveLogs, setUpLogs } from "./logs.ts";
+import { logViewer } from "./logs.ts";
 import { historyView } from "./history.ts";
 import { openForm, renderModels, savedModel, setUpModels } from "./models.ts";
 import { makingOf, progressView, tickClocks, whatChanged, type Showing } from "./progress.ts";
@@ -21,7 +21,7 @@ type State = Extract<ToUi, { type: "state" }>;
 /** What the main area shows: a new app's empty conversation, an app's conversation, or the settings. */
 type View = { readonly kind: "new" } | { readonly kind: "app"; readonly name: string; readonly tab: Tab } | { readonly kind: "settings" };
 /** An app's conversation, or its history. */
-type Tab = "chat" | "history" | "code";
+type Tab = "chat" | "history" | "code" | "logs";
 
 const TITLES: Record<Progress["kind"], string> = { create: "Writing your app", change: "Changing your app", restore: "Going back", edit: "Trying your edit" };
 
@@ -53,6 +53,8 @@ let lastSent: Work | undefined;
 let removeArmed = false;
 /** The app whose code the person is editing by hand. */
 let editing: string | undefined;
+/** The app whose logs the Logs tab last asked for, so a redraw does not ask again. */
+let appLogsShown: string | undefined;
 /** Which version the Code tab shows, so a redraw leaves it alone. */
 let codeShown = "";
 /** Folds the person opened or closed, so a redraw leaves them as they were. */
@@ -69,7 +71,11 @@ let health: readonly ServiceHealth[] | undefined;
 let newAppModel: string | undefined;
 
 setUpModels(post, () => render());
-setUpLogs(post);
+// One log reader in Settings for everything, Mayfly's activity included, and one for the app on screen.
+const settingsLogs = logViewer(post, { activity: true });
+const appLogs = logViewer(post, { activity: false });
+element("settings-logs").append(settingsLogs.element);
+element("app-logs").append(appLogs.element);
 element("examples").replaceChildren(...EXAMPLES.map(exampleItem));
 
 window.addEventListener("message", (event: MessageEvent<ToUi>) => receive(event.data));
@@ -80,6 +86,7 @@ element("open-app").addEventListener("click", openApp);
 element("tab-chat").addEventListener("click", () => showTab("chat"));
 element("tab-history").addEventListener("click", () => showTab("history"));
 element("tab-code").addEventListener("click", () => showTab("code"));
+element("tab-logs").addEventListener("click", () => showTab("logs"));
 element("edit-code").addEventListener("click", startEditing);
 element("cancel-edit").addEventListener("click", () => {
   editing = undefined;
@@ -124,15 +131,16 @@ function receive(message: ToUi): void {
       return render();
     case "health":
       health = message.services;
-      offerSources(message.services);
+      settingsLogs.offer(message.services);
       return render();
     case "doctor":
       checks = message.checks;
       return render();
     case "logs":
-      return receiveLogs(message.lines);
+      settingsLogs.receiveLogs(message.pod, message.container, message.lines);
+      return appLogs.receiveLogs(message.pod, message.container, message.lines);
     case "activity":
-      return receiveActivity(message.entries);
+      return settingsLogs.receiveActivity(message.entries);
     case "created":
       if (view.kind === "new") go({ kind: "app", name: message.name, tab: "chat" });
       return;
@@ -166,7 +174,7 @@ function go(next: View): void {
   if (view.kind === "settings") {
     askDoctor();
     askHealth();
-    return askLogs(post);
+    return settingsLogs.ask();
   }
   request.focus();
   // A conversation opens at its latest message; history and code open at the top.
@@ -204,6 +212,16 @@ function copySignIn(what: "email" | "password"): void {
   const chip = element(`copy-${what}`);
   chip.classList.add("copied");
   window.setTimeout(() => chip.classList.remove("copied"), COPIED_MS);
+}
+
+/** For developers: how the app is running, and what its containers wrote. */
+function renderAppLogs(app: AppView): void {
+  const mine = health?.filter((service) => service.kind === "app" && service.name === app.name);
+  element("app-health").replaceChildren(...healthView(mine));
+  appLogs.offer(mine ?? []);
+  if (appLogsShown === app.name) return;
+  appLogsShown = app.name;
+  appLogs.ask();
 }
 
 /** Behind the curtain: the code running now, and an editor to change it by hand. */
@@ -393,7 +411,10 @@ function renderChat(state: State, app: AppView | undefined): void {
   element("turns").replaceChildren(...(tab === "chat" ? [...items, ...pending] : []));
   element("history").hidden = tab !== "history";
   element("history").replaceChildren(...(tab === "history" && app !== undefined ? [historyView(app, showing, { restore: (version) => goBack(app.name, version), busy: state.working !== null })] : []));
-  for (const name of ["chat", "history", "code"] as const) element(`tab-${name}`).setAttribute("aria-selected", String(tab === name));
+  for (const name of ["chat", "history", "code", "logs"] as const) element(`tab-${name}`).setAttribute("aria-selected", String(tab === name));
+  element("logs-tab").hidden = tab !== "logs";
+  if (tab === "logs" && app !== undefined) renderAppLogs(app);
+  else appLogsShown = undefined;
   element("app-tabs").hidden = !state.developer;
   element("code-tab").hidden = tab !== "code";
   if (tab === "code" && app !== undefined) renderCode(app, showing);

@@ -1100,6 +1100,14 @@ pre.problem {
   color: var(--error);
 }
 
+#logs-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-width: var(--column);
+  margin: 0 auto;
+}
+
 .log-controls {
   display: flex;
   gap: 0.5rem;
@@ -1110,8 +1118,8 @@ pre.problem {
   flex-wrap: wrap;
 }
 
-.log-controls select:first-child,
-#log-text {
+.log-source,
+.log-search {
   flex: 1 1 10rem;
   min-width: 0;
 }
@@ -1122,7 +1130,7 @@ pre.problem {
 }
 
 /* Expanded, the logs fill the page above everything else, until closed. */
-#logs.expanded {
+.log-viewer.expanded {
   position: fixed;
   z-index: 10;
   inset: 0.75rem;
@@ -1135,7 +1143,7 @@ pre.problem {
   box-shadow: 0 12px 40px light-dark(#0003, #000a);
 }
 
-#logs.expanded .log-lines {
+.log-viewer.expanded .log-lines {
   flex: 1;
   max-height: none;
 }

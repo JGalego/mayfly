@@ -42,6 +42,7 @@
           <button id="tab-chat" role="tab" type="button">Conversation</button>
           <button id="tab-history" role="tab" type="button">History</button>
           <button id="tab-code" role="tab" type="button">Code</button>
+          <button id="tab-logs" role="tab" type="button">Logs</button>
         </div>
         <button id="remove-app" class="quiet-button" type="button">Remove</button>
         <button id="open-app" class="primary" type="button">Open app</button>
@@ -56,6 +57,10 @@
         </section>
         <ol id="turns"></ol>
         <div id="history" hidden></div>
+        <div id="logs-tab" hidden>
+          <ul id="app-health" class="health-list"></ul>
+          <div id="app-logs"></div>
+        </div>
         <div id="code-tab" hidden>
           <div id="code-reading">
             <div class="code-head">
@@ -123,34 +128,7 @@
           <p class="quiet">Whether each app and the sign-in service are running, as Podman sees them.</p>
           <ul id="health" class="health-list"></ul>
         </section>
-        <section id="logs" class="developer-only">
-          <div class="section-head">
-            <h2>Logs</h2>
-            <div>
-              <button id="refresh-logs" class="quiet-button" type="button">Refresh</button>
-              <button id="expand-logs" class="quiet-button" type="button" aria-expanded="false">Expand</button>
-            </div>
-          </div>
-          <p class="quiet">What Mayfly did, and what each app and the sign-in service wrote.</p>
-          <div class="log-controls">
-            <select id="log-source" aria-label="Whose logs"><option value="mayfly">Mayfly's activity</option></select>
-            <select id="log-level" aria-label="How serious">
-              <option value="debug">Everything</option>
-              <option value="info" selected>Info and up</option>
-              <option value="warn">Warnings and errors</option>
-              <option value="error">Errors only</option>
-            </select>
-            <select id="log-since" aria-label="How recent">
-              <option value="0">Any time</option>
-              <option value="300000">Last 5 minutes</option>
-              <option value="3600000" selected>Last hour</option>
-              <option value="86400000">Last day</option>
-            </select>
-            <input id="log-text" type="search" placeholder="Find…" aria-label="Find in the logs">
-          </div>
-          <p id="log-count" class="quiet log-count"></p>
-          <ol id="log-lines" class="log-lines"></ol>
-        </section>
+        <div id="settings-logs" class="developer-only"></div>
         <section>
           <h2>Advanced</h2>
           <label class="check"><input id="developer" type="checkbox"> Enable developer mode</label>
