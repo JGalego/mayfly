@@ -173,7 +173,7 @@ async function rename(app: string, to: string, session: Session): Promise<void> 
 }
 
 async function deploy(app: string, version: string, session: Session): Promise<void> {
-  await runAlone({ app, request: `Deploy version ${version}`, kind: "deploy" }, session, (watch) => session.engine.deploy(app, version, watch));
+  await runAlone({ app, request: `Deploy version \`${version}\``, kind: "deploy" }, session, (watch) => session.engine.deploy(app, version, watch));
 }
 
 /** Does work that needs nothing checked first, once no other work is under way. */

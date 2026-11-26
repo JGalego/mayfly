@@ -117,7 +117,8 @@ describe("the engine", () => {
     assert.equal(names(deployed.at(-2)).length, 3);
     assert.equal(branched.versions.at(-1)?.parent, first.head);
     assert.equal(branched.versions.length, 3);
-    assert.match(back.conversation.at(-1)?.text ?? "", new RegExp(`Deployed version ${first.head}.*split lunch bills`));
+    assert.deepEqual(back.conversation.slice(-2).map((turn) => turn.text.split(":")[0]), [`Deploy version \`${first.head}\``, `Deployed version \`${first.head}\``]);
+    assert.match(back.conversation.at(-1)?.text ?? "", /split lunch bills/);
   });
 
   it("saves code the person edited by hand, from any version, as theirs: tried, but not running until they deploy it", async () => {

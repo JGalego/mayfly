@@ -300,9 +300,10 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       // It passed its trial when it was made, on the same runtime, so it is built again but not tried again.
       watch({ kind: "building" });
       const image = await builder.build(name, version.routes);
-      const note = `Deployed version ${id}: “${version.request}”.`;
+      // Versions go in backticks, like app names, so shells set them apart.
+      const note = `Deployed version \`${id}\`: “${version.request}”.`;
       const conversation: Turn[] = [
-        { from: "person", text: `Deploy version ${id}`, at: started },
+        { from: "person", text: `Deploy version \`${id}\``, at: started },
         { from: "mayfly", text: note, versions: [], took: Date.now() - started, at: Date.now() },
       ];
       const next: App = { ...app, ...(app.head === null || app.head === id ? {} : { previous: app.head }), head: id, conversation: [...app.conversation, ...conversation] };
