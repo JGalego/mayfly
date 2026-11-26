@@ -136,6 +136,17 @@ describe("the Mayfly panel's controller", () => {
     );
   });
 
+  it("renames an app, telling the page its new name before the state without the old one", async () => {
+    const { handle, posted, calls } = setUp({ apps: [lunch] });
+
+    await handle({ type: "rename", app: "lunch-split", name: " bills " });
+
+    assert.deepEqual(calls, ["rename lunch-split bills"]);
+    assert.equal(stateOf(posted[0])?.working?.kind, "rename");
+    assert.deepEqual(posted.at(-2), { type: "renamed", from: "lunch-split", to: "bills" });
+    assert.equal(stateOf(posted.at(-1))?.working, null);
+  });
+
   it("deploys a version, showing the work while it runs", async () => {
     const { handle, posted, calls } = setUp({ apps: [lunch] });
 
@@ -440,6 +451,10 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
     change: async (name, request) => {
       calls.push(`change ${name} ${request}`);
       return lunch;
+    },
+    rename: async (name, to) => {
+      calls.push(`rename ${name} ${to}`);
+      return { ...lunch, name: to };
     },
     fix: async (name) => {
       calls.push(`fix ${name}`);

@@ -35,7 +35,7 @@ const SETTINGS_TABS: readonly SettingsTab[] = ["general", "models", "logs", "usa
 // Logs and usage are for developers.
 const DEVELOPER_TABS: readonly SettingsTab[] = ["logs", "usage"];
 
-const TITLES: Record<Exclude<Progress["kind"], "remove">, string> = { create: "Writing your app", change: "Changing your app", ask: "Answering", deploy: "Deploying", save: "Trying your edit" };
+const TITLES: Record<Exclude<Progress["kind"], "remove">, string> = { create: "Writing your app", change: "Changing your app", ask: "Answering", deploy: "Deploying", save: "Trying your edit", rename: "Renaming" };
 
 const NOTICE_MS = 4000;
 const CONFIRM_MS = 4000;
@@ -203,6 +203,8 @@ function receive(message: ToUi): void {
     case "saved":
       carryOn(message.app, message.version);
       return render();
+    case "renamed":
+      return followRename(message.from, message.to);
     case "notice":
       return showBanner(message.text, "notice");
     case "error":
@@ -434,7 +436,26 @@ function runCommand(command: Command, argument: string): void {
   if (view.kind !== "app") return;
   const app = view.name;
   if (command.name === "ask") return startWork({ type: "ask", app, question: argument }, true);
+  if (command.name === "rename") return askToRename(app, argument);
   startWork({ type: command.name, app }, command.name !== "undo");
+}
+
+/** Renames the app only once the person agrees to the redeploy it takes. Until then, the command stays in the composer. */
+function askToRename(app: string, to: string): void {
+  const dialog = element<HTMLDialogElement>("rename-dialog");
+  element("rename-title").textContent = `Rename ${app} to ${to}?`;
+  dialog.returnValue = "";
+  dialog.addEventListener("close", () => dialog.returnValue === "rename" && startWork({ type: "rename", app, name: to }, false), { once: true });
+  dialog.showModal();
+}
+
+/** The page follows a renamed app, before the state with its new name comes: its conversation stays on screen, and the editor and the picked version close. */
+function followRename(from: string, to: string): void {
+  if (state !== undefined) state = { ...state, apps: state.apps.map((app) => (app.name === from ? { ...app, name: to } : app)) };
+  if (editing?.app === from) editing = undefined;
+  if (picked?.app === from) picked = undefined;
+  if (view.kind === "app" && view.name === from) go({ ...view, name: to });
+  else render();
 }
 
 /** Starts the work a command asks for, unless other work is under way. Work that calls the model needs its key, like a request. */

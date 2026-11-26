@@ -5,6 +5,7 @@ import { generateApp, listenFor, type Ask, type Attempt, type Generation } from 
 import { ASK_PROMPT, fixFor, questionFor } from "./prompt.ts";
 import { errorsIn } from "./log-errors.ts";
 import { mayflyName } from "../core/names.ts";
+import { parseAppName } from "../core/manifest.ts";
 import type { ContainerHealth, ModelProvider, Ports } from "./ports.ts";
 import { newPassword, newSecret } from "./secrets.ts";
 import { findApp, findVersion, runningVersion, withApp, withoutApp, type App, type Author, type ModelCall, type Owner, type State, type Turn, type Version } from "./state.ts";
@@ -65,6 +66,8 @@ export interface Engine {
   undo(name: string, watch?: Watcher): Promise<AppView>;
   /** Has the app's model answer a question about it from its code, changing nothing. The exchange joins the conversation. */
   ask(name: string, question: string, watch?: Watcher): Promise<AppView>;
+  /** Gives an app a new name and runs it again under it, at the same address. People signed in to it sign in again. */
+  rename(name: string, to: string, watch?: Watcher): Promise<AppView>;
   /** Marks an app as a favourite, or no longer. */
   star(name: string, starred: boolean): Promise<void>;
   /** Has another model write the app's changes from now on, or the default one for null. */
@@ -201,6 +204,33 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       const next = charge(withApp(state, { ...now, conversation: [...now.conversation, ...turns] }), calls);
       await store.save(next);
       return appView(existingApp(next, name));
+    },
+
+    async rename(name, to, watch = UNWATCHED) {
+      const started = Date.now();
+      const state = await store.load();
+      const app = existingApp(state, name);
+      const newName = usableName(state, name, to);
+      const note = `Renamed ${name} to ${newName}. It is at the same address, and anyone signed in to it has to sign in again.`;
+      const conversation: Turn[] = [...app.conversation, { from: "person", text: `Rename to ${newName}`, at: started }, { from: "mayfly", text: note, versions: [], took: Date.now() - started, at: Date.now() }];
+      const renamed: App = { ...app, name: newName, conversation };
+      const next: State = {
+        ...state,
+        apps: state.apps.map((kept) => (kept.name === name ? renamed : kept)),
+        calls: state.calls.map((call) => (call.app === name ? { ...call, app: newName } : call)),
+      };
+      const running = runningVersion(app);
+      // The pod, the sign-in client and its cookie all carry the name, so the app stops under the old one and starts under the new.
+      if (running !== undefined) {
+        watch({ kind: "building" });
+        const image = await builder.build(newName, running.routes);
+        watch({ kind: "deploying" });
+        await deployer.remove(appObjects(app, running.image, identity.settingsFor(app)));
+        await identity.sync(next);
+        await deployer.deploy(appObjects(renamed, image, identity.settingsFor(renamed)));
+      } else await identity.sync(next);
+      await store.save(next);
+      return appView(renamed);
     },
 
     async star(name, starred) {
@@ -341,6 +371,17 @@ interface Made {
 /** Where a change starts: the running code, or for an app that never ran, its latest attempt that had any. */
 function startingPoint(app: App): Version | undefined {
   return runningVersion(app) ?? app.versions.findLast((version) => version.routes !== "");
+}
+
+/** A name another app does not have, and that the contract allows. */
+function usableName(state: State, name: string, to: string): string {
+  if (to === name) throw new Error(`${name} is already called that.`);
+  if (findApp(state, to) !== undefined) throw new Error(`There is already an app called ${to}.`);
+  try {
+    return parseAppName(to);
+  } catch {
+    throw new Error(`${to} can't be an app's name: use lowercase letters, digits and inner hyphens, at most 40 characters.`);
+  }
 }
 
 function existingApp(state: State, name: string): App {

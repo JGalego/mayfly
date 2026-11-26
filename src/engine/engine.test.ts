@@ -198,6 +198,30 @@ describe("the engine", () => {
     assert.deepEqual([undone.head, redone.head, deployed.length], [first.head, changed.head, 4]);
   });
 
+  it("renames an app, running it again under the new name at the same address, with its ledger", async () => {
+    const { engine, deployed, removed } = setUp([reply("lunch")]);
+    const before = await engine.create("split lunch bills");
+
+    const after = await engine.rename("lunch", "bills");
+
+    assert.deepEqual([after.name, after.url, after.head], ["bills", before.url, before.head]);
+    assert.deepEqual((await engine.list()).map((app) => app.name), ["bills"]);
+    assert.deepEqual(names(removed.at(-1)), names(deployed.at(-2)));
+    assert.ok(names(deployed.at(-1)).every((name) => name.includes("mayfly-bills")));
+    assert.deepEqual((await engine.ledger()).map((call) => call.app), ["bills"]);
+    assert.match(after.conversation.at(-1)?.text ?? "", /sign in again/);
+  });
+
+  it("refuses a new name that is not usable, taken, or the same", async () => {
+    const { engine } = setUp([reply("lunch"), reply("notes")]);
+    await engine.create("split lunch bills");
+    await engine.create("keep notes");
+
+    await assert.rejects(engine.rename("lunch", "Lunch Bills"), /Lunch Bills can't be an app's name: use lowercase letters/);
+    await assert.rejects(engine.rename("lunch", "notes"), /There is already an app called notes/);
+    await assert.rejects(engine.rename("lunch", "lunch"), /lunch is already called that/);
+  });
+
   it("refuses to save from a version it does not have, or to deploy one that failed", async () => {
     const { engine } = setUp([reply("lunch"), reply("lunch")], [crashed, { ok: true }]);
     const app = await engine.create("split lunch bills");
