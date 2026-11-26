@@ -88,8 +88,13 @@ let codeShown = "";
 let comparing: { readonly app: string; readonly version: string; readonly with: string } | undefined;
 /** The version shown in full beside the history, if any. */
 let picked: { readonly app: string; readonly version: string } | undefined;
-/** Folds the person opened or closed, so a redraw leaves them as they were. */
+/** Folds the person opened or closed, so a redraw leaves them as they were, and how often they changed. */
 const folds = new Map<string, boolean>();
+let foldsChanged = 0;
+/** The conversation's turns as last built, what they were built from, and what the conversation shows now. */
+let builtTurns: { readonly key: string; readonly items: readonly HTMLElement[] } | undefined;
+let turnsShown = "";
+let pendingShown: readonly HTMLElement[] = [];
 /** Versions' code and thinking fetched from the extension, and the ones already asked for. */
 const written = new Map<string, Written>();
 const asked = new Set<string>();
@@ -751,10 +756,13 @@ function renderChat(state: State, app: AppView | undefined): void {
   const model = activeModel(state, app);
   element("key-hint").hidden = app !== undefined || model?.provider !== "openai" || model.hasApiKey;
   element("key-hint-text").textContent = `${model?.label ?? "This model"} needs an API key.`;
-  const turns = [...(app?.conversation ?? []), ...(working === null ? [] : [{ from: "person", text: working.request, at: working.since } as const])];
   const showing = showingFor(state);
-  const items = turns.map((said) => turnItem(said, app === undefined ? [] : madeOf(said, app, showing)));
-  const pending = working === null ? failure : [turn("mayfly", pendingView(working, showing))];
+  const said = app?.conversation ?? [];
+  // The turns are built again only when what they show changes: not on each step of the work, which only the last turns show.
+  const key = [app?.name, said.length, said.at(-1)?.at, state.developer, foldsChanged, written.size, app?.versions.length].join("|");
+  if (builtTurns?.key !== key) builtTurns = { key, items: said.map((turn) => turnItem(turn, app === undefined ? [] : madeOf(turn, app, showing))) };
+  const asked = working === null ? [] : [turnItem({ from: "person", text: working.request, at: working.since })];
+  const pending = working === null ? failure : [...asked, turn("mayfly", pendingView(working, showing))];
   const thread = element("thread");
   const following = thread.scrollHeight - thread.scrollTop - thread.clientHeight < FOLLOW_PX;
   // The Code tab is behind the curtain.
@@ -763,7 +771,7 @@ function renderChat(state: State, app: AppView | undefined): void {
   // The editor has its own message box; a second one for the model would only confuse.
   element("composer").hidden = tab === "code" && editing !== undefined && editing.app === app?.name;
   element("turns").hidden = tab !== "chat";
-  element("turns").replaceChildren(...(tab === "chat" ? [...items, ...pending] : []));
+  showTurns(tab === "chat" ? builtTurns : undefined, pending);
   conversationFind.mark();
   element("history").hidden = tab !== "history";
   renderHistory(tab === "history" ? app : undefined, showing, state.working === null);
@@ -800,6 +808,7 @@ function showingFor({ developer }: State): Showing {
     isOpen: (key, byDefault) => folds.get(key) ?? byDefault,
     setOpen: (key, open) => {
       folds.set(key, open);
+      foldsChanged++;
       render();
     },
     code: (app, version) => fetchWritten(app, version)?.routes,
@@ -837,6 +846,22 @@ function renderHistory(app: AppView | undefined, showing: Showing, idle: boolean
     },
   };
   panel.replaceChildren(...versionPanel(app, version, showing, { pick: (id) => pick({ app: app.name, version: id }), close: () => pick(undefined), compare, ...actions }));
+}
+
+/** Puts the turns in the conversation: all of them when they were built again, or else only the work's, in place of the last ones. */
+function showTurns(built: typeof builtTurns, pending: readonly HTMLElement[]): void {
+  const list = element("turns");
+  if (built === undefined) {
+    list.replaceChildren();
+    turnsShown = "";
+  } else if (turnsShown !== built.key) {
+    list.replaceChildren(...built.items, ...pending);
+    turnsShown = built.key;
+  } else {
+    for (const node of pendingShown) node.remove();
+    list.append(...pending);
+  }
+  pendingShown = pending;
 }
 
 // A link in a reply opens in the browser, by way of the extension, which opens only web pages.
