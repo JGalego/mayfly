@@ -9,6 +9,7 @@ import { codeEditor } from "./editor.ts";
 import { commandMenu } from "./command-menu.ts";
 import { parse, suggestions, type Command } from "./commands.ts";
 import { nameChip, withChips } from "./chips.ts";
+import { markdownView } from "./markdown-view.ts";
 import { doctorView } from "./doctor-view.ts";
 import { healthView } from "./health.ts";
 import { lightFor, type Light } from "./lights.ts";
@@ -753,7 +754,8 @@ function renderHistory(app: AppView | undefined, showing: Showing, idle: boolean
 }
 
 function turnItem({ from, text, at }: Turn, extras: readonly Node[] = []): HTMLLIElement {
-  const words = h("p", "", ...withChips(text));
+  // Mayfly's replies, and its model's, can be Markdown. What a person typed shows as they typed it.
+  const words = from === "mayfly" ? h("div", "md", ...markdownView(text)) : h("p", "", ...withChips(text));
   // When it was said, for anyone who wants to know.
   if (at !== 0) words.title = new Date(at).toLocaleString();
   return turn(from, h("div", "", words, ...extras));
@@ -776,7 +778,7 @@ function pendingView(working: Progress, showing: Showing): HTMLElement {
   if (working.kind === "remove") return h("p", "", spinner(), " Stopping and removing ", nameChip(working.app ?? ""), "…");
   if (working.kind !== "ask") return progressView(working, TITLES[working.kind], showing);
   const draft = working.steps.findLast((step) => step.kind === "draft");
-  return draft?.kind === "draft" ? h("p", "", draft.text) : h("p", "", spinner(), " Thinking about your question…");
+  return draft?.kind === "draft" ? h("div", "md", ...markdownView(draft.text)) : h("p", "", spinner(), " Thinking about your question…");
 }
 
 function spinner(): HTMLSpanElement {

@@ -10,18 +10,23 @@ hljs.registerLanguage("typescript", typescript);
 hljs.registerLanguage("xml", xml);
 hljs.registerLanguage("css", css);
 
+// The languages it highlights, by the names code fences give them. Anything else shows as it is.
+const LANGUAGES: Readonly<Record<string, string>> = { "": "typescript", ts: "typescript", typescript: "typescript", js: "typescript", javascript: "typescript", json: "typescript", html: "xml", xml: "xml", svg: "xml", css: "css" };
+
 /** The code, highlighted. */
-export function codeView(code: string, className: string): HTMLPreElement {
+export function codeView(code: string, className: string, language = "ts"): HTMLPreElement {
   const inner = h("code", "hljs");
-  highlightInto(inner, code);
+  highlightInto(inner, code, language);
   return h("pre", className, inner);
 }
 
 /** Fills an element with the code, highlighted. */
-export function highlightInto(target: HTMLElement, code: string): void {
+export function highlightInto(target: HTMLElement, code: string, language = "ts"): void {
+  const known = LANGUAGES[language.toLowerCase()];
+  if (known === undefined) return void (target.textContent = code);
   // The one place the page takes markup from a string. highlight.js escapes the code it is given,
   // and the page's CSP would stop any script regardless.
-  target.innerHTML = hljs.highlight(code, { language: "typescript", ignoreIllegals: true }).value;
+  target.innerHTML = hljs.highlight(code, { language: known, ignoreIllegals: true }).value;
 }
 
 const LINE_CLASS: Readonly<Record<string, string>> = { "+": "diff-added", "-": "diff-removed", "\\": "diff-note" };
