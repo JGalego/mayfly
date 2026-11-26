@@ -4,6 +4,7 @@ import { generateApp, type Ask, type Generated } from "./generate.ts";
 import type { Ports } from "./ports.ts";
 import { newPassword, newSecret } from "./secrets.ts";
 import { findApp, withApp, withoutApp, type App, type Owner, type State, type Turn } from "./state.ts";
+import { UNWATCHED, type Watcher } from "./step.ts";
 import { addUsage, metered, NO_USAGE, type Usage } from "./usage.ts";
 
 const FIRST_PORT = 18100;
@@ -16,14 +17,15 @@ export interface AppView {
   readonly name: string;
   readonly url: string;
   readonly conversation: readonly Turn[];
+  readonly routes: string;
   readonly spent: Usage;
 }
 
 export interface Engine {
   /** Has the model write an app for the description, proves it runs, and deploys it behind sign-in. */
-  create(description: string): Promise<AppView>;
+  create(description: string, watch?: Watcher): Promise<AppView>;
   /** Has the model change an app as asked, proves the new version runs, and swaps it in at the same URL. */
-  change(name: string, request: string): Promise<AppView>;
+  change(name: string, request: string, watch?: Watcher): Promise<AppView>;
   list(): Promise<AppView[]>;
   remove(name: string): Promise<void>;
   /** Who signs in to the apps. Created on first use. */
@@ -36,10 +38,10 @@ type Result = { readonly generated: Generated; readonly spent: Usage };
 
 export function createEngine({ store, deployer, identity, model, builder }: Ports): Engine {
   /** Generates an app, counting what the model spends even when it fails. */
-  async function generate(ask: Ask): Promise<Result> {
+  async function generate(ask: Ask, watch: Watcher): Promise<Result> {
     const meter = metered(model);
     try {
-      return { generated: await generateApp(ask, { model: meter.model, builder }), spent: meter.spent() };
+      return { generated: await generateApp(ask, { model: meter.model, builder, watch }), spent: meter.spent() };
     } catch (error) {
       const state = await store.load();
       const app = "change" in ask ? findApp(state, ask.app.name) : undefined;
@@ -48,7 +50,8 @@ export function createEngine({ store, deployer, identity, model, builder }: Port
     }
   }
 
-  async function deploy({ generated, spent }: Result, turns: readonly Turn[]): Promise<AppView> {
+  async function deploy({ generated, spent }: Result, turns: readonly Turn[], watch: Watcher): Promise<AppView> {
+    watch({ kind: "deploying" });
     const state = withOwner(await store.load());
     const app = charged(placeApp(state, generated, turns), spent);
     const next = withSpent(withApp(state, app), spent);
@@ -59,17 +62,17 @@ export function createEngine({ store, deployer, identity, model, builder }: Port
   }
 
   return {
-    async create(description) {
+    async create(description, watch = UNWATCHED) {
       const taken = (await store.load()).apps.map((app) => app.manifest.name);
-      const result = await generate({ description, taken });
-      return deploy(result, [said("person", description), said("mayfly", result.generated.summary || MADE)]);
+      const result = await generate({ description, taken }, watch);
+      return deploy(result, [said("person", description), said("mayfly", result.generated.summary || MADE)], watch);
     },
 
-    async change(name, request) {
+    async change(name, request, watch = UNWATCHED) {
       const app = findApp(await store.load(), name);
       if (app === undefined) throw new Error(`no app named ${name}`);
-      const result = await generate({ change: request, app: { name, routes: app.routes } });
-      return deploy(result, [said("person", request), said("mayfly", result.generated.summary || CHANGED)]);
+      const result = await generate({ change: request, app: { name, routes: app.routes } }, watch);
+      return deploy(result, [said("person", request), said("mayfly", result.generated.summary || CHANGED)], watch);
     },
 
     async list() {
@@ -137,5 +140,5 @@ function said(from: Turn["from"], text: string): Turn {
 }
 
 function appView(app: App): AppView {
-  return { name: app.manifest.name, url: appUrl(app.hostPort), conversation: app.conversation, spent: app.spent };
+  return { name: app.manifest.name, url: appUrl(app.hostPort), conversation: app.conversation, routes: app.routes, spent: app.spent };
 }

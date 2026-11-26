@@ -35,7 +35,7 @@ You need [Podman Desktop](https://podman-desktop.io/) with a Podman 5 machine ru
 3. Choose **New app** and say what you need. About a minute later the app opens in your browser. Sign in as the owner shown above the conversation; **Copy password** puts the password on your clipboard.
 4. Each app is a conversation. Ask for a change there, and the new version replaces the old one at the same address.
 
-The status bar shows the model and the tokens it has spent, on the app you're looking at and in all.
+The status bar shows the model and the tokens it has spent, on the app you're looking at and in all. To see the code and each step of making an app, turn on **Peek behind the curtain** in Settings.
 
 ## Why not Dyad?
 

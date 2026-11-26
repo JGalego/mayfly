@@ -72,6 +72,15 @@ describe("the engine", () => {
     ]);
   });
 
+  it("says when it starts the app, after the model's code passed its trial", async () => {
+    const { engine } = setUp([reply("lunch")]);
+    const steps: string[] = [];
+
+    await engine.create("split lunch bills", (step) => steps.push(step.kind));
+
+    assert.deepEqual(steps, ["writing", "wrote", "trying", "deploying"]);
+  });
+
   it("refuses to change an app it does not know", async () => {
     const { engine } = setUp([]);
 

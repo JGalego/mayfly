@@ -12,12 +12,17 @@
     <nav id="sidebar" aria-label="Mayfly">
       <div class="brand"><img id="logo" src="logo.svg" alt=""><span>Mayfly</span></div>
       <button id="new-app" class="nav-item" type="button"><span class="plus" aria-hidden="true">+</span>New app</button>
-      <h2 id="apps-heading" class="label">Your apps</h2>
+      <h2 id="apps-heading" class="label" hidden>Your apps</h2>
       <ul id="apps" aria-labelledby="apps-heading"></ul>
       <button id="show-settings" class="nav-item" type="button">Settings</button>
     </nav>
 
-    <main id="chat">
+    <div id="loading" role="status" aria-label="Loading">
+      <img src="logo.svg" alt="" class="hero">
+      <span class="spinner"></span>
+    </div>
+
+    <main id="chat" hidden>
       <header id="app-header" hidden>
         <div class="app-title">
           <h1 id="app-name"></h1>
@@ -31,6 +36,7 @@
           <img src="logo.svg" alt="" class="hero">
           <h1>What do you need?</h1>
           <p class="quiet">Describe a small app in your own words. Mayfly writes it, tries it, and runs it on this computer, behind sign-in.</p>
+          <ul id="examples" aria-label="Examples"></ul>
           <p id="needs-key" hidden><button id="add-key" class="primary" type="button">Add your API key</button></p>
         </section>
         <ol id="turns"></ol>
@@ -42,21 +48,28 @@
     </main>
 
     <main id="settings" hidden>
-      <form id="settings-form">
+      <div class="settings-page">
         <h1>Settings</h1>
-        <h2>Model</h2>
-        <p class="quiet">The model writes and changes your apps.</p>
-        <label for="provider">Provider</label>
-        <select id="provider"></select>
-        <label for="endpoint" class="compatible-only">Endpoint</label>
-        <input id="endpoint" class="compatible-only" type="url" placeholder="http://localhost:11434/v1">
-        <label for="model-name">Model</label>
-        <input id="model-name" type="text" maxlength="200" required>
-        <label for="api-key">API key</label>
-        <input id="api-key" type="password" autocomplete="off">
-        <p class="quiet">Podman Desktop keeps the key in its secret storage. Mayfly sends it only to the endpoint it was saved for.</p>
-        <button class="primary" type="submit">Save</button>
-      </form>
+        <form id="settings-form">
+          <h2>Model</h2>
+          <p class="quiet">The model writes and changes your apps.</p>
+          <label for="provider">Provider</label>
+          <select id="provider"></select>
+          <label for="endpoint" class="compatible-only">Endpoint</label>
+          <input id="endpoint" class="compatible-only" type="url" placeholder="http://localhost:11434/v1">
+          <label for="model-name">Model</label>
+          <input id="model-name" type="text" maxlength="200" required>
+          <label for="api-key">API key</label>
+          <input id="api-key" type="password" autocomplete="off">
+          <p class="quiet">Podman Desktop keeps the key in its secret storage. Mayfly sends it only to the endpoint it was saved for.</p>
+          <button class="primary" type="submit">Save</button>
+        </form>
+        <section>
+          <h2>Code</h2>
+          <label class="check"><input id="peek" type="checkbox"> Peek behind the curtain</label>
+          <p class="quiet">Show the code Mayfly writes, and each step of making an app: writing it, trying it, and fixing what failed.</p>
+        </section>
+      </div>
     </main>
 
     <p id="banner" role="status" hidden></p>

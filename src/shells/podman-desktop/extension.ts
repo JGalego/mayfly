@@ -38,7 +38,8 @@ export async function activate(context: api.ExtensionContext): Promise<void> {
 async function openPanel(context: api.ExtensionContext, engine: Engine, keys: KeyStore): Promise<Panel> {
   const media = api.Uri.joinPath(context.extensionUri, "media");
   const panel = api.window.createWebviewPanel("mayfly", "Mayfly", { localResourceRoots: [media] });
-  panel.iconPath = api.Uri.joinPath(context.extensionUri, "icon.png");
+  // The navigation bar shows this file by its path: the same logo as the page, sharp at any size.
+  panel.iconPath = api.Uri.joinPath(media, "logo.svg");
   context.subscriptions.push(panel);
   panel.webview.html = await pageFor(panel.webview, media);
   const handle = createController({
@@ -46,7 +47,12 @@ async function openPanel(context: api.ExtensionContext, engine: Engine, keys: Ke
     post: (message) => panel.webview.postMessage(message),
     openExternal: (url) => api.env.openExternal(api.Uri.parse(url)),
     copy: (text) => api.env.clipboard.writeText(text),
-    settings: { read: readChoice, save: saveChoice },
+    settings: {
+      model: readChoice,
+      saveModel: saveChoice,
+      peek: () => api.configuration.getConfiguration("mayfly").get<boolean>("peek") ?? false,
+      savePeek: (on) => api.configuration.getConfiguration("mayfly").update("peek", on),
+    },
     keys,
   });
   context.subscriptions.push(panel.webview.onDidReceiveMessage(handle));

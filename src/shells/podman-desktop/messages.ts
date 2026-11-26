@@ -1,4 +1,5 @@
 import type { AppView } from "../../engine/engine.ts";
+import type { Step } from "../../engine/step.ts";
 import type { Usage } from "../../engine/usage.ts";
 import type { ModelChoice } from "./settings.ts";
 
@@ -8,6 +9,11 @@ export interface Work {
   readonly request: string;
 }
 
+/** A request Mayfly is working on, and what it has done so far. */
+export interface Progress extends Work {
+  readonly steps: readonly Step[];
+}
+
 /** What the page asks the extension to do. */
 export type FromUi =
   | { readonly type: "ready" }
@@ -15,7 +21,8 @@ export type FromUi =
   | { readonly type: "open"; readonly name: string }
   | { readonly type: "remove"; readonly name: string }
   | { readonly type: "copy-password" }
-  | { readonly type: "save-settings"; readonly choice: ModelChoice; readonly apiKey: string };
+  | { readonly type: "save-settings"; readonly choice: ModelChoice; readonly apiKey: string }
+  | { readonly type: "peek"; readonly on: boolean };
 
 /** What the extension tells the page. Never a secret. */
 export type ToUi =
@@ -26,9 +33,11 @@ export type ToUi =
       readonly model: ModelChoice;
       readonly hasApiKey: boolean;
       readonly spent: Usage;
-      /** The request Mayfly is working on, if any. */
-      readonly working: Work | null;
+      readonly working: Progress | null;
+      /** Whether to show the code and each step of making an app. */
+      readonly peek: boolean;
     }
+  | { readonly type: "progress"; readonly working: Progress }
   | { readonly type: "created"; readonly name: string }
   | { readonly type: "notice"; readonly text: string }
   | { readonly type: "error"; readonly text: string };

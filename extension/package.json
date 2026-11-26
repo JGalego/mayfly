@@ -38,6 +38,11 @@
           "type": "string",
           "default": "gpt-6.2-sol",
           "description": "The model that writes the apps"
+        },
+        "mayfly.peek": {
+          "type": "boolean",
+          "default": false,
+          "description": "Peek behind the curtain: show the code Mayfly writes, and each step of making an app"
         }
       }
     }

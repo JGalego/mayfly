@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { generateApp, type Ask } from "./generate.ts";
 import type { Builder, Message, ModelProvider, Trial } from "./ports.ts";
 import { SYSTEM_PROMPT } from "./prompt.ts";
+import type { Step } from "./step.ts";
 
 const good = 'name: notes\n```ts\nexport default 1;\n```\nKeeps your notes.';
 const broken = 'name: notes\n```ts\nthrow new Error("boom");\n```';
@@ -65,6 +66,23 @@ describe("generateApp", () => {
 
     assert.equal(built.length, 1);
     assert.match(conversations[1]?.messages[2]?.content ?? "", /name/);
+  });
+
+  it("tells a watcher each step: writing, the code, trying it, and why it failed", async () => {
+    const { model, builder } = fakes([broken, good], [{ ok: false, problem: "boom at start" }, { ok: true }]);
+    const steps: Step[] = [];
+
+    await generateApp(newNotes, { model, builder, watch: (step) => steps.push(step) });
+
+    assert.deepEqual(steps, [
+      { kind: "writing", attempt: 1 },
+      { kind: "wrote", routes: 'throw new Error("boom");\n' },
+      { kind: "trying" },
+      { kind: "failed", problem: "boom at start" },
+      { kind: "writing", attempt: 2 },
+      { kind: "wrote", routes: "export default 1;\n" },
+      { kind: "trying" },
+    ]);
   });
 
   it("gives up after three attempts, saying what went wrong last", async () => {

@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { AppView, Engine } from "../../engine/engine.ts";
+import type { Watcher } from "../../engine/step.ts";
 import { createController } from "./controller.ts";
 import type { ToUi } from "./messages.ts";
 import type { ModelChoice } from "./settings.ts";
@@ -9,6 +10,7 @@ const lunch: AppView = {
   name: "lunch-split",
   url: "http://localhost:18100/",
   conversation: [{ from: "person", text: "split lunch bills" }],
+  routes: "export default 1;\n",
   spent: { input: 100, output: 20 },
 };
 const owner = { email: "owner@mayfly.local", username: "owner", password: "s3cret-pass" };
@@ -29,6 +31,7 @@ describe("the Mayfly panel's controller", () => {
       hasApiKey: true,
       spent: { input: 500, output: 80 },
       working: null,
+      peek: false,
     });
   });
 
@@ -38,10 +41,27 @@ describe("the Mayfly panel's controller", () => {
     await handle({ type: "send", app: null, request: " split lunch bills " });
 
     assert.deepEqual(calls, ["create split lunch bills"]);
-    assert.deepEqual(stateOf(posted[0])?.working, { app: null, request: "split lunch bills" });
+    assert.deepEqual(stateOf(posted[0])?.working, { app: null, request: "split lunch bills", steps: [] });
     assert.equal(stateOf(posted[1])?.working, null);
     assert.deepEqual(posted[2], { type: "created", name: "lunch-split" });
     assert.deepEqual(opened, [lunch.url]);
+  });
+
+  it("shows each step of the work as it happens", async () => {
+    const { handle, posted } = setUp({ apps: [], steps: true });
+
+    await handle({ type: "send", app: null, request: "split lunch bills" });
+
+    const progress = posted.flatMap((m) => (m.type === "progress" ? [m.working.steps.map((s) => s.kind)] : []));
+    assert.deepEqual(progress, [["writing"], ["writing", "wrote"]]);
+  });
+
+  it("remembers whether to peek behind the curtain", async () => {
+    const { handle, posted } = setUp({ apps: [] });
+
+    await handle({ type: "peek", on: true });
+
+    assert.equal(stateOf(posted.at(-1))?.peek, true);
   });
 
   it("changes an app in its own conversation, without opening another browser tab", async () => {
@@ -154,12 +174,13 @@ function stateOf(message: ToUi | undefined) {
 
 interface Options {
   apps: AppView[];
+  steps?: boolean;
   keyFor?: string[];
   createFails?: string;
   waitForCreate?: boolean;
 }
 
-function setUp({ apps, keyFor = [OPENAI_ENDPOINT], createFails, waitForCreate = false }: Options) {
+function setUp({ apps, steps = false, keyFor = [OPENAI_ENDPOINT], createFails, waitForCreate = false }: Options) {
   const posted: ToUi[] = [];
   const opened: string[] = [];
   const copied: string[] = [];
@@ -168,11 +189,13 @@ function setUp({ apps, keyFor = [OPENAI_ENDPOINT], createFails, waitForCreate = 
   const savedChoices: ModelChoice[] = [];
   const keys = new Set(keyFor);
   let choice = openai;
+  let peek = false;
   let finish = (): void => {};
   const created = new Promise<void>((resolve) => (finish = resolve));
   const engine: Engine = {
-    create: async (description) => {
+    create: async (description, watch: Watcher = () => {}) => {
       calls.push(`create ${description}`);
+      if (steps) [{ kind: "writing", attempt: 1 } as const, { kind: "wrote", routes: "x" } as const].forEach(watch);
       if (waitForCreate) await created;
       if (createFails) throw new Error(createFails);
       apps.push(lunch);
@@ -193,8 +216,10 @@ function setUp({ apps, keyFor = [OPENAI_ENDPOINT], createFails, waitForCreate = 
     openExternal: async (url) => void opened.push(url),
     copy: async (text) => void copied.push(text),
     settings: {
-      read: () => choice,
-      save: async (next) => void (savedChoices.push(next), (choice = next)),
+      model: () => choice,
+      saveModel: async (next) => void (savedChoices.push(next), (choice = next)),
+      peek: () => peek,
+      savePeek: async (on) => void (peek = on),
     },
     keys: {
       has: async (endpoint) => keys.has(endpoint),

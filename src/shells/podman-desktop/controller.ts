@@ -1,5 +1,6 @@
 import type { Engine } from "../../engine/engine.ts";
-import type { FromUi, ToUi, Work } from "./messages.ts";
+import type { Step } from "../../engine/step.ts";
+import type { FromUi, Progress, ToUi, Work } from "./messages.ts";
 import { endpointOf, isProvider, type ModelChoice } from "./settings.ts";
 
 const MAX_REQUEST = 2000;
@@ -10,13 +11,18 @@ export interface ControllerPorts {
   readonly post: (message: ToUi) => Promise<unknown>;
   readonly openExternal: (url: string) => Promise<unknown>;
   readonly copy: (text: string) => Promise<unknown>;
-  readonly settings: { read(): ModelChoice; save(choice: ModelChoice): Promise<void> };
+  readonly settings: {
+    model(): ModelChoice;
+    saveModel(choice: ModelChoice): Promise<void>;
+    peek(): boolean;
+    savePeek(on: boolean): Promise<void>;
+  };
   /** API keys, each kept for the endpoint it was given for. */
   readonly keys: { has(endpoint: string): Promise<boolean>; save(endpoint: string, key: string): Promise<void> };
 }
 
 // One request at a time: each one reads and writes the whole state.
-type Session = ControllerPorts & { working: Work | null };
+type Session = ControllerPorts & { working: Progress | null };
 
 /** Handles what the page asks for. The page is trusted with nothing: it names apps, never URLs, and never sees a secret. */
 export function createController(ports: ControllerPorts): (message: unknown) => Promise<void> {
@@ -47,22 +53,32 @@ function handle(request: FromUi, session: Session): Promise<unknown> {
       return copyPassword(session);
     case "save-settings":
       return saveSettings(request.choice, request.apiKey.trim(), session);
+    case "peek":
+      return savePeek(request.on, session);
   }
 }
 
 async function send(work: Work, session: Session): Promise<void> {
   const problem = problemWithWork(work, session);
   if (problem !== undefined) return void (await session.post({ type: "error", text: problem }));
-  session.working = work;
+  session.working = { ...work, steps: [] };
   await showState(session);
   const { engine } = session;
-  const app = await (work.app === null ? engine.create(work.request) : engine.change(work.app, work.request)).finally(() => {
+  const watch = (step: Step): void => showProgress(step, session);
+  const app = await (work.app === null ? engine.create(work.request, watch) : engine.change(work.app, work.request, watch)).finally(() => {
     session.working = null;
   });
   await showState(session);
   if (work.app !== null) return;
   await session.post({ type: "created", name: app.name });
   await session.openExternal(app.url);
+}
+
+function showProgress(step: Step, session: Session): void {
+  if (session.working === null) return;
+  session.working = { ...session.working, steps: [...session.working.steps, step] };
+  // The page may have closed. When it opens again, the state it asks for brings it up to date.
+  session.post({ type: "progress", working: session.working }).catch(() => undefined);
 }
 
 function problemWithWork(work: Work, session: Session): string | undefined {
@@ -92,9 +108,14 @@ async function saveSettings(choice: ModelChoice, apiKey: string, session: Sessio
   const cleaned = { ...choice, baseUrl: choice.baseUrl.trim(), model: choice.model.trim() };
   const problem = problemWithChoice(cleaned);
   if (problem !== undefined) return void (await session.post({ type: "error", text: problem }));
-  await session.settings.save(cleaned);
+  await session.settings.saveModel(cleaned);
   if (apiKey !== "") await session.keys.save(endpointOf(cleaned), apiKey);
   await session.post({ type: "notice", text: "Saved." });
+  await showState(session);
+}
+
+async function savePeek(on: boolean, session: Session): Promise<void> {
+  await session.settings.savePeek(on);
   await showState(session);
 }
 
@@ -110,7 +131,7 @@ function isWebUrl(text: string): boolean {
 }
 
 async function showState(session: Session): Promise<void> {
-  const model = session.settings.read();
+  const model = session.settings.model();
   await session.post({
     type: "state",
     apps: await session.engine.list(),
@@ -119,13 +140,14 @@ async function showState(session: Session): Promise<void> {
     hasApiKey: await session.keys.has(endpointOf(model)),
     spent: await session.engine.spent(),
     working: session.working,
+    peek: session.settings.peek(),
   });
 }
 
 // Messages come from the page, so each is checked for its shape before anything acts on it.
 function readRequest(message: unknown): FromUi | undefined {
   if (typeof message !== "object" || message === null) return undefined;
-  const { type, app, request, name, choice, apiKey } = message as Record<string, unknown>;
+  const { type, app, request, name, choice, apiKey, on } = message as Record<string, unknown>;
   switch (type) {
     case "ready":
     case "copy-password":
@@ -135,6 +157,8 @@ function readRequest(message: unknown): FromUi | undefined {
     case "open":
     case "remove":
       return typeof name === "string" ? { type, name } : undefined;
+    case "peek":
+      return typeof on === "boolean" ? { type, on } : undefined;
     case "save-settings": {
       const model = readChoice(choice);
       return model !== undefined && typeof apiKey === "string" ? { type, choice: model, apiKey } : undefined;
