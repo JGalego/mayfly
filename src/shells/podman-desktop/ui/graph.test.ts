@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { VersionView } from "../../../engine/engine.ts";
-import { graph } from "./graph.ts";
+import { connection, graph } from "./graph.ts";
 
 function version(id: string, parent: string | null): VersionView {
   return { id, parent, request: "r", by: { kind: "model", name: "the test model" }, attempt: 1, summary: "", problem: null, spent: { input: 0, output: 0, thinking: 0 }, at: 0, lines: 1, thinkingWords: 0 };
@@ -33,5 +33,12 @@ describe("the history graph", () => {
         ["a", "dot,join"],
       ],
     );
+  });
+
+  it("joins a row's dot to the branches ending at it, however many lanes away and on either side", () => {
+    assert.deepEqual(connection(["dot", "join"]), { from: 0, to: 1 });
+    assert.deepEqual(connection(["join", "line", "dot"]), { from: 0, to: 2 });
+    assert.deepEqual(connection(["dot", "line", "join", "join"]), { from: 0, to: 3 });
+    assert.equal(connection(["line", "dot", "empty"]), undefined);
   });
 });

@@ -29,6 +29,12 @@ export function graph(versions: readonly VersionView[]): GraphRow[] {
   return rows;
 }
 
+/** The lanes a row's line across spans: from its dot to the farthest branch that ends at it, either side. None when no branch ends there. */
+export function connection(lanes: readonly Lane[]): { readonly from: number; readonly to: number } | undefined {
+  const ends = lanes.flatMap((lane, index) => (lane === "dot" || lane === "join" ? [index] : []));
+  return lanes.includes("join") ? { from: Math.min(...ends), to: Math.max(...ends) } : undefined;
+}
+
 function freeLane(waiting: (string | null)[]): number {
   const free = waiting.indexOf(null);
   return free === -1 ? waiting.push(null) - 1 : free;

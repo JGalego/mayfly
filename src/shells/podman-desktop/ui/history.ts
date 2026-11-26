@@ -2,7 +2,7 @@ import type { AppView, VersionView } from "../../../engine/engine.ts";
 import { h } from "./dom.ts";
 import { icon } from "./icons.ts";
 import { tokens, when } from "./format.ts";
-import { graph, type GraphRow, type Lane } from "./graph.ts";
+import { connection, graph, type GraphRow, type Lane } from "./graph.ts";
 import { versionDetails, type Showing } from "./progress.ts";
 
 type Status = "running" | "passed" | "failed";
@@ -109,5 +109,14 @@ function statusOf(app: AppView, version: VersionView): Status {
 
 function lanes({ lanes, tip, root }: GraphRow, width: number): HTMLElement {
   const cells = Array.from({ length: width }, (_, index): Lane => lanes[index] ?? "empty");
-  return h("span", "graph", ...cells.map((lane) => h("span", lane === "dot" ? `lane dot${tip ? " tip" : ""}${root ? " root" : ""}` : `lane ${lane}`)));
+  const across = connection(cells);
+  return h("span", "graph", ...cells.map((lane) => h("span", lane === "dot" ? `lane dot${tip ? " tip" : ""}${root ? " root" : ""}` : `lane ${lane}`)), ...(across === undefined ? [] : [acrossBar(across)]));
+}
+
+/** The line across a row, from the lane of one end to the lane of the other. */
+function acrossBar({ from, to }: { readonly from: number; readonly to: number }): HTMLElement {
+  const bar = h("span", "lane-across");
+  bar.style.setProperty("--from", String(from));
+  bar.style.setProperty("--to", String(to));
+  return bar;
 }
