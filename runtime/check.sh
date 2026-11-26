@@ -24,6 +24,8 @@ second="$("$ROOT/runtime/build.sh" localhost/mayfly-runtime:second-build)"
 podman untag localhost/mayfly-runtime:second-build localhost/mayfly-runtime:second-build
 [[ "$first" == "$second" ]] || { echo "the builds differ: $first and $second"; exit 1; }
 echo "both builds: $first"
+echo "layers:"
+podman image inspect --format '{{range .RootFS.Layers}}{{println .}}{{end}}' "$IMAGE"
 
 step "The image follows policy"
 node "$ROOT/policy/image-facts.ts" "$IMAGE" >"$work/facts.json"
