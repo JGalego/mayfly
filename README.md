@@ -38,9 +38,9 @@ A generated app:
 - is stateless, with SQLite locally at most;
 - answers `/healthz`;
 - logs JSON to stdout;
-- never implements login. An OIDC proxy ([oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/)) in front of it authenticates and passes identity to it in trusted headers. Locally, a development IdP stands in for a real one;
-- is authorized by role. A policy file outside the app lists the OIDC roles allowed in, and the proxy enforces the list;
-- ships as an OCI image plus Kubernetes manifests that `podman kube play` runs;
+- never implements login. An OIDC proxy ([oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/)) in front of it authenticates and passes identity to it in trusted headers. Locally, [Dex](https://dexidp.io/) stands in for a real identity provider;
+- is authorized by role. A policy outside the app lists the roles allowed in, read from the OIDC `groups` claim, and the proxy enforces the list;
+- ships as an OCI image plus Kubernetes manifests that `podman kube play` runs on Podman 5 or later. To run an app someone handed you, set your identity provider and allowed roles in its one ConfigMap;
 - is TypeScript on Node with Hono, like every other app.
 
 Every container runs as a non-root user with all capabilities dropped, a read-only root filesystem and CPU and memory limits. Only the proxy is published, and only on loopback.
@@ -68,7 +68,7 @@ flowchart LR
   subgraph pod["Pod: mayfly-app"]
     proxy["oauth2-proxy<br/>sign-in · policy roles"] -->|"identity headers"| app["Generated app<br/>business logic only"]
   end
-  proxy <-->|"OIDC"| idp["Dev IdP"]
+  proxy <-->|"OIDC"| idp["Dex, locally"]
 ```
 
 ## Offerings
@@ -83,6 +83,7 @@ flowchart LR
 
 - Login, user databases or sessions inside generated apps.
 - Stateful apps in v1.
+- Limiting an app's outbound network in v1. The app shares the pod's network with the proxy, which has to reach the identity provider.
 - More than one stack for generated apps.
 - Mobile or WebAssembly targets.
 - Container platforms other than Podman, for now. The engine doesn't depend on Podman, so Docker Desktop and Rancher Desktop can come later as new deployers and shells.
