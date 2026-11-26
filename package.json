@@ -1,0 +1,18 @@
+{
+  "name": "mayfly",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Describe a small app; get it running on your machine behind sign-in, built to a fixed contract.",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node --test \"src/**/*.test.ts\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.4",
+    "typescript": "7.0.2"
+  }
+}
