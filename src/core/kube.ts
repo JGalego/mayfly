@@ -4,7 +4,7 @@ export interface Pod {
   readonly apiVersion: "v1";
   readonly kind: "Pod";
   readonly metadata: { readonly name: string };
-  readonly spec: { readonly containers: readonly Container[] };
+  readonly spec: { readonly containers: readonly Container[]; readonly volumes?: readonly SecretVolume[] };
 }
 
 export interface ConfigMap {
@@ -31,6 +31,7 @@ export interface Container {
   readonly env?: readonly EnvVar[];
   readonly envFrom?: readonly { readonly configMapRef: { readonly name: string } }[];
   readonly ports?: readonly ContainerPort[];
+  readonly volumeMounts?: readonly VolumeMount[];
   readonly livenessProbe: Probe;
   readonly securityContext: SecurityContext;
   readonly resources: { readonly limits: { readonly cpu: string; readonly memory: string } };
@@ -49,6 +50,18 @@ export interface ContainerPort {
   readonly containerPort: number;
   readonly hostPort: number;
   readonly hostIP: string;
+}
+
+export interface SecretVolume {
+  readonly name: string;
+  readonly secret: { readonly secretName: string };
+}
+
+/** Always read-only, like the root filesystem. */
+export interface VolumeMount {
+  readonly name: string;
+  readonly mountPath: string;
+  readonly readOnly: true;
 }
 
 export interface Probe {

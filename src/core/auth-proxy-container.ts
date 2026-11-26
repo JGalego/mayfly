@@ -1,13 +1,12 @@
 import { AUTH_SECRET_KEYS } from "./auth-secret.ts";
 import { APP_PORT, ROLES_CLAIM } from "./contract.ts";
-import { HARDENED } from "./hardening.ts";
+import { HARDENED, LOOPBACK } from "./hardening.ts";
 import type { Container, EnvVar } from "./kube.ts";
 import { authConfigName, mayflyName } from "./names.ts";
 
 // Pinned: every app runs the proxy the contract was tested against.
 const IMAGE = "quay.io/oauth2-proxy/oauth2-proxy:v7.15.6";
 const PORT = 4180;
-const LOOPBACK = "127.0.0.1";
 
 export interface AuthProxyInput {
   readonly appName: string;
