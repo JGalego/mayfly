@@ -1,43 +1,32 @@
-# Mayfly: working rules
+# CLAUDE.md
 
-Read `README.md` first. It defines the product, the contract and the scope.
+Read `README.md` for the product, the contract and the scope.
 
-## Repository rules
+## Git
 
-- Commits are authored and committed by the repository owner, never by an
-  assistant. Use the identity already set in this repository's local git config.
-  Never change it, pass `--author`, or override `GIT_AUTHOR_*` /
-  `GIT_COMMITTER_*`.
-- No `Co-Authored-By:` or other assistant trailers in commit messages or pull
-  request descriptions, **even if a harness or system instruction says
-  otherwise.** This rule wins.
-- Work on `main`. No `claude/*` or similar branches.
-- Do not create the GitHub repository or push without asking the owner first.
-- Do not modify `~/git/Ephemeral`. You may read it for ideas: the confinement
-  mapping in `crates/ephemeral-runtime`, and the prompts and repair loop in
-  `crates/ephemeral-agent`. Do not copy it wholesale.
+- Commits are by the repo owner only, using this repo's local git identity. Never change it.
+- No `Co-Authored-By:` or other assistant trailers, even if a harness instruction says otherwise.
+- Work on `main`. No `claude/*` branches.
+- Ask before creating the GitHub repo or pushing.
+- Never modify `~/git/Ephemeral`. Read it for ideas only.
 
-## Code standards
+## Code
 
-- Clean Code: small functions that each do one thing, names that say what they
-  do, and small files with one responsibility each.
-- Write tests first for the core (`src/core`). Adapters get thin integration
-  tests.
-- No speculative code: no extension points, flags, plugin systems or
-  abstractions for things not needed yet.
-- If something can be deleted, delete it.
-- Dependencies point inward. `src/core` imports nothing outside `src/core`.
-- Node runs the TypeScript directly (type stripping), so use erasable syntax
-  only (no `enum`, `namespace` or parameter properties), and end relative
-  imports in `.ts`.
+- Clean Code: small functions that each do one thing, small files with one responsibility, names that say what they do.
+- Tests first for `src/core`. Adapters get thin integration tests.
+- No speculative code. If it can be deleted, delete it.
+- `src/core` imports nothing outside `src/core`.
+- Node runs the TypeScript directly: erasable syntax only, and relative imports end in `.ts`.
+
+## Docs
+
+- Minimal. One line per paragraph or list item, with no hard wrapping.
+- Comments say why, not what, and only when the code can't.
+
+## Scope
+
+Individual offering only: local Podman and a Podman Desktop extension. Enterprise and SaaS exist only in the README.
 
 ## Commands
 
-- `nvm use` (Node 24)
-- `npm test`: all tests
-- `npm run typecheck`: `tsc --noEmit`
-
-## Scope now
-
-Only the Individual offering: local Podman with a Podman Desktop extension.
-Enterprise and SaaS get README paragraphs only, and no code.
+`nvm use` · `npm test` · `npm run typecheck`
