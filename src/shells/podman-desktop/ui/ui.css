@@ -1704,10 +1704,13 @@ dialog .version-id {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
+  min-width: 0;
   padding: 0.15rem 0.5rem;
   border-radius: 4px;
   font-size: inherit;
   color: inherit;
+  /* One line, however narrow the window: the bar never grows a second. */
+  white-space: nowrap;
 }
 
 .status-item:hover {
@@ -1731,10 +1734,6 @@ dialog .version-id {
 
 .status-count + .status-count {
   margin-left: 0.5rem;
-}
-
-.status-divider {
-  margin: 0 0.4rem;
 }
 
 .token-in {

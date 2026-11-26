@@ -29,22 +29,34 @@ export function setUpStatusbar(openSettings: (tab: "models" | "logs") => void): 
 export function renderStatusbar(state: State, app: AppView | undefined, model: ModelView | undefined, health: readonly ServiceHealth[] | undefined): void {
   element("model-info").textContent = model === undefined ? "No model" : model.label;
   element("model-warning").hidden = model?.hasApiKey !== false;
-  element("status-apps").replaceChildren(...appCounts(state, health));
+  const apps = appCounts(state, health);
+  element("status-apps").replaceChildren(...apps.shown);
+  element("status-apps").title = apps.said === "" ? "No apps yet" : `${apps.said}. Click for their health and logs.`;
+  element("status-apps").setAttribute("aria-label", apps.said === "" ? "No apps yet" : apps.said);
   element("token-info").replaceChildren(...tokenSummary(app, state.spent));
   element("token-popover").replaceChildren(tokenBreakdown(state));
 }
 
-/** How many apps show each light, the colours that have any. */
-function appCounts(state: State, health: readonly ServiceHealth[] | undefined): Node[] {
+/** How many apps show each light, for the colours that have any: each light and its number, with the words for hovering and for screen readers. */
+function appCounts(state: State, health: readonly ServiceHealth[] | undefined): { readonly shown: Node[]; readonly said: string } {
   const colours = state.apps.map((app) => lightFor(app, health, state.working?.app).colour);
-  const shown = COUNTED.filter(([colour]) => colours.includes(colour));
-  if (shown.length === 0) return [document.createTextNode("No apps yet")];
-  return shown.map(([colour, word]) => h("span", "status-count", h("span", `light ${colour}`), `${colours.filter((c) => c === colour).length} ${word}`));
+  const counted = COUNTED.flatMap(([colour, word]) => {
+    const many = colours.filter((c) => c === colour).length;
+    return many === 0 ? [] : [{ colour, said: `${many} ${word}`, many }];
+  });
+  if (counted.length === 0) return { shown: [document.createTextNode("No apps yet")], said: "" };
+  const said = counted.map((count) => count.said).join(", ");
+  const shown = counted.map(({ colour, said: words, many }) => {
+    const count = h("span", "status-count", h("span", `light ${colour}`), String(many));
+    count.title = words;
+    return count;
+  });
+  return { shown, said };
 }
 
+// The app on screen, or every app when none is. The popover has every app's, and the total.
 function tokenSummary(app: AppView | undefined, spent: Usage): (Node | string)[] {
-  const all = [h("span", "quiet", "All apps"), ...counts(spent)];
-  return app === undefined ? all : [h("span", "", app.name), ...counts(app.spent), h("span", "status-divider", "·"), ...all];
+  return app === undefined ? [h("span", "quiet", "All apps"), ...counts(spent)] : [h("span", "", app.name), ...counts(app.spent)];
 }
 
 // Thinking shows only once a provider has counted some: most never do.
