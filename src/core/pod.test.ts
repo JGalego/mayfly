@@ -1,12 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { buildPod } from "./pod.ts";
-import type { Container, Pod } from "./kube.ts";
+import type { Container, EnvVarSource, Pod } from "./kube.ts";
 
 const pod = buildPod({
   manifest: { name: "expenses", image: "localhost/mayfly-expenses:1" },
-  policy: { roles: ["finance", "admin"] },
-  idp: { issuerUrl: "http://localhost:5556/dex", clientId: "mayfly-expenses" },
   hostPort: 8137,
 });
 const proxy = containerNamed(pod, "auth-proxy");
@@ -48,38 +46,34 @@ describe("the pod Mayfly runs for an app", () => {
     assert.ok(proxy.args?.includes("--pass-user-headers=true"));
   });
 
-  it("signs people in with the configured identity provider", () => {
-    for (const arg of [
-      "--provider=oidc",
-      "--oidc-issuer-url=http://localhost:5556/dex",
-      "--client-id=mayfly-expenses",
-      "--redirect-url=http://localhost:8137/oauth2/callback",
-    ]) {
-      assert.ok(proxy.args?.includes(arg), arg);
-    }
+  it("signs people in over OIDC and sends them back to this app's port", () => {
+    assert.ok(proxy.args?.includes("--provider=oidc"));
+    assert.ok(proxy.args?.includes("--redirect-url=http://localhost:8137/oauth2/callback"));
   });
 
-  it("lets in only the roles the policy names, read from the roles claim", () => {
-    const allowed = proxy.args?.filter((arg) => arg.startsWith("--allowed-group="));
+  it("reads roles from the groups claim", () => {
+    assert.ok(proxy.args?.includes("--oidc-groups-claim=groups"));
+  });
 
-    assert.deepEqual(allowed, ["--allowed-group=finance", "--allowed-group=admin"]);
-    assert.ok(proxy.args?.includes("--oidc-groups-claim=roles"));
+  it("takes the identity provider and allowed roles from the app's ConfigMap", () => {
+    assert.deepEqual(envFrom(proxy, "configMapKeyRef"), {
+      OAUTH2_PROXY_OIDC_ISSUER_URL: "mayfly-expenses-auth/issuer-url",
+      OAUTH2_PROXY_CLIENT_ID: "mayfly-expenses-auth/client-id",
+      OAUTH2_PROXY_ALLOWED_GROUPS: "mayfly-expenses-auth/allowed-roles",
+    });
+  });
+
+  it("takes the proxy's secrets from the app's Secret by reference, never inline", () => {
+    assert.deepEqual(envFrom(proxy, "secretKeyRef"), {
+      OAUTH2_PROXY_CLIENT_SECRET: "mayfly-expenses-auth/client-secret",
+      OAUTH2_PROXY_COOKIE_SECRET: "mayfly-expenses-auth/cookie-secret",
+    });
+    assert.ok(proxy.env?.every((env) => "valueFrom" in env));
+    assert.ok(!proxy.args?.some((arg) => /--(client|cookie)-secret=/.test(arg)));
   });
 
   it("gives each app its own session cookie, since browsers share localhost cookies across ports", () => {
     assert.ok(proxy.args?.includes("--cookie-name=mayfly-expenses"));
-  });
-
-  it("takes the proxy's secrets from a Secret by reference, never inline", () => {
-    for (const env of proxy.env ?? []) {
-      assert.ok("valueFrom" in env, `${env.name} must come from a Secret`);
-      assert.equal(env.valueFrom.secretKeyRef.name, "mayfly-expenses-auth");
-    }
-    assert.deepEqual(
-      proxy.env?.map((env) => env.name),
-      ["OAUTH2_PROXY_CLIENT_SECRET", "OAUTH2_PROXY_COOKIE_SECRET"],
-    );
-    assert.ok(!proxy.args?.some((arg) => /--(client|cookie)-secret=/.test(arg)));
   });
 
   it("hardens every container the same way, whatever the manifest says", () => {
@@ -107,4 +101,14 @@ function containerNamed(pod: Pod, name: string): Container {
   const container = pod.spec.containers.find((c) => c.name === name);
   assert.ok(container, `no container named ${name}`);
   return container;
+}
+
+/** Each variable drawn from the given source, as "resource/key". */
+function envFrom(container: Container, source: keyof EnvVarSource): Record<string, string> {
+  return Object.fromEntries(
+    (container.env ?? []).flatMap((env) => {
+      const ref = "valueFrom" in env ? env.valueFrom[source] : undefined;
+      return ref ? [[env.name, `${ref.name}/${ref.key}`]] : [];
+    }),
+  );
 }

@@ -4,6 +4,7 @@ export function mayflyName(appName: string): string {
   return `mayfly-${appName}`;
 }
 
-export function authSecretName(appName: string): string {
+/** Names both the ConfigMap and the Secret holding an app's sign-in settings. */
+export function authConfigName(appName: string): string {
   return `${mayflyName(appName)}-auth`;
 }

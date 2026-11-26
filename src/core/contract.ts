@@ -3,4 +3,4 @@
 /** Passed to the app as $PORT. */
 export const APP_PORT = 8080;
 export const HEALTH_PATH = "/healthz";
-export const ROLES_CLAIM = "roles";
+export const ROLES_CLAIM = "groups";

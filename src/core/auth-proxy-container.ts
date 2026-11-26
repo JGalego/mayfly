@@ -1,46 +1,36 @@
+import { AUTH_CONFIG_KEYS } from "./auth-config-map.ts";
 import { APP_PORT, ROLES_CLAIM } from "./contract.ts";
 import { HARDENED } from "./hardening.ts";
 import type { Container, EnvVar } from "./kube.ts";
-import { authSecretName, mayflyName } from "./names.ts";
-import type { Policy } from "./policy.ts";
+import { authConfigName, mayflyName } from "./names.ts";
 
 // Pinned: every app runs the proxy the contract was tested against.
 const IMAGE = "quay.io/oauth2-proxy/oauth2-proxy:v7.15.6";
 const PORT = 4180;
 const LOOPBACK = "127.0.0.1";
 
-/** The client Mayfly registered with the identity provider. */
-export interface OidcClient {
-  readonly issuerUrl: string;
-  readonly clientId: string;
-}
-
 export interface AuthProxyInput {
   readonly appName: string;
-  readonly policy: Policy;
-  readonly idp: OidcClient;
   readonly hostPort: number;
 }
 
 /** Signs people in, admits only the policy's roles, and passes identity to the app in headers. */
-export function buildAuthProxyContainer(input: AuthProxyInput): Container {
+export function buildAuthProxyContainer({ appName, hostPort }: AuthProxyInput): Container {
   return {
     name: "auth-proxy",
     image: IMAGE,
-    args: [...signInArgs(input), ...authorizationArgs(input.policy), ...forwardingArgs()],
-    env: secretEnv(input.appName),
-    ports: [{ containerPort: PORT, hostPort: input.hostPort, hostIP: LOOPBACK }],
+    args: [...signInArgs(appName, hostPort), ...authorizationArgs(), ...forwardingArgs()],
+    env: [...configEnv(appName), ...secretEnv(appName)],
+    ports: [{ containerPort: PORT, hostPort, hostIP: LOOPBACK }],
     livenessProbe: { httpGet: { path: "/ping", port: PORT } },
     securityContext: HARDENED,
     resources: { limits: { cpu: "100m", memory: "64Mi" } },
   };
 }
 
-function signInArgs({ appName, idp, hostPort }: AuthProxyInput): string[] {
+function signInArgs(appName: string, hostPort: number): string[] {
   return [
     "--provider=oidc",
-    `--oidc-issuer-url=${idp.issuerUrl}`,
-    `--client-id=${idp.clientId}`,
     `--redirect-url=http://localhost:${hostPort}/oauth2/callback`,
     "--skip-provider-button=true",
     // Browsers share localhost cookies across ports, so each app needs its own.
@@ -50,12 +40,11 @@ function signInArgs({ appName, idp, hostPort }: AuthProxyInput): string[] {
   ];
 }
 
-function authorizationArgs(policy: Policy): string[] {
+function authorizationArgs(): string[] {
   return [
     // Access is decided by role, not by email domain.
     "--email-domain=*",
     `--oidc-groups-claim=${ROLES_CLAIM}`,
-    ...policy.roles.map((role) => `--allowed-group=${role}`),
   ];
 }
 
@@ -67,14 +56,27 @@ function forwardingArgs(): string[] {
   ];
 }
 
-// Secrets by reference only: their values never enter a spec.
-function secretEnv(appName: string): EnvVar[] {
+// Kept out of the pod so a recipient changes one ConfigMap, not the pod.
+function configEnv(appName: string): EnvVar[] {
   return [
-    fromAuthSecret("OAUTH2_PROXY_CLIENT_SECRET", "client-secret", appName),
-    fromAuthSecret("OAUTH2_PROXY_COOKIE_SECRET", "cookie-secret", appName),
+    fromConfigMap("OAUTH2_PROXY_OIDC_ISSUER_URL", AUTH_CONFIG_KEYS.issuerUrl, appName),
+    fromConfigMap("OAUTH2_PROXY_CLIENT_ID", AUTH_CONFIG_KEYS.clientId, appName),
+    fromConfigMap("OAUTH2_PROXY_ALLOWED_GROUPS", AUTH_CONFIG_KEYS.allowedRoles, appName),
   ];
 }
 
-function fromAuthSecret(variable: string, key: string, appName: string): EnvVar {
-  return { name: variable, valueFrom: { secretKeyRef: { name: authSecretName(appName), key } } };
+// Secrets by reference only: their values never enter a spec.
+function secretEnv(appName: string): EnvVar[] {
+  return [
+    fromSecret("OAUTH2_PROXY_CLIENT_SECRET", "client-secret", appName),
+    fromSecret("OAUTH2_PROXY_COOKIE_SECRET", "cookie-secret", appName),
+  ];
+}
+
+function fromConfigMap(variable: string, key: string, appName: string): EnvVar {
+  return { name: variable, valueFrom: { configMapKeyRef: { name: authConfigName(appName), key } } };
+}
+
+function fromSecret(variable: string, key: string, appName: string): EnvVar {
+  return { name: variable, valueFrom: { secretKeyRef: { name: authConfigName(appName), key } } };
 }
