@@ -1,10 +1,16 @@
 import type { Usage } from "../../../engine/usage.ts";
 
 const RELATIVE = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+const COMPACT = new Intl.NumberFormat("en", { notation: "compact" });
+
+/** A count the way people glance at it: 900, 3.4K, 21K, 12M. */
+export function compact(count: number): string {
+  return COMPACT.format(count);
+}
 
 export function tokens({ input, output, thinking }: Usage): string {
-  const thought = thinking === 0 ? "" : `, ${thinking.toLocaleString()} thinking`;
-  return `${input.toLocaleString()} tokens in, ${output.toLocaleString()} out${thought}`;
+  const thought = thinking === 0 ? "" : `, ${compact(thinking)} thinking`;
+  return `${compact(input)} tokens in, ${compact(output)} out${thought}`;
 }
 
 /** When something happened, the way people say it: "5 minutes ago", "yesterday". */

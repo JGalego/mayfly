@@ -2,6 +2,7 @@ import type { AppView, ServiceHealth } from "../../../engine/engine.ts";
 import type { Usage } from "../../../engine/usage.ts";
 import type { ModelView, ToUi } from "../messages.ts";
 import { h } from "./dom.ts";
+import { compact } from "./format.ts";
 import { icon } from "./icons.ts";
 import { lightFor, type Colour } from "./lights.ts";
 
@@ -51,8 +52,15 @@ function tokenSummary(app: AppView | undefined, spent: Usage): (Node | string)[]
 
 // Thinking shows only once a provider has counted some: most never do.
 function counts({ input, output, thinking }: Usage): Node[] {
-  const spent = [h("span", "token-in", ` ↑ ${input.toLocaleString()}`), h("span", "token-out", ` ↓ ${output.toLocaleString()}`)];
-  return thinking === 0 ? spent : [...spent, h("span", "token-thinking", " ", icon("thinking"), ` ${thinking.toLocaleString()}`)];
+  const spent = [count("token-in", ["↑ "], input), count("token-out", ["↓ "], output)];
+  return thinking === 0 ? spent : [...spent, count("token-thinking", [icon("thinking"), " "], thinking)];
+}
+
+// Short to glance at, exact on hover.
+function count(className: string, marker: readonly (Node | string)[], value: number): HTMLElement {
+  const shown = h("span", className, " ", ...marker, compact(value));
+  shown.title = value.toLocaleString();
+  return shown;
 }
 
 /** Every app's tokens, the hungriest first, and the total, removed apps included. */
@@ -69,8 +77,8 @@ function tokenBreakdown({ apps, spent }: State): HTMLElement {
 }
 
 function tokenRow(name: string, usage: Usage, className: string, thinking: boolean): HTMLTableRowElement {
-  const cells = [h("td", "", name), h("td", "token-in", `↑ ${usage.input.toLocaleString()}`), h("td", "token-out", `↓ ${usage.output.toLocaleString()}`)];
-  if (thinking) cells.push(h("td", "token-thinking", icon("thinking"), ` ${usage.thinking.toLocaleString()}`));
+  const cells = [h("td", "", name), h("td", "token-in", `↑ ${compact(usage.input)}`), h("td", "token-out", `↓ ${compact(usage.output)}`)];
+  if (thinking) cells.push(h("td", "token-thinking", icon("thinking"), ` ${compact(usage.thinking)}`));
   return h("tr", className, ...cells);
 }
 

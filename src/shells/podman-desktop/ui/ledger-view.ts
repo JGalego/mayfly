@@ -1,6 +1,7 @@
 import type { ModelCall } from "../../../engine/state.ts";
 import { addUsage, NO_USAGE, type Usage } from "../../../engine/usage.ts";
 import { h } from "./dom.ts";
+import { compact } from "./format.ts";
 import { groupsOf, periodsOf, spanStart, ticksFor, totalOf, UNNAMED, unrecorded, type Grain, type GroupBy, type Period, type Span } from "./ledger.ts";
 
 const SPANS: readonly [string, string, Span][] = [
@@ -22,8 +23,6 @@ const SERIES: readonly [keyof Usage, string][] = [
   ["output", "Tokens out"],
   ["thinking", "Thinking"],
 ];
-
-const COMPACT = new Intl.NumberFormat("en", { notation: "compact" });
 
 /** What the page knows that the ledger does not: everything spent, and the apps that still exist. */
 export interface Context {
@@ -74,7 +73,7 @@ function ledgerBody(calls: readonly ModelCall[], context: Context, span: Span, b
 
 /** Which colour is which, with each one's total, so the legend doubles as the summary. */
 function legend(spent: Usage, calls: number): HTMLElement {
-  const items = SERIES.map(([key, label]) => h("span", "legend-item", h("span", `swatch series-${key}`), `${label} `, h("strong", "", spent[key].toLocaleString())));
+  const items = SERIES.map(([key, label]) => h("span", "legend-item", h("span", `swatch series-${key}`), `${label} `, h("strong", "", compact(spent[key]))));
   return h("p", "usage-legend", ...items, h("span", "quiet", `${calls.toLocaleString()} ${calls === 1 ? "call" : "calls"}`));
 }
 
@@ -85,7 +84,7 @@ function chart(periods: readonly Period[], grain: Grain): HTMLElement {
   const readout = h("div", "usage-readout");
   readout.hidden = true;
   const grid = ticks.map((tick) => {
-    const line = h("div", "usage-grid", h("span", "usage-tick", COMPACT.format(tick)));
+    const line = h("div", "usage-grid", h("span", "usage-tick", compact(tick)));
     line.style.bottom = `${(tick / top) * 100}%`;
     return line;
   });
@@ -124,7 +123,7 @@ function slot(period: Period, grain: Grain, top: number, label: string, readout:
 
 // The value leads; a short stroke of the series' colour says which.
 function readoutRow(key: keyof Usage, name: string, value: number): HTMLElement {
-  return h("p", "readout-row", h("span", `line-key series-${key}`), h("strong", "", value.toLocaleString()), ` ${name.toLowerCase()}`);
+  return h("p", "readout-row", h("span", `line-key series-${key}`), h("strong", "", compact(value)), ` ${name.toLowerCase()}`);
 }
 
 /** The span's spending by model, provider or app, with the total and, for all time, what the ledger has no record of. */
