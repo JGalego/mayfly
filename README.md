@@ -165,3 +165,5 @@ CI runs the hooks, checks every commit message, proves the runtime image, and ru
 Copyright © 2026 João Galego.
 
 Mayfly is free software under the [GNU Affero General Public License v3.0 only](LICENSE). If you run a changed version for others over a network, you must offer them its source.
+
+The runtime every app runs on, in [`runtime/`](runtime/), is under the [MIT License](runtime/LICENSE) instead, so the apps you make are yours to use, share or sell on any terms.

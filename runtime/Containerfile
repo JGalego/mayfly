@@ -7,7 +7,7 @@ LABEL org.opencontainers.image.title="mayfly-runtime" \
       org.opencontainers.image.description="Node 24 runtime for Mayfly apps: sign-in identity, JSON logs, health checks" \
       org.opencontainers.image.source="https://github.com/JGalego/mayfly" \
       org.opencontainers.image.revision="${REVISION}" \
-      org.opencontainers.image.licenses="AGPL-3.0-only"
+      org.opencontainers.image.licenses="MIT"
 
 WORKDIR /app
 COPY package.json ./
