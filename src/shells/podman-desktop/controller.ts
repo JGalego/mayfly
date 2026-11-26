@@ -19,6 +19,8 @@ const DONE: Record<Exclude<Progress["kind"], "remove">, string> = { create: "Mad
 export interface ControllerPorts {
   readonly engine: Engine;
   readonly post: (message: ToUi) => Promise<unknown>;
+  /** Tells the person that work ended, and whether it failed, for when they are looking elsewhere. */
+  readonly notify: (note: { readonly text: string; readonly failed: boolean }) => void;
   readonly openExternal: (url: string) => Promise<unknown>;
   readonly copy: (text: string) => Promise<unknown>;
   readonly settings: {
@@ -206,13 +208,20 @@ async function run(work: Omit<Progress, "since" | "steps"> & { kind: keyof typeo
   session.working = { ...work, since: Date.now(), steps: [] };
   note(session, "info", `Started: ${work.request}`);
   await showState(session);
-  const app = await job((step) => showProgress(step, session)).finally(() => {
-    session.working = null;
-  });
+  const app = await job((step) => showProgress(step, session))
+    .catch((error: unknown) => {
+      session.notify({ text: `Could not finish “${work.request}”: ${error instanceof Error ? error.message : String(error)}`, failed: true });
+      throw error;
+    })
+    .finally(() => {
+      session.working = null;
+    });
   // Deploying runs a version that passed, and answering makes none; anything else passed if its last attempt did.
   const last = app.versions.at(-1);
   const passed = ["deploy", "ask", "rename", "start"].includes(work.kind) || last === undefined || last.problem === null;
-  note(session, passed ? "info" : "error", `${DONE[work.kind]} ${app.name}${passed ? "" : ", but it did not pass its trial"}`);
+  const text = `${DONE[work.kind]} ${app.name}${passed ? "" : ", but it did not pass its trial"}`;
+  note(session, passed ? "info" : "error", text);
+  session.notify({ text, failed: !passed });
   await showState(session);
   return app;
 }

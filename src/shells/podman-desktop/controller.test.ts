@@ -309,6 +309,17 @@ describe("the Mayfly panel's controller", () => {
     assert.equal(stateOf(posted.at(-1))?.working, null);
   });
 
+  it("tells the person when work ends, and when it fails", async () => {
+    const done = setUp({ apps: [lunch] });
+    const failing = setUp({ apps: [], createFails: "The model's service is down." });
+
+    await done.handle({ type: "send", app: "lunch-split", request: "add totals" });
+    await failing.handle({ type: "send", app: null, request: "split lunch bills" });
+
+    assert.deepEqual(done.notes, [{ text: "Changed lunch-split", failed: false }]);
+    assert.deepEqual(failing.notes, [{ text: "Could not finish “split lunch bills”: The model's service is down.", failed: true }]);
+  });
+
   it("refuses an empty request", async () => {
     const { handle, posted, calls } = setUp({ apps: [] });
 
@@ -435,6 +446,7 @@ interface Options {
 
 function setUp({ apps, created: made = lunch, steps = [], developer: developing = false, keyFor = [OPENAI_ENDPOINT], createFails, waitForCreate = false, stopped: stoppedApps = [] }: Options) {
   const posted: ToUi[] = [];
+  const notes: { text: string; failed: boolean }[] = [];
   const opened: string[] = [];
   const copied: string[] = [];
   const calls: string[] = [];
@@ -514,6 +526,7 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
   const handle = createController({
     engine,
     post: async (message) => void posted.push(message),
+    notify: (note) => void notes.push(note),
     openExternal: async (url) => void opened.push(url),
     copy: async (text) => void copied.push(text),
     doctor: async () => ({ ready: [{ name: "Podman", status: "pass", detail: "Podman 5.8.9 is running." }], models: [{ id: "openai", status: "pass", detail: "The provider accepts the key and has this model." }] }),
@@ -530,5 +543,5 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
       save: async (endpoint, key) => void (savedKeys.push([endpoint, key]), keys.add(endpoint)),
     },
   });
-  return { handle, posted, opened, copied, calls, savedKeys, models: () => models, finish };
+  return { handle, posted, opened, copied, calls, savedKeys, models: () => models, finish, notes };
 }
