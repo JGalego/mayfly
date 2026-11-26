@@ -80,7 +80,7 @@ function parentLink(parent: string, pick: (version: string) => void): HTMLButton
 
 function goBack(version: VersionView, status: Status, restore?: (version: string) => void): Node[] {
   if (status !== "passed") return [];
-  const button = h("button", "primary", "Go back to this");
+  const button = h("button", "primary with-icon", icon("rewind"), "Go back to this");
   button.type = "button";
   button.disabled = restore === undefined;
   button.title = "Run this version again. Your next change starts from it, and nothing is lost.";
