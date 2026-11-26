@@ -1,9 +1,9 @@
 import type { ServiceHealth } from "../../../engine/engine.ts";
 import { h } from "./dom.ts";
 
-type Verdict = "running" | "stopped" | "missing";
+type Verdict = "running" | "starting" | "unhealthy" | "stopped" | "missing";
 
-const VERDICT: Record<Verdict, string> = { running: "✓ Running", stopped: "✗ Stopped", missing: "✗ Not running" };
+const VERDICT: Record<Verdict, string> = { running: "✓ Running", starting: "… Starting", unhealthy: "✗ Unhealthy", stopped: "✗ Stopped", missing: "✗ Not running" };
 
 /** Each app and the sign-in service, and how their containers are doing, as Podman sees them. */
 export function healthView(services: readonly ServiceHealth[] | undefined): HTMLElement[] {
@@ -21,5 +21,7 @@ export function healthView(services: readonly ServiceHealth[] | undefined): HTML
 
 function verdictOf({ containers }: ServiceHealth): Verdict {
   if (containers.length === 0) return "missing";
-  return containers.every((container) => container.state === "running") ? "running" : "stopped";
+  if (containers.some((container) => container.state !== "running")) return "stopped";
+  if (containers.some((container) => container.health === "unhealthy")) return "unhealthy";
+  return containers.some((container) => container.health === "starting") ? "starting" : "running";
 }

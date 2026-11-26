@@ -22,6 +22,8 @@ export interface ContainerHealth {
   /** Podman's own summary, such as "Up 5 minutes". */
   readonly status: string;
   readonly restarts: number;
+  /** What its health check last found, for a container that has one. */
+  readonly health?: "starting" | "healthy" | "unhealthy";
 }
 
 export interface PodHealth {

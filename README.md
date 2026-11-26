@@ -114,27 +114,34 @@ flowchart LR
   t -->|"passes"| dep["Deploy behind sign-in"]
 ```
 
-Each app has a light in the sidebar: orange while Mayfly works on it, and otherwise what Podman says about it.
+Each app has a light in the sidebar: orange while Mayfly works on it, and otherwise what Podman says about it. While it is up, its health check decides: Podman runs it every 10 seconds and restarts the app after three failures in a row, or when it crashes.
 
 ```mermaid
 stateDiagram-v2
   direction LR
   state "⚪ Never ran" as never
   state "🟠 In the works" as working
-  state "🟢 Running" as running
-  state "🟡 Restarted" as restarted
   state "🔴 Stopped" as stopped
+  state "Up" as up {
+    direction LR
+    state "◯ Starting" as starting
+    state "🟢 Running, 🟡 once restarted" as running
+    state "⭕ Unhealthy" as unhealthy
+    [*] --> starting
+    starting --> running: its health check passes
+    running --> unhealthy: its health check fails
+    unhealthy --> running: it passes again
+    unhealthy --> starting: three failures, and Podman restarts it
+    running --> starting: it crashes, and Podman restarts it
+  }
 
   [*] --> working: describe an app
   working --> never: no attempt passed
-  working --> running: an attempt passed, or a version was deployed
+  working --> up: an attempt passed, or a version was deployed
   working --> [*]: removed
   never --> working: a change, or remove
-  running --> working: a change, deploy, undo, rename or remove
-  running --> restarted: it crashed or failed its health check three times, and Podman restarted it
-  restarted --> working: a change, deploy, undo, rename or remove
-  running --> stopped: it stopped, say with the Podman machine
-  restarted --> stopped: it stopped
+  up --> working: a change, deploy, undo, rename or remove
+  up --> stopped: it stopped, say with the Podman machine
   stopped --> working: a change, deploy, undo, rename or remove
   note right of working
     Writing, building, trying, deploying, renaming or removing.

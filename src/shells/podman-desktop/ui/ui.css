@@ -227,7 +227,7 @@ select {
   padding-right: 2rem;
 }
 
-/* An app's traffic light: running, restarted, being worked on, stopped, never run. */
+/* An app's traffic light: running, restarted, being worked on, stopped, never run; a ring while it starts or fails its health check. */
 .light {
   flex: none;
   width: 9px;
@@ -259,6 +259,20 @@ select {
 
 .light.grey {
   background: var(--hover);
+}
+
+.light.starting,
+.light.unhealthy {
+  border-width: 2px;
+  background: transparent;
+}
+
+.light.starting {
+  border-color: #16a34a;
+}
+
+.light.unhealthy {
+  border-color: #dc2626;
 }
 
 @keyframes pulse {
@@ -1459,6 +1473,12 @@ pre.problem {
   background: light-dark(#dcfce7, #052e16);
 }
 
+.pill.starting {
+  color: var(--muted);
+  background: var(--hover);
+}
+
+.pill.unhealthy,
 .pill.stopped,
 .pill.missing {
   color: var(--error);

@@ -48,9 +48,13 @@ export async function imageExists(image: string): Promise<boolean> {
   return (await run(["image", "exists", image])).code === 0;
 }
 
+// Podman tells what a health check found only in its summary: "Up 5 minutes (healthy)".
+const VERDICT = /\((starting|healthy|unhealthy)\)$/;
+
 function containerHealth(pod: string, { Names, State, Status, Restarts }: Listed): ContainerHealth {
   const name = (Names[0] ?? "").replace(`${pod}-`, "");
-  return { name, state: State, status: Status, restarts: Restarts };
+  const verdict = VERDICT.exec(Status)?.[1] as ContainerHealth["health"];
+  return { name, state: State, status: Status, restarts: Restarts, ...(verdict === undefined ? {} : { health: verdict }) };
 }
 
 /** Creates the objects' pods and secrets, replacing any that already exist. */

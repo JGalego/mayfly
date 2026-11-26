@@ -10,8 +10,10 @@ import { popover } from "./popover.ts";
 type State = Extract<ToUi, { type: "state" }>;
 
 const COUNTED: readonly [Colour, string][] = [
+  ["starting", "starting"],
   ["green", "running"],
   ["yellow", "restarted"],
+  ["unhealthy", "unhealthy"],
   ["red", "stopped"],
   ["orange", "in the works"],
   ["grey", "never ran"],

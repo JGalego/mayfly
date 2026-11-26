@@ -2,7 +2,7 @@ import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { buildDex, dexSettings } from "../../src/adapters/dex/dex.ts";
-import { down, play } from "../../src/adapters/podman/podman.ts";
+import { down, health, play } from "../../src/adapters/podman/podman.ts";
 import { appUrl, callbackUrl } from "../../src/core/app-url.ts";
 import { buildAuthConfigMap } from "../../src/core/auth-config-map.ts";
 import { buildAuthSecret } from "../../src/core/auth-secret.ts";
@@ -65,9 +65,12 @@ describe("an app behind Mayfly's sign-in, on Podman", () => {
     assert.deepEqual(JSON.parse(page.body).groups, ["owner"]);
   });
 
-  it("keeps the app and Dex passing their own liveness probes, with no shell or curl", () => {
+  it("keeps the app and Dex passing their own liveness probes, with no shell or curl, and says the app is healthy", async () => {
     runHealthCheck("mayfly-echo-app");
     runHealthCheck("mayfly-dex-dex");
+
+    const [echo] = await health(["mayfly-echo"]);
+    assert.equal(echo?.containers.find((container) => container.name === "app")?.health, "healthy");
   });
 
   it("signs the owner out at /oauth2/sign_out, so the app asks them to sign in again", async () => {
