@@ -13,6 +13,7 @@ export const SYSTEM_PROMPT = [
   "",
   "People:",
   '- Everyone who reaches the app is already signed in. `c.get("user")` gives `{ id, email, name, groups }`. Never add login, logout, passwords or sessions.',
+  '- People sign out at /oauth2/sign_out, which the runtime handles. Put a small "Sign out" link to it somewhere unobtrusive, such as a corner of the page.',
   "- To show different things to different people, check `user.groups`.",
   "",
   "Pages:",

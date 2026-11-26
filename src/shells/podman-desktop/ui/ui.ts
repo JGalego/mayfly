@@ -82,6 +82,7 @@ element("new-app").addEventListener("click", () => go({ kind: "new" }));
 element("show-settings").addEventListener("click", () => go({ kind: "settings" }));
 element("add-key").addEventListener("click", () => state !== undefined && askForKey(state, shownApp()));
 element("open-app").addEventListener("click", openApp);
+element("sign-out").addEventListener("click", () => view.kind === "app" && post({ type: "sign-out", name: view.name }));
 element("tab-chat").addEventListener("click", () => showTab("chat"));
 element("tab-history").addEventListener("click", () => showTab("history"));
 element("tab-code").addEventListener("click", () => showTab("code"));

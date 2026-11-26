@@ -62,6 +62,8 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       return send({ ...request, request: request.request.trim() }, session);
     case "open":
       return open(request.name, session);
+    case "sign-out":
+      return open(request.name, session, "oauth2/sign_out");
     case "remove":
       return remove(request.name, session);
     case "copy":
@@ -204,9 +206,10 @@ function problemWithWork(work: Work, session: Session): string | undefined {
   return undefined;
 }
 
-async function open(name: string, session: Session): Promise<void> {
+/** Opens an app, or a page of its auth proxy's, at the URL the engine knows. */
+async function open(name: string, session: Session, path = ""): Promise<void> {
   const app = (await session.engine.list()).find((candidate) => candidate.name === name);
-  if (app !== undefined) await session.openExternal(app.url);
+  if (app !== undefined) await session.openExternal(new URL(path, app.url).toString());
 }
 
 // Removing takes a moment, and while it does the page shows it and leaves the app alone.
@@ -277,6 +280,7 @@ function readRequest(message: unknown): FromUi | undefined {
     case "default-model":
       return typeof id === "string" ? { type, id } : undefined;
     case "open":
+    case "sign-out":
     case "remove":
       return typeof name === "string" ? { type, name } : undefined;
     case "developer":

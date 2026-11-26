@@ -70,6 +70,16 @@ describe("an app behind Mayfly's sign-in, on Podman", () => {
     runHealthCheck("mayfly-dex-dex");
   });
 
+  it("signs the owner out at /oauth2/sign_out, so the app asks them to sign in again", async () => {
+    const browser = new Browser();
+    await browser.submit(await browser.get(APP), { login: owner.email, password: owner.password });
+
+    await browser.get(`${APP}oauth2/sign_out`);
+    const page = await browser.get(APP);
+
+    assert.match(page.url, /^http:\/\/localhost:5556\/dex\/auth\/local/);
+  });
+
   it("turns away a signed-in user without an allowed role", async () => {
     const page = await signIn(guest);
 
