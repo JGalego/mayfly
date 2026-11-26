@@ -45,6 +45,21 @@ A generated app:
 
 Every container runs as a non-root user with all capabilities dropped, a read-only root filesystem and CPU and memory limits. Only the proxy is published, and only on loopback.
 
+## The runtime image
+
+Every app runs on one image: Node 24 on [Wolfi](https://github.com/wolfi-dev), built with [apko](https://github.com/chainguard-dev/apko) from a locked list of packages, plus Mayfly's runtime (identity from the proxy's headers, JSON logs, `/healthz`, security headers, a body limit, graceful shutdown). It has no shell and no package manager, its code is owned by root and read-only to the app, and it is about 150 MB. A generated app adds one file, `routes.ts`.
+
+`pixi run check-image` proves the image meets the policies in [`policy/`](policy/), and CI runs it on every push:
+
+| What | How |
+|---|---|
+| Containerfile best practices | [hadolint](https://github.com/hadolint/hadolint), on every commit |
+| Containerfile: base pinned by digest, no `RUN` or `ADD`, numeric non-root user, exec-form entrypoint, no secrets, labels | [OPA](https://www.openpolicyagent.org/) via [conftest](https://www.conftest.dev/): [`containerfile.rego`](policy/containerfile.rego) |
+| The same commit always builds the same image | two clean builds, same digest |
+| Image: no shell, package manager or download tool, no setuid files, nothing writable by anyone, root-owned read-only code, no tests, under 160 MB, no secrets in the environment, labels | OPA via conftest: [`image.rego`](policy/image.rego), on the built image's config and every file in it |
+| No known high or critical vulnerabilities | [Grype](https://github.com/anchore/grype) |
+| The policies themselves | Rego tests, `conftest verify` |
+
 ## Architecture
 
 Mayfly's engine is a TypeScript library with a small API. People use it through a UI built on top: the Podman Desktop extension now, a web app for Enterprise and SaaS later. The core holds the contract, turns a manifest into a pod spec and applies expiry rules, and it imports nothing outside itself. Everything else (storage, identity, the model and the deployer) plugs in through small interfaces, the ports below.
@@ -92,15 +107,17 @@ flowchart LR
 
 ## Development
 
-Needs Node 24 and, for the integration tests, Podman 5.
+Needs Node 24, and for the image and integration tests, Podman 5 and [pixi](https://pixi.sh).
 
 ```sh
-nvm use                    # Node 24
-npm install
-pre-commit install         # hygiene, Conventional Commits, typecheck and unit tests on every commit
-npm test                   # unit tests
+nvm use                                  # Node 24
+npm ci && npm ci --prefix runtime
+pre-commit install                       # hygiene, Conventional Commits, lint, typecheck, tests, policies on every commit
+npm test                                 # unit tests
 npm run typecheck
-npm run test:integration   # signs in through Dex to a real app on Podman
+npm run build:runtime                    # the runtime image every app starts from
+pixi run check-image                     # proves the image meets policy/
+npm run test:integration                 # signs in through Dex to a real app on Podman
 ```
 
-CI runs the hooks, checks every commit message, and runs the integration tests on Podman 5.
+CI runs the hooks, checks every commit message, proves the runtime image, and runs the integration tests on Podman 5.

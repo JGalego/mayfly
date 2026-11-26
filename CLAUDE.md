@@ -37,4 +37,4 @@ Individual offering only: local Podman and a Podman Desktop extension. Enterpris
 
 ## Commands
 
-`nvm use` · `npm test` · `npm run typecheck`
+`nvm use` · `npm test` · `npm run typecheck` · `npm run build:runtime` · `pixi run check-image` · `npm run test:integration`
