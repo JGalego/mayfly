@@ -15,7 +15,7 @@ interface UnversionedApp {
 /** Reads a state saved by this or an earlier version of Mayfly, so nobody loses their apps on an update. */
 export function upgradeState(saved: unknown): State {
   const state = { ...EMPTY_STATE, ...(saved as Partial<State>) };
-  const apps = state.apps.map((app) => ("versions" in app ? app : versioned(app as unknown as UnversionedApp))).map(withThinkingCounted);
+  const apps = state.apps.map((app) => ("versions" in app ? app : versioned(app as unknown as UnversionedApp))).map(withThinkingCounted).map(withNamesMarked);
   const calls = (saved as Partial<State>).calls ?? apps.flatMap(callsOf);
   return { ...state, spent: counted(state.spent), apps, calls: withOutcomes(calls, apps) };
 }
@@ -45,6 +45,20 @@ function withOutcomes(calls: readonly ModelCall[], apps: readonly App[]): ModelC
 function providerIn(model: string): string {
   const end = model.indexOf(" · ");
   return end === -1 ? "Unknown" : model.slice(0, end);
+}
+
+// What Mayfly wrote before it put versions and app names in backticks, which shells set apart. Only its own sentences, whole.
+const UNMARKED: readonly (readonly [RegExp, string])[] = [
+  [/^(Go back to version|Deploy version) ([0-9a-f]{8})$/, "$1 `$2`"],
+  [/^Deployed version ([0-9a-f]{8}):/, "Deployed version `$1`:"],
+  [/^Version ([0-9a-f]{8}) is running now/, "Version `$1` is running now"],
+  [/^Rename to ([a-z0-9-]+)$/, "Rename to `$1`"],
+  [/^Renamed ([a-z0-9-]+) to ([a-z0-9-]+)\./, "Renamed `$1` to `$2`."],
+];
+
+function withNamesMarked(app: App): App {
+  const conversation = app.conversation.map((turn): Turn => ({ ...turn, text: UNMARKED.reduce((text, [unmarked, marked]) => text.replace(unmarked, marked), turn.text) }));
+  return { ...app, conversation };
 }
 
 // Tokens saved before thinking was counted apart are all in the reply's.

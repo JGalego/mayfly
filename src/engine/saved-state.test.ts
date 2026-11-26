@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { upgradeState } from "./saved-state.ts";
-import { EMPTY_STATE } from "./state.ts";
+import { EMPTY_STATE, type Turn } from "./state.ts";
 
 const owner = { email: "o@mayfly.local", username: "o", password: "p" };
 const unversioned = {
@@ -67,6 +67,32 @@ describe("upgradeState", () => {
     const upgraded = upgradeState({ owner, apps: [lunch], calls: calls.toSorted((a, b) => a.at - b.at) }).calls;
 
     assert.deepEqual(upgraded.map((c) => c.passed), [undefined, false, undefined, true, undefined, true]);
+  });
+
+  it("sets apart the versions and names in what Mayfly wrote before it marked them, and nothing else", () => {
+    const app = upgradeState({ owner, apps: [unversioned] }).apps[0];
+    const said = (from: "person" | "mayfly", text: string): Turn => (from === "person" ? { from, text, at: 1 } : { from, text, versions: [], took: 0, at: 1 });
+    const conversation = [
+      said("person", "Go back to version 0a1b2c3d"),
+      said("person", "Deploy version 0a1b2c3d"),
+      said("mayfly", "Deployed version 0a1b2c3d: “add totals”."),
+      said("mayfly", "Version 0a1b2c3d is running now: “add totals”. Ask for a change to carry on from here."),
+      said("person", "Rename to bills"),
+      said("mayfly", "Renamed lunch to bills. It is at the same address."),
+      said("person", "Deploy version 0a1b2c3d, please"),
+    ];
+
+    const upgraded = upgradeState({ owner, apps: [{ ...app, conversation }] }).apps[0]?.conversation.map((turn) => turn.text);
+
+    assert.deepEqual(upgraded, [
+      "Go back to version `0a1b2c3d`",
+      "Deploy version `0a1b2c3d`",
+      "Deployed version `0a1b2c3d`: “add totals”.",
+      "Version `0a1b2c3d` is running now: “add totals”. Ask for a change to carry on from here.",
+      "Rename to `bills`",
+      "Renamed `lunch` to `bills`. It is at the same address.",
+      "Deploy version 0a1b2c3d, please",
+    ]);
   });
 
   it("leaves a state saved with versions as it is", () => {
