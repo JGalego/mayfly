@@ -169,6 +169,46 @@ select {
   margin: 0 0 0 auto;
 }
 
+/* An app's traffic light: running, restarted, being worked on, stopped, never run. */
+.light {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--line);
+}
+
+.light.green {
+  border-color: #16a34a;
+  background: #22c55e;
+}
+
+.light.yellow {
+  border-color: #ca8a04;
+  background: #facc15;
+}
+
+.light.orange {
+  border-color: #ea580c;
+  background: #fb923c;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.light.red {
+  border-color: #dc2626;
+  background: #ef4444;
+}
+
+.light.grey {
+  background: var(--hover);
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
 .label {
   margin: 1rem 0.6rem 0.25rem;
   font-size: 0.75rem;

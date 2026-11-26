@@ -8,6 +8,7 @@ import { tokens } from "./format.ts";
 import { codeView } from "./code.ts";
 import { doctorView } from "./doctor-view.ts";
 import { healthView } from "./health.ts";
+import { lightFor, type Light } from "./lights.ts";
 import { askLogs, offerSources, receiveActivity, receiveLogs, setUpLogs } from "./logs.ts";
 import { historyView } from "./history.ts";
 import { openForm, renderModels, savedModel, setUpModels } from "./models.ts";
@@ -27,6 +28,7 @@ const TITLES: Record<Progress["kind"], string> = { create: "Writing your app", c
 const NOTICE_MS = 4000;
 const CONFIRM_MS = 4000;
 const COPIED_MS = 1500;
+const HEALTH_MS = 10_000;
 // How close to the bottom of a conversation counts as following it.
 const FOLLOW_PX = 48;
 // Apps that work for one person in one browser, since an app keeps its data in the browser.
@@ -105,6 +107,8 @@ element("run-doctor").addEventListener("click", askDoctor);
 developer.addEventListener("change", () => post({ type: "developer", on: developer.checked }));
 
 window.setInterval(tickClocks, 1000);
+// The lights beside the apps follow what Podman says, asked again every little while the page is in view.
+window.setInterval(() => document.visibilityState === "visible" && post({ type: "health" }), HEALTH_MS);
 post({ type: "ready" });
 
 function receive(message: ToUi): void {
@@ -142,6 +146,7 @@ function receive(message: ToUi): void {
 
 function receiveState(next: State): void {
   const previous = state;
+  if (previous === undefined) post({ type: "health" });
   state = next;
   // Whatever the outcome, an error for it came before this.
   if (previous !== undefined && previous.working !== null && next.working === null) lastSent = undefined;
@@ -336,7 +341,7 @@ function render(): void {
 }
 
 function renderSidebar({ apps, working }: State): void {
-  element("apps").replaceChildren(...apps.map((app) => appItem(app, working?.app === app.name)));
+  element("apps").replaceChildren(...apps.map((app) => appItem(app, lightFor(app, health, working?.app))));
   element("apps-heading").hidden = apps.length === 0;
   const newApp = element("new-app");
   markCurrent(newApp, view.kind === "new");
@@ -346,12 +351,14 @@ function renderSidebar({ apps, working }: State): void {
 }
 
 // Built from text nodes only, so nothing in a name or a conversation can become markup.
-function appItem(app: AppView, working: boolean): HTMLLIElement {
+function appItem(app: AppView, { colour, meaning }: Light): HTMLLIElement {
   const control = document.createElement("button");
   control.type = "button";
   control.className = "nav-item";
-  control.textContent = app.name;
-  if (working) control.append(spinner());
+  control.title = meaning;
+  const light = h("span", `light ${colour}`);
+  light.setAttribute("aria-label", meaning);
+  control.append(light, app.name);
   markCurrent(control, view.kind === "app" && view.name === app.name);
   control.addEventListener("click", () => go({ kind: "app", name: app.name, tab: "chat" }));
   const item = document.createElement("li");
