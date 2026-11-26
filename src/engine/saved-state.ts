@@ -31,6 +31,7 @@ function versioned(app: UnversionedApp): App {
     id,
     parent: null,
     request: turns.find((turn) => turn.from === "person")?.text ?? "",
+    by: { kind: "model", name: "the model" } as const,
     attempt: 1,
     routes: app.routes,
     summary: turns[lastReply]?.text ?? "",

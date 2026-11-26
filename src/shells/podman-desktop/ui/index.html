@@ -41,6 +41,7 @@
         <div class="tabs" role="tablist" aria-label="App">
           <button id="tab-chat" role="tab" type="button">Conversation</button>
           <button id="tab-history" role="tab" type="button">History</button>
+          <button id="tab-code" role="tab" type="button" hidden>Code</button>
         </div>
         <button id="remove-app" class="quiet-button" type="button">Remove</button>
         <button id="open-app" class="primary" type="button">Open app</button>
@@ -55,6 +56,23 @@
         </section>
         <ol id="turns"></ol>
         <div id="history" hidden></div>
+        <div id="code-tab" hidden>
+          <div id="code-reading">
+            <div class="code-head">
+              <p id="code-caption" class="quiet"></p>
+              <button id="edit-code" class="primary" type="button">Edit</button>
+            </div>
+            <div id="code-current"></div>
+          </div>
+          <form id="code-editor" hidden>
+            <textarea id="code-text" spellcheck="false" aria-label="routes.ts"></textarea>
+            <input id="code-message" type="text" maxlength="200" placeholder="What did you change? (optional)" aria-label="What you changed">
+            <div class="editor-actions">
+              <button id="cancel-edit" class="quiet-button" type="button">Cancel</button>
+              <button class="primary" type="submit">Save and deploy</button>
+            </div>
+          </form>
+        </div>
       </div>
       <form id="composer">
         <textarea id="request" rows="2" maxlength="2000" aria-label="Your request"></textarea>

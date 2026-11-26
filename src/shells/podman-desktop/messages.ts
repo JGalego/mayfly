@@ -12,7 +12,7 @@ export interface Work {
 /** A request Mayfly is working on, and what it has done so far. */
 export interface Progress extends Work {
   /** Making a new app, changing one, or going back to an earlier version. */
-  readonly kind: "create" | "change" | "restore";
+  readonly kind: "create" | "change" | "restore" | "edit";
   /** When Mayfly started on it, in milliseconds since the epoch. */
   readonly since: number;
   readonly steps: readonly Step[];
@@ -28,7 +28,8 @@ export type FromUi =
   | { readonly type: "save-settings"; readonly choice: ModelChoice; readonly apiKey: string }
   | { readonly type: "peek"; readonly on: boolean }
   | { readonly type: "code"; readonly app: string; readonly version: string }
-  | { readonly type: "restore"; readonly app: string; readonly version: string };
+  | { readonly type: "restore"; readonly app: string; readonly version: string }
+  | { readonly type: "edit"; readonly app: string; readonly routes: string; readonly message: string };
 
 /** What the extension tells the page. Never a secret. */
 export type ToUi =

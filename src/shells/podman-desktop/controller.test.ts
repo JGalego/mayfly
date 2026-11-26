@@ -93,6 +93,17 @@ describe("the Mayfly panel's controller", () => {
     assert.equal(stateOf(posted.at(-1))?.working, null);
   });
 
+  it("builds and runs code edited by hand, and refuses empty code", async () => {
+    const { handle, posted, calls } = setUp({ apps: [lunch] });
+
+    await handle({ type: "edit", app: "lunch-split", routes: "export default 2;\n", message: " Say two " });
+    await handle({ type: "edit", app: "lunch-split", routes: "  ", message: "" });
+
+    assert.deepEqual(calls, ["edit lunch-split export default 2; Say two"]);
+    assert.equal(stateOf(posted[0])?.working?.kind, "edit");
+    assert.equal(posted.at(-1)?.type, "error");
+  });
+
   it("sends the code of a version the page asks for", async () => {
     const { handle, posted } = setUp({ apps: [lunch] });
 
@@ -260,6 +271,10 @@ function setUp({ apps, created: made = lunch, steps = [], peek: peeking = false,
       return made;
     },
     code: async () => "export default 1;\n",
+    edit: async (name, routes, message) => {
+      calls.push(`edit ${name} ${routes.trim()} ${message}`);
+      return lunch;
+    },
     restore: async (name, version) => {
       calls.push(`restore ${name} ${version}`);
       return lunch;

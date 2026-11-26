@@ -9,7 +9,7 @@ import { podmanDeployer } from "../../adapters/podman/podman.ts";
 import { createEngine, type Engine } from "../../engine/engine.ts";
 import type { ModelProvider } from "../../engine/ports.ts";
 import { createController, type ControllerPorts } from "./controller.ts";
-import { endpointOf, isProvider, type ModelChoice } from "./settings.ts";
+import { endpointOf, isProvider, PROVIDERS, type ModelChoice } from "./settings.ts";
 
 // The published, signed runtime this version builds apps on. The README shows how to verify it.
 const RUNTIME_IMAGE = "ghcr.io/jgalego/mayfly-runtime@sha256:1d30bd9e46727f4f116861a24851c84c267bd79803f75b040c9d223846bebd05";
@@ -84,6 +84,10 @@ function keyStore(secrets: api.SecretStorage): KeyStore {
 // The settings and key are read on each call, so a change works without restarting anything.
 function configuredModel(keys: KeyStore): ModelProvider {
   return {
+    get name() {
+      const { provider, model } = readChoice();
+      return `${PROVIDERS[provider]} · ${model}`;
+    },
     async complete(system, messages) {
       const choice = readChoice();
       const baseUrl = endpointOf(choice);

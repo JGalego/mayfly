@@ -5,6 +5,9 @@ import { endpointOf, isProvider, type ModelChoice } from "./settings.ts";
 
 const MAX_REQUEST = 2000;
 const MAX_MODEL_NAME = 200;
+// Far more than any app Mayfly writes, and a bound on what the page can make the extension build.
+const MAX_ROUTES = 200_000;
+const MAX_MESSAGE = 200;
 const BUSY = "Mayfly is still working on your last request. Wait for it to finish.";
 // The model's draft changes many times a second. The page gets the latest at most this often.
 const DRAFT_MS = 150;
@@ -62,6 +65,8 @@ function handle(request: FromUi, session: Session): Promise<unknown> {
       return sendCode(request.app, request.version, session);
     case "restore":
       return restore(request.app, request.version, session);
+    case "edit":
+      return editByHand(request.app, request.routes, request.message.trim(), session);
   }
 }
 
@@ -79,6 +84,20 @@ async function send(work: Work, session: Session): Promise<void> {
 async function restore(app: string, version: string, session: Session): Promise<void> {
   if (session.working !== null) return void (await session.post({ type: "error", text: BUSY }));
   await run({ app, request: `Go back to version ${version}`, kind: "restore" }, session, (watch) => session.engine.restore(app, version, watch));
+}
+
+async function editByHand(app: string, routes: string, message: string, session: Session): Promise<void> {
+  const problem = problemWithEdit(routes, message, session);
+  if (problem !== undefined) return void (await session.post({ type: "error", text: problem }));
+  await run({ app, request: message || "Edit the code by hand", kind: "edit" }, session, (watch) => session.engine.edit(app, routes, message, watch));
+}
+
+function problemWithEdit(routes: string, message: string, session: Session): string | undefined {
+  if (session.working !== null) return BUSY;
+  if (routes.trim() === "") return "The code is empty.";
+  if (routes.length > MAX_ROUTES) return "That is too much code for one app.";
+  if (message.length > MAX_MESSAGE) return `Keep the message under ${MAX_MESSAGE} characters.`;
+  return undefined;
 }
 
 /** Does one piece of work, showing its progress while it runs. */
@@ -186,7 +205,7 @@ async function showState(session: Session): Promise<void> {
 // Messages come from the page, so each is checked for its shape before anything acts on it.
 function readRequest(message: unknown): FromUi | undefined {
   if (typeof message !== "object" || message === null) return undefined;
-  const { type, app, request, name, choice, apiKey, on, version, what } = message as Record<string, unknown>;
+  const { type, app, request, name, choice, apiKey, on, version, what, routes, message: note } = message as Record<string, unknown>;
   switch (type) {
     case "ready":
       return { type };
@@ -199,6 +218,8 @@ function readRequest(message: unknown): FromUi | undefined {
       return typeof name === "string" ? { type, name } : undefined;
     case "peek":
       return typeof on === "boolean" ? { type, on } : undefined;
+    case "edit":
+      return typeof app === "string" && typeof routes === "string" && typeof note === "string" ? { type, app, routes, message: note } : undefined;
     case "code":
     case "restore":
       return typeof app === "string" && typeof version === "string" ? { type, app, version } : undefined;

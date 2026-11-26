@@ -96,6 +96,7 @@ describe("generateApp", () => {
 
   it("shows a watcher the model's reply as it arrives", async () => {
     const model: ModelProvider = {
+      name: "the test model",
       complete: async (_system, _messages, onText) => {
         for (const piece of ["name: notes\n", "```ts\nexport default 1;\n```"]) onText?.(piece);
         return { text: good, usage: { input: 1, output: 1 } };
@@ -138,6 +139,7 @@ function fakes(replies: string[], trials: Trial[]) {
   const conversations: { system: string; messages: Message[] }[] = [];
   const built: { name: string; routes: string }[] = [];
   const model: ModelProvider = {
+    name: "the test model",
     complete: async (system, messages) => {
       conversations.push({ system, messages: [...messages] });
       return { text: replies.shift() ?? "", usage: { input: 10, output: 5 } };

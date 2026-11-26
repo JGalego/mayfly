@@ -19,7 +19,8 @@ function historyRow(app: AppView, row: GraphRow, width: number, showing: Showing
   const { version } = row;
   const status: Status = version.id === app.head ? "running" : version.problem === null ? "passed" : "failed";
   const title = h("p", "history-title", h("code", "version-id", version.id), " ", version.request === "" ? "No request" : version.request);
-  const facts = h("p", "quiet", [STATUS[status], `attempt ${version.attempt}`, when(version.at), tokens(version.spent)].join(" · "));
+  const cost = version.by.kind === "model" ? [tokens(version.spent)] : [];
+  const facts = h("p", "quiet", [STATUS[status], `by ${version.by.name}`, when(version.at), ...cost].join(" · "));
   const problem = version.problem === null ? [] : [showing.peek ? h("pre", "problem", version.problem) : h("p", "quiet", version.problem.split("\n")[0] ?? "")];
   const body = h("div", "history-body", title, facts, ...problem, ...versionDetails(app.name, version, showing));
   return h("li", `history-row ${status}`, lanes(row, width), body, ...action(version, status, restore));

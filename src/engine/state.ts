@@ -20,6 +20,8 @@ interface VersionDetails {
   readonly parent: string | null;
   /** What the person asked for. */
   readonly request: string;
+  /** Who made it: the model, or the person who edited the code by hand. */
+  readonly by: Author;
   readonly attempt: number;
   /** Empty when the model's reply held no usable code. */
   readonly routes: string;
@@ -28,6 +30,12 @@ interface VersionDetails {
   readonly spent: Usage;
   /** When it was made, in milliseconds since the epoch. */
   readonly at: number;
+}
+
+export interface Author {
+  readonly kind: "model" | "person";
+  /** The model as people know it, such as "OpenAI · gpt-6.2-sol", or the person's email. */
+  readonly name: string;
 }
 
 /** One message in an app's conversation. Mayfly's replies name the versions made for the request before them. */

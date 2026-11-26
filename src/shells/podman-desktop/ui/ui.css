@@ -523,6 +523,53 @@ pre.live::after {
   box-shadow: 0 1px 2px light-dark(#0002, #0006);
 }
 
+/* The Code tab: the running code, and an editor for changing it by hand. */
+#code-tab {
+  max-width: var(--column);
+  margin: 0 auto;
+}
+
+.code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+pre.editable {
+  max-height: none;
+}
+
+#code-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+#code-text {
+  min-height: 28rem;
+  padding: 0.75rem;
+  border: 1px solid var(--field-line);
+  border-radius: 8px;
+  font: 12px/1.45 ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-variant-ligatures: none;
+  white-space: pre;
+  tab-size: 2;
+  background: var(--field);
+  resize: vertical;
+}
+
+#code-text:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
 /* History: a graph of versions, newest first. */
 .history {
   max-width: var(--column);

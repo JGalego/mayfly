@@ -4,7 +4,7 @@ import { appObjects } from "./app-objects.ts";
 import { generateApp, type Ask, type Attempt, type Generation } from "./generate.ts";
 import type { Ports } from "./ports.ts";
 import { newPassword, newSecret } from "./secrets.ts";
-import { findApp, findVersion, runningVersion, withApp, withoutApp, type App, type Owner, type State, type Turn, type Version } from "./state.ts";
+import { findApp, findVersion, runningVersion, withApp, withoutApp, type App, type Author, type Owner, type State, type Turn, type Version } from "./state.ts";
 import { UNWATCHED, type Watcher } from "./step.ts";
 import { addUsage, metered, NO_USAGE, type Usage } from "./usage.ts";
 
@@ -32,6 +32,8 @@ export interface Engine {
   create(description: string, watch?: Watcher): Promise<AppView>;
   /** Has the model change an app as asked. An attempt that passes replaces the running one at the same URL. Every attempt is kept. */
   change(name: string, request: string, watch?: Watcher): Promise<AppView>;
+  /** Builds, tries and runs code the person wrote by hand, kept as a version of theirs. The message says what they changed. */
+  edit(name: string, routes: string, message: string, watch?: Watcher): Promise<AppView>;
   /** Runs an earlier version that passed again, at the same URL. The next change starts from it, so history branches rather than being lost. */
   restore(name: string, version: string, watch?: Watcher): Promise<AppView>;
   /** The code of one version of an app. */
@@ -57,14 +59,14 @@ export function createEngine({ store, deployer, identity, model, builder }: Port
   }
 
   /** Keeps every attempt as a version and the exchange in the conversation, then runs the attempt that passed. */
-  async function record(request: string, { name, attempts }: Generation, base: string | null, started: number, watch: Watcher): Promise<AppView> {
+  async function record(request: string, { name, attempts }: Generation, made: Made, watch: Watcher): Promise<AppView> {
     const state = withOwner(await store.load());
     const app = findApp(state, name) ?? newApp(state, name);
-    const versions = chain(attempts, request, base);
+    const versions = chain(attempts, request, made);
     const last = versions.at(-1);
     const passed = last?.problem === null ? last : undefined;
     const spent = attempts.reduce((sum, attempt) => addUsage(sum, attempt.spent), NO_USAGE);
-    const reply: Turn = { from: "mayfly", text: replyFor(app, versions), versions: versions.map((version) => version.id), took: Date.now() - started };
+    const reply: Turn = { from: "mayfly", text: replyFor(app, versions), versions: versions.map((version) => version.id), took: Date.now() - made.started };
     const next: App = {
       ...app,
       versions: [...app.versions, ...versions],
@@ -86,16 +88,28 @@ export function createEngine({ store, deployer, identity, model, builder }: Port
     async create(description, watch = UNWATCHED) {
       const started = Date.now();
       const taken = (await store.load()).apps.map((app) => app.name);
-      return record(description, await generate({ description, taken }, watch), null, started, watch);
+      return record(description, await generate({ description, taken }, watch), { base: null, by: { kind: "model", name: model.name }, started }, watch);
     },
 
     async change(name, request, watch = UNWATCHED) {
       const started = Date.now();
-      const app = existingApp(await store.load(), name);
-      // The running code, or for an app that never ran, its latest attempt that had any.
-      const base = runningVersion(app) ?? app.versions.findLast((version) => version.routes !== "");
+      const base = startingPoint(existingApp(await store.load(), name));
       const generation = await generate({ change: request, app: { name, routes: base?.routes ?? "" } }, watch);
-      return record(request, generation, base?.id ?? null, started, watch);
+      return record(request, generation, { base: base?.id ?? null, by: { kind: "model", name: model.name }, started }, watch);
+    },
+
+    async edit(name, routes, message, watch = UNWATCHED) {
+      const started = Date.now();
+      const state = withOwner(await store.load());
+      const base = startingPoint(existingApp(state, name));
+      watch({ kind: "building" });
+      const image = await builder.build(name, routes);
+      watch({ kind: "trying" });
+      const trial = await builder.trial(image);
+      if (!trial.ok) watch({ kind: "failed", problem: trial.problem });
+      const outcome = trial.ok ? { problem: null, image } : { problem: trial.problem, image: null };
+      const attempt: Attempt = { routes, summary: trial.ok ? "Your edit is running." : "", spent: NO_USAGE, at: Date.now(), ...outcome };
+      return record(message || "Edit the code by hand", { name, attempts: [attempt] }, { base: base?.id ?? null, by: { kind: "person", name: state.owner.email }, started }, watch);
     },
 
     async restore(name, id, watch = UNWATCHED) {
@@ -152,6 +166,18 @@ export function createEngine({ store, deployer, identity, model, builder }: Port
   };
 }
 
+/** Who made a request's versions, what they started from, and when. */
+interface Made {
+  readonly base: string | null;
+  readonly by: Author;
+  readonly started: number;
+}
+
+/** Where a change starts: the running code, or for an app that never ran, its latest attempt that had any. */
+function startingPoint(app: App): Version | undefined {
+  return runningVersion(app) ?? app.versions.findLast((version) => version.routes !== "");
+}
+
 function existingApp(state: State, name: string): App {
   const app = findApp(state, name);
   if (app === undefined) throw new Error(`no app named ${name}`);
@@ -177,10 +203,10 @@ function freePort(state: State): number {
 }
 
 /** The attempts as versions, each starting from the one before, and the first from the base. */
-function chain(attempts: readonly Attempt[], request: string, base: string | null): Version[] {
+function chain(attempts: readonly Attempt[], request: string, { base, by }: Made): Version[] {
   const versions: Version[] = [];
   for (const [index, attempt] of attempts.entries()) {
-    versions.push({ id: randomBytes(4).toString("hex"), parent: versions.at(-1)?.id ?? base, request, attempt: index + 1, ...attempt });
+    versions.push({ id: randomBytes(4).toString("hex"), parent: versions.at(-1)?.id ?? base, request, by, attempt: index + 1, ...attempt });
   }
   return versions;
 }
@@ -189,7 +215,8 @@ function replyFor(app: App, versions: readonly Version[]): string {
   const last = versions.at(-1);
   if (last?.problem === null) return last.summary || (app.head === null ? MADE : CHANGED);
   const unchanged = app.head === null ? "" : " Your app is as it was.";
-  return `It still failed after ${versions.length} attempts.${unchanged} The last problem was:\n\n${last?.problem ?? ""}`;
+  const failed = versions.length === 1 ? "It didn't pass its trial." : `It still failed after ${versions.length} attempts.`;
+  return `${failed}${unchanged} The ${versions.length === 1 ? "" : "last "}problem was:\n\n${last?.problem ?? ""}`;
 }
 
 /** Counts tokens against the total and, when it names one, against an app. */

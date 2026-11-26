@@ -6,6 +6,7 @@ import { elapsed, lineCount, stagesOf, stagesOfVersions, type Stage, type StageK
 
 const STAGES: Record<StageKind, (attempt: number) => readonly [icon: string, label: string]> = {
   writing: (attempt) => (attempt === 1 ? ["✍️", "Writing the code"] : ["🩹", `Fixing it · attempt ${attempt}`]),
+  edited: () => ["✏️", "Edited by hand"],
   building: () => ["🔨", "Building the app"],
   trying: () => ["🧪", "Trying it out, cut off from the network"],
   deploying: () => ["🚀", "Starting it behind sign-in"],

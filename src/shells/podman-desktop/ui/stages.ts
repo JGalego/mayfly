@@ -1,7 +1,7 @@
 import type { VersionView } from "../../../engine/engine.ts";
 import type { Step } from "../../../engine/step.ts";
 
-export type StageKind = "writing" | "building" | "trying" | "deploying";
+export type StageKind = "writing" | "edited" | "building" | "trying" | "deploying";
 
 /** One thing Mayfly does while it makes an app, and how it went. */
 export interface Stage {
@@ -70,12 +70,13 @@ export function elapsed(since: number, now: number): string {
 /** The stages of a finished request, rebuilt from the versions it made. */
 export function stagesOfVersions(versions: readonly VersionView[]): Stage[] {
   const stages: Stage[] = [];
-  for (const { id, parent, attempt, lines, problem } of versions) {
+  for (const { id, parent, attempt, lines, problem, by } of versions) {
     if (lines === 0) {
       stages.push({ kind: "writing", attempt, problem: problem ?? "" });
       continue;
     }
-    stages.push({ kind: "writing", attempt, version: id, lines, ...(parent === null ? {} : { parent }) }, { kind: "building", attempt });
+    const kind = by.kind === "person" ? "edited" : "writing";
+    stages.push({ kind, attempt, version: id, lines, ...(parent === null ? {} : { parent }) }, { kind: "building", attempt });
     stages.push(problem === null ? { kind: "trying", attempt } : { kind: "trying", attempt, problem });
   }
   const last = versions.at(-1);

@@ -15,6 +15,7 @@ export interface ModelSettings {
 export function openAiCompatibleModel({ baseUrl, apiKey, model }: ModelSettings): ModelProvider {
   const client = new OpenAI({ baseURL: baseUrl, apiKey });
   return {
+    name: model,
     // Streamed, so people can watch the code being written.
     async complete(system, messages, onText) {
       const stream = await client.chat.completions.create({

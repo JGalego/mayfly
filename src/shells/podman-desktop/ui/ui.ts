@@ -4,6 +4,7 @@ import type { FromUi, Progress, ToUi, Work } from "../messages.ts";
 import { isProvider, PROVIDERS } from "../settings.ts";
 import { h, keepTime } from "./dom.ts";
 import { tokens } from "./format.ts";
+import { codeView } from "./code.ts";
 import { historyView } from "./history.ts";
 import { makingOf, progressView, tickClocks, whatChanged, type Showing } from "./progress.ts";
 
@@ -14,9 +15,9 @@ type State = Extract<ToUi, { type: "state" }>;
 /** What the main area shows: a new app's empty conversation, an app's conversation, or the settings. */
 type View = { readonly kind: "new" } | { readonly kind: "app"; readonly name: string; readonly tab: Tab } | { readonly kind: "settings" };
 /** An app's conversation, or its history. */
-type Tab = "chat" | "history";
+type Tab = "chat" | "history" | "code";
 
-const TITLES: Record<Progress["kind"], string> = { create: "Writing your app", change: "Changing your app", restore: "Going back" };
+const TITLES: Record<Progress["kind"], string> = { create: "Writing your app", change: "Changing your app", restore: "Going back", edit: "Trying your edit" };
 
 const NOTICE_MS = 4000;
 const CONFIRM_MS = 4000;
@@ -46,6 +47,10 @@ const drafts = new Map<string, string>();
 /** What the person sent last, to give back if it fails. */
 let lastSent: Work | undefined;
 let removeArmed = false;
+/** The app whose code the person is editing by hand. */
+let editing: string | undefined;
+/** Which version the Code tab shows, so a redraw leaves it alone. */
+let codeShown = "";
 /** Folds the person opened or closed, so a redraw leaves them as they were. */
 const folds = new Map<string, boolean>();
 /** Versions' code fetched from the extension, and the ones already asked for. */
@@ -63,6 +68,17 @@ element("add-key").addEventListener("click", () => go({ kind: "settings" }));
 element("open-app").addEventListener("click", openApp);
 element("tab-chat").addEventListener("click", () => showTab("chat"));
 element("tab-history").addEventListener("click", () => showTab("history"));
+element("tab-code").addEventListener("click", () => showTab("code"));
+element("edit-code").addEventListener("click", startEditing);
+element("cancel-edit").addEventListener("click", () => {
+  editing = undefined;
+  render();
+});
+element("code-editor").addEventListener("submit", (event) => {
+  event.preventDefault();
+  saveEdit();
+});
+element("code-text").addEventListener("keydown", indentWithTab);
 element("remove-app").addEventListener("click", removeApp);
 for (const what of ["email", "password"] as const) element(`copy-${what}`).addEventListener("click", () => copySignIn(what));
 element("composer").addEventListener("submit", (event) => {
@@ -125,7 +141,10 @@ function go(next: View): void {
   render();
   if (view.kind === "settings") return;
   request.focus();
-  scrollToEnd(element("thread"));
+  // A conversation opens at its latest message; history and code open at the top.
+  const thread = element("thread");
+  if (view.kind === "app" && view.tab !== "chat") thread.scrollTop = 0;
+  else scrollToEnd(thread);
 }
 
 function send(): void {
@@ -157,6 +176,60 @@ function copySignIn(what: "email" | "password"): void {
   const chip = element(`copy-${what}`);
   chip.classList.add("copied");
   window.setTimeout(() => chip.classList.remove("copied"), COPIED_MS);
+}
+
+/** Behind the curtain: the code running now, and an editor to change it by hand. */
+function renderCode(app: AppView, showing: Showing): void {
+  const isEditing = editing === app.name;
+  element("code-reading").hidden = isEditing;
+  element("code-editor").hidden = !isEditing;
+  if (isEditing) return;
+  const base = startingPoint(app);
+  const code = base === undefined ? undefined : showing.code(app.name, base.id);
+  element<HTMLButtonElement>("edit-code").disabled = code === undefined || state?.working !== null;
+  element("code-caption").textContent = base === undefined ? "No attempt has written any code yet." : `routes.ts · version ${base.id}${base.id === app.head ? ", running now" : ", the latest attempt"} · by ${base.by.name}`;
+  const key = `${app.name}:${base?.id ?? ""}:${code === undefined ? "" : "loaded"}`;
+  if (key === codeShown) return;
+  codeShown = key;
+  element("code-current").replaceChildren(code === undefined ? h("p", "quiet", base === undefined ? "" : "Fetching the code…") : codeView(code, "listing editable"));
+}
+
+/** What an edit starts from: the running version, or the latest attempt with code. */
+function startingPoint(app: AppView): AppView["versions"][number] | undefined {
+  return app.versions.find((version) => version.id === app.head) ?? app.versions.findLast((version) => version.lines > 0);
+}
+
+function startingCode(app: AppView): string | undefined {
+  const base = startingPoint(app);
+  return base === undefined ? undefined : codes.get(`${app.name}:${base.id}`);
+}
+
+function startEditing(): void {
+  const app = shownApp();
+  const code = app === undefined ? undefined : startingCode(app);
+  if (app === undefined || code === undefined) return;
+  editing = app.name;
+  element<HTMLTextAreaElement>("code-text").value = code;
+  element<HTMLInputElement>("code-message").value = "";
+  render();
+  element("code-text").focus();
+}
+
+function saveEdit(): void {
+  if (editing === undefined) return;
+  post({ type: "edit", app: editing, routes: element<HTMLTextAreaElement>("code-text").value, message: element<HTMLInputElement>("code-message").value });
+  const app = editing;
+  editing = undefined;
+  codeShown = "";
+  go({ kind: "app", name: app, tab: "chat" });
+}
+
+// A code editor indents with Tab rather than leaving the field.
+function indentWithTab(event: KeyboardEvent): void {
+  if (event.key !== "Tab" || event.shiftKey) return;
+  event.preventDefault();
+  const field = event.currentTarget as HTMLTextAreaElement;
+  field.setRangeText("  ", field.selectionStart, field.selectionEnd, "end");
 }
 
 // Going back rebuilds and restarts the app, which the conversation shows as it happens.
@@ -262,14 +335,18 @@ function renderChat(state: State, app: AppView | undefined): void {
   const pending = working === null ? [] : [turn("mayfly", progressView(working, TITLES[working.kind], showing))];
   const thread = element("thread");
   const following = thread.scrollHeight - thread.scrollTop - thread.clientHeight < FOLLOW_PX;
-  const tab = view.kind === "app" ? view.tab : "chat";
+  // The Code tab is behind the curtain.
+  const tab = view.kind !== "app" || (view.tab === "code" && !state.peek) ? "chat" : view.tab;
   element("turns").hidden = tab !== "chat";
   element("turns").replaceChildren(...(tab === "chat" ? [...items, ...pending] : []));
   element("history").hidden = tab !== "history";
   element("history").replaceChildren(...(tab === "history" && app !== undefined ? [historyView(app, showing, { restore: (version) => goBack(app.name, version), busy: state.working !== null })] : []));
-  for (const name of ["chat", "history"] as const) element(`tab-${name}`).setAttribute("aria-selected", String(tab === name));
+  for (const name of ["chat", "history", "code"] as const) element(`tab-${name}`).setAttribute("aria-selected", String(tab === name));
+  element("tab-code").hidden = !state.peek;
+  element("code-tab").hidden = tab !== "code";
+  if (tab === "code" && app !== undefined) renderCode(app, showing);
   element("tab-history").textContent = `History · ${app?.versions.length ?? 0}`;
-  if (following) scrollToEnd(thread);
+  if (following && tab === "chat") scrollToEnd(thread);
   for (const live of document.querySelectorAll<HTMLElement>(".live")) scrollToEnd(live);
   request.placeholder = app === undefined ? "Describe the app you need" : `Ask for a change to ${app.name}`;
   request.disabled = !state.hasApiKey;

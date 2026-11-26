@@ -120,6 +120,30 @@ describe("the engine", () => {
     assert.match(back.conversation.at(-1)?.text ?? "", /split lunch bills/);
   });
 
+  it("runs code the person edited by hand as their version, starting from the running one", async () => {
+    const { engine, deployed } = setUp([reply("lunch")]);
+    const before = await engine.create("split lunch bills");
+
+    const after = await engine.edit("lunch", "export default 2;\n", "Say two");
+
+    const mine = after.versions.at(-1);
+    assert.partialDeepStrictEqual(mine, { parent: before.head, request: "Say two", by: { kind: "person", name: "owner@mayfly.local" }, problem: null, spent: { input: 0, output: 0 } });
+    assert.equal(after.head, mine?.id);
+    assert.deepEqual(before.versions[0]?.by, { kind: "model", name: "the test model" });
+    assert.equal(deployed.length, 2);
+  });
+
+  it("keeps a hand edit that fails its trial, and leaves the app as it was", async () => {
+    const { engine } = setUp([reply("lunch")], [{ ok: true }, crashed]);
+    const before = await engine.create("split lunch bills");
+
+    const after = await engine.edit("lunch", "throw 1;\n", "");
+
+    assert.equal(after.head, before.head);
+    assert.partialDeepStrictEqual(after.versions.at(-1), { request: "Edit the code by hand", problem: "crashed" });
+    assert.match(after.conversation.at(-1)?.text ?? "", /didn't pass its trial\. Your app is as it was/);
+  });
+
   it("refuses to go back to a version that failed", async () => {
     const { engine } = setUp([reply("lunch"), reply("lunch")], [crashed, { ok: true }]);
     const app = await engine.create("split lunch bills");
@@ -220,6 +244,7 @@ function setUp(replies: string[], trials: Trial[] = []) {
     settingsFor: () => ({ OAUTH2_PROXY_CLIENT_ID: "fake" }),
   };
   const model: ModelProvider = {
+    name: "the test model",
     complete: async (_system, messages: readonly Message[]) => {
       asked.push(messages[0]?.content ?? "");
       return { text: replies.shift() ?? "", usage: COST };
