@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ConfigMap, KubeObject } from "../core/kube.ts";
 import { createEngine } from "./engine.ts";
-import type { Builder, Deployer, IdentitySource, Message, ModelProvider, StateStore, Trial } from "./ports.ts";
+import type { Builder, Deployer, IdentitySource, Message, ModelProvider, Observer, StateStore, Trial } from "./ports.ts";
 import { EMPTY_STATE, type State } from "./state.ts";
 
 const COST = { input: 100, output: 20 };
@@ -164,6 +164,22 @@ describe("the engine", () => {
     assert.equal(changed.versions.at(-1)?.by.name, "Careful model");
   });
 
+  it("says how each running app and the sign-in service are doing", async () => {
+    const { engine } = setUp([reply("lunch"), reply("notes"), reply("notes"), reply("notes")], [{ ok: true }, crashed, crashed, crashed]);
+    await engine.create("split lunch bills");
+    await engine.create("keep notes");
+
+    const health = await engine.health();
+
+    assert.deepEqual(
+      health.map((service) => [service.name, service.kind, service.pod, service.containers.length]),
+      [
+        ["lunch", "app", "mayfly-lunch", 1],
+        ["Sign-in", "sign-in", "mayfly-dex", 1],
+      ],
+    );
+  });
+
   it("refuses to change an app it does not know", async () => {
     const { engine } = setUp([]);
 
@@ -253,6 +269,7 @@ function setUp(replies: string[], trials: Trial[] = [], named: (id: string | nul
     remove: async (objects) => void (log.push("remove"), removed.push(objects)),
   };
   const identity: IdentitySource = {
+    pod: "mayfly-dex",
     sync: async (next) => void (log.push("sync"), synced.push(next)),
     settingsFor: () => ({ OAUTH2_PROXY_CLIENT_ID: "fake" }),
   };
@@ -268,7 +285,10 @@ function setUp(replies: string[], trials: Trial[] = [], named: (id: string | nul
     build: async (name) => `localhost/mayfly-app-${name}:${++builds}`,
     trial: async () => trials.shift() ?? { ok: true },
   };
-  const engine = createEngine({ store, deployer, identity, models, builder });
+  const observer: Observer = {
+    health: async (pods) => pods.filter((pod) => pod !== "mayfly-gone").map((pod) => ({ pod, containers: [{ name: "app", state: "running", status: "Up", restarts: 0 }] })),
+  };
+  const engine = createEngine({ store, deployer, observer, identity, models, builder });
   return { engine, deployed, removed, synced, log, asked };
 }
 

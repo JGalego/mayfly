@@ -6,7 +6,7 @@ import { readJson, writeJson } from "../../adapters/json-file/json-file.ts";
 import { jsonFileStore } from "../../adapters/json-file/json-file-store.ts";
 import { openAiCompatibleModel } from "../../adapters/openai-compatible/openai-compatible-model.ts";
 import { podmanBuilder } from "../../adapters/podman/podman-builder.ts";
-import { podmanDeployer } from "../../adapters/podman/podman.ts";
+import { podmanDeployer, podmanObserver } from "../../adapters/podman/podman.ts";
 import { createEngine, type Engine } from "../../engine/engine.ts";
 import type { ModelProvider } from "../../engine/ports.ts";
 import { createController, type ControllerPorts } from "./controller.ts";
@@ -25,6 +25,7 @@ export async function activate(context: api.ExtensionContext): Promise<void> {
   const engine = createEngine({
     store: jsonFileStore(join(context.storagePath, "state.json")),
     deployer: podmanDeployer,
+    observer: podmanObserver,
     identity: dexIdentity(logo),
     models: (id) => configuredModel(modelFor(models.models(), id), keys),
     builder: podmanBuilder(RUNTIME_IMAGE),

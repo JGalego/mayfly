@@ -7,7 +7,7 @@ import { buildDex } from "../../src/adapters/dex/dex.ts";
 import { dexIdentity } from "../../src/adapters/dex/dex-identity.ts";
 import { jsonFileStore } from "../../src/adapters/json-file/json-file-store.ts";
 import { podmanBuilder } from "../../src/adapters/podman/podman-builder.ts";
-import { down, podmanDeployer } from "../../src/adapters/podman/podman.ts";
+import { down, podmanDeployer, podmanObserver } from "../../src/adapters/podman/podman.ts";
 import { createEngine } from "../../src/engine/engine.ts";
 import type { ModelProvider } from "../../src/engine/ports.ts";
 import { Browser } from "./browser.ts";
@@ -16,7 +16,7 @@ import { removeImages, replyWith, RUNTIME_IMAGE, waitUntilUp } from "./support.t
 // A scripted model, so this test needs no API key: it always writes the hello app.
 const model: ModelProvider = { name: "a scripted model", complete: async () => ({ text: replyWith("hello", "hello-app"), usage: { input: 0, output: 0 } }) };
 const store = jsonFileStore(join(await mkdtemp(join(tmpdir(), "mayfly-")), "state.json"));
-const engine = createEngine({ store, deployer: podmanDeployer, identity: dexIdentity(), models: () => model, builder: podmanBuilder(RUNTIME_IMAGE) });
+const engine = createEngine({ store, deployer: podmanDeployer, observer: podmanObserver, identity: dexIdentity(), models: () => model, builder: podmanBuilder(RUNTIME_IMAGE) });
 const images: string[] = [];
 
 after(async () => {
@@ -36,6 +36,11 @@ describe("the engine on Podman with Dex", () => {
     const browser = new Browser();
     const page = await browser.submit(await browser.get(app.url), { login: owner.email, password: owner.password });
     assert.match(page.body, new RegExp(`Hello, ${owner.email}`));
+    const health = await engine.health();
+    assert.deepEqual(health.find((service) => service.name === "hello")?.containers.map((c) => [c.name, c.state]).sort(), [
+      ["app", "running"],
+      ["auth-proxy", "running"],
+    ]);
 
     await engine.remove("hello");
     await assert.rejects(fetch(app.url));

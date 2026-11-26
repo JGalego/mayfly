@@ -7,6 +7,7 @@ import { execProbe } from "../../core/probe.ts";
 // Pinned: v2.45 is the first release that gives static users groups.
 const IMAGE = "ghcr.io/dexidp/dex:v2.46.1";
 const NAME = "mayfly-dex";
+export const DEX_POD = NAME;
 const CONFIG = `${NAME}-config`;
 const BRAND = `${NAME}-brand`;
 // Dex serves its pages from here, and anything in static/ as is.

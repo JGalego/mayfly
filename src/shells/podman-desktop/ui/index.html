@@ -109,6 +109,14 @@
           </form>
         </section>
         <section>
+          <div class="section-head">
+            <h2>Health</h2>
+            <button id="refresh-health" class="quiet-button" type="button">Refresh</button>
+          </div>
+          <p class="quiet">Whether each app and the sign-in service are running, as Podman sees them.</p>
+          <ul id="health" class="health-list"></ul>
+        </section>
+        <section>
           <h2>Code</h2>
           <label class="check"><input id="peek" type="checkbox"> Peek behind the curtain</label>
           <p class="quiet">Show the code Mayfly writes, and each step of making an app: writing it, trying it, and fixing what failed.</p>

@@ -1,10 +1,11 @@
-import type { AppView } from "../../../engine/engine.ts";
+import type { AppView, ServiceHealth } from "../../../engine/engine.ts";
 import type { Turn } from "../../../engine/state.ts";
 import type { FromUi, Progress, ToUi, Work } from "../messages.ts";
 import type { ModelView } from "../messages.ts";
 import { h, keepTime } from "./dom.ts";
 import { tokens } from "./format.ts";
 import { codeView } from "./code.ts";
+import { healthView } from "./health.ts";
 import { historyView } from "./history.ts";
 import { openForm, renderModels, savedModel, setUpModels } from "./models.ts";
 import { makingOf, progressView, tickClocks, whatChanged, type Showing } from "./progress.ts";
@@ -55,6 +56,8 @@ const folds = new Map<string, boolean>();
 const codes = new Map<string, string>();
 const asked = new Set<string>();
 let bannerTimer: number | undefined;
+/** How the apps and the sign-in service were doing when Podman was last asked. */
+let health: readonly ServiceHealth[] | undefined;
 /** The model the person picked for the next new app, if not the default. */
 let newAppModel: string | undefined;
 
@@ -91,6 +94,7 @@ request.addEventListener("keydown", (event) => {
   send();
 });
 composerModel.addEventListener("change", pickModel);
+element("refresh-health").addEventListener("click", askHealth);
 peek.addEventListener("change", () => post({ type: "peek", on: peek.checked }));
 
 window.setInterval(tickClocks, 1000);
@@ -106,6 +110,9 @@ function receive(message: ToUi): void {
       return render();
     case "code":
       codes.set(`${message.app}:${message.version}`, message.routes);
+      return render();
+    case "health":
+      health = message.services;
       return render();
     case "created":
       if (view.kind === "new") go({ kind: "app", name: message.name, tab: "chat" });
@@ -136,7 +143,7 @@ function go(next: View): void {
   removeArmed = false;
   hideBanner();
   render();
-  if (view.kind === "settings") return;
+  if (view.kind === "settings") return askHealth();
   request.focus();
   // A conversation opens at its latest message; history and code open at the top.
   const thread = element("thread");
@@ -255,6 +262,12 @@ function removeApp(): void {
   }, CONFIRM_MS);
 }
 
+function askHealth(): void {
+  health = undefined;
+  render();
+  post({ type: "health" });
+}
+
 /** The model an app uses, or a new app would: what the composer's picker shows. */
 function activeModel(current: State, app: AppView | undefined): ModelView | undefined {
   const wanted = app === undefined ? (newAppModel ?? current.defaultModel) : (app.model ?? current.defaultModel);
@@ -286,7 +299,10 @@ function render(): void {
   element("chat").hidden = view.kind === "settings";
   element("settings").hidden = view.kind !== "settings";
   peek.checked = state.peek;
-  if (view.kind === "settings") renderModels(state, post, () => render());
+  if (view.kind === "settings") {
+    renderModels(state, post, () => render());
+    element("health").replaceChildren(...healthView(health));
+  }
   else renderChat(state, app);
   renderStatusbar(state, app);
 }

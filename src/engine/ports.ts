@@ -14,7 +14,30 @@ export interface Deployer {
   remove(objects: readonly KubeObject[]): Promise<void>;
 }
 
+/** How one container is doing. */
+export interface ContainerHealth {
+  readonly name: string;
+  /** Podman's word for it: running, exited, created and so on. */
+  readonly state: string;
+  /** Podman's own summary, such as "Up 5 minutes". */
+  readonly status: string;
+  readonly restarts: number;
+}
+
+export interface PodHealth {
+  readonly pod: string;
+  readonly containers: readonly ContainerHealth[];
+}
+
+/** Watches the pods that run: how they are doing, and what they wrote. */
+export interface Observer {
+  /** The pods with these names that exist, and their containers. */
+  health(pods: readonly string[]): Promise<PodHealth[]>;
+}
+
 export interface IdentitySource {
+  /** The pod that signs people in, to watch it like the apps. */
+  readonly pod: string;
   /** Brings the identity provider in line with the owner and apps in the state. */
   sync(state: State): Promise<void>;
   /** The proxy settings an app uses to sign people in. */
@@ -50,6 +73,7 @@ export interface Builder {
 export interface Ports {
   readonly store: StateStore;
   readonly deployer: Deployer;
+  readonly observer: Observer;
   readonly identity: IdentitySource;
   /** The model with this id, or the default model for null or for an id that no longer exists. */
   readonly models: (id: string | null) => ModelProvider;

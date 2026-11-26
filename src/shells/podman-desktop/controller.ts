@@ -45,7 +45,7 @@ export function createController(ports: ControllerPorts): (message: unknown) => 
   };
 }
 
-function handle(request: FromUi, session: Session): Promise<unknown> {
+async function handle(request: FromUi, session: Session): Promise<unknown> {
   switch (request.type) {
     case "ready":
       return showState(session);
@@ -69,6 +69,8 @@ function handle(request: FromUi, session: Session): Promise<unknown> {
       return savePeek(request.on, session);
     case "code":
       return sendCode(request.app, request.version, session);
+    case "health":
+      return session.post({ type: "health", services: await session.engine.health() });
     case "restore":
       return restore(request.app, request.version, session);
     case "edit":
@@ -209,6 +211,7 @@ function readRequest(message: unknown): FromUi | undefined {
   const { type, app, request, name, apiKey, on, version, what, routes, message: note, model, id } = message as Record<string, unknown>;
   switch (type) {
     case "ready":
+    case "health":
       return { type };
     case "copy":
       return what === "email" || what === "password" ? { type, what } : undefined;

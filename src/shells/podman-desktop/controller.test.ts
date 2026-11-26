@@ -106,6 +106,14 @@ describe("the Mayfly panel's controller", () => {
     assert.equal(posted.at(-1)?.type, "error");
   });
 
+  it("says how the apps and the sign-in service are doing", async () => {
+    const { handle, posted } = setUp({ apps: [lunch] });
+
+    await handle({ type: "health" });
+
+    assert.deepEqual(posted, [{ type: "health", services: [{ name: "lunch-split", kind: "app", pod: "mayfly-lunch-split", containers: [] }] }]);
+  });
+
   it("sends the code of a version the page asks for", async () => {
     const { handle, posted } = setUp({ apps: [lunch] });
 
@@ -324,6 +332,7 @@ function setUp({ apps, created: made = lunch, steps = [], peek: peeking = false,
     remove: async (name) => void calls.push(`remove ${name}`),
     owner: async () => owner,
     spent: async () => ({ input: 500, output: 80 }),
+    health: async () => [{ name: "lunch-split", kind: "app", pod: "mayfly-lunch-split", containers: [] }],
   };
   const handle = createController({
     engine,

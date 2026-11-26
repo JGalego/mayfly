@@ -2,7 +2,8 @@ import { randomBytes } from "node:crypto";
 import { appUrl } from "../core/app-url.ts";
 import { appObjects } from "./app-objects.ts";
 import { generateApp, type Ask, type Attempt, type Generation } from "./generate.ts";
-import type { ModelProvider, Ports } from "./ports.ts";
+import { mayflyName } from "../core/names.ts";
+import type { ContainerHealth, ModelProvider, Ports } from "./ports.ts";
 import { newPassword, newSecret } from "./secrets.ts";
 import { findApp, findVersion, runningVersion, withApp, withoutApp, type App, type Author, type Owner, type State, type Turn, type Version } from "./state.ts";
 import { UNWATCHED, type Watcher } from "./step.ts";
@@ -15,6 +16,14 @@ const CHANGED = "Done. Your app has the change.";
 
 /** A version as a shell shows it: how long its code is, but not the code, which the shell asks for when it needs it. */
 export type VersionView = Omit<Version, "routes" | "image"> & { readonly lines: number };
+
+/** How an app's pod, or the sign-in service's, is doing. No containers means it is not running. */
+export interface ServiceHealth {
+  readonly name: string;
+  readonly kind: "app" | "sign-in";
+  readonly pod: string;
+  readonly containers: readonly ContainerHealth[];
+}
 
 /** What a shell shows of an app. Never its secrets. */
 export interface AppView {
@@ -48,9 +57,11 @@ export interface Engine {
   owner(): Promise<Owner>;
   /** What the model has spent on every app, including removed ones and attempts that failed. */
   spent(): Promise<Usage>;
+  /** How each app that should be running, and the sign-in service, is doing. */
+  health(): Promise<ServiceHealth[]>;
 }
 
-export function createEngine({ store, deployer, identity, models, builder }: Ports): Engine {
+export function createEngine({ store, deployer, observer, identity, models, builder }: Ports): Engine {
   async function generate(ask: Ask, model: ModelProvider, watch: Watcher): Promise<Generation> {
     const meter = metered(model);
     try {
@@ -187,6 +198,16 @@ export function createEngine({ store, deployer, identity, models, builder }: Por
 
     async spent() {
       return (await store.load()).spent;
+    },
+
+    async health() {
+      const running = (await store.load()).apps.filter((app) => app.head !== null);
+      const services: Omit<ServiceHealth, "containers">[] = [
+        ...running.map((app) => ({ name: app.name, kind: "app" as const, pod: mayflyName(app.name) })),
+        { name: "Sign-in", kind: "sign-in", pod: identity.pod },
+      ];
+      const pods = await observer.health(services.map((service) => service.pod));
+      return services.map((service) => ({ ...service, containers: pods.find((pod) => pod.pod === service.pod)?.containers ?? [] }));
     },
   };
 }

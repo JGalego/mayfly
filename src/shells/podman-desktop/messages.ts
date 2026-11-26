@@ -1,4 +1,4 @@
-import type { AppView } from "../../engine/engine.ts";
+import type { AppView, ServiceHealth } from "../../engine/engine.ts";
 import type { Step } from "../../engine/step.ts";
 import type { Usage } from "../../engine/usage.ts";
 import type { ModelSetting } from "./settings.ts";
@@ -35,6 +35,7 @@ export type FromUi =
   | { readonly type: "default-model"; readonly id: string }
   | { readonly type: "use-model"; readonly app: string; readonly model: string }
   | { readonly type: "peek"; readonly on: boolean }
+  | { readonly type: "health" }
   | { readonly type: "code"; readonly app: string; readonly version: string }
   | { readonly type: "restore"; readonly app: string; readonly version: string }
   | { readonly type: "edit"; readonly app: string; readonly routes: string; readonly message: string };
@@ -55,6 +56,7 @@ export type ToUi =
     }
   | { readonly type: "progress"; readonly working: Progress }
   | { readonly type: "created"; readonly name: string }
+  | { readonly type: "health"; readonly services: readonly ServiceHealth[] }
   | { readonly type: "code"; readonly app: string; readonly version: string; readonly routes: string }
   | { readonly type: "notice"; readonly text: string }
   | { readonly type: "error"; readonly text: string };
