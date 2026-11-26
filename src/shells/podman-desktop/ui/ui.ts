@@ -130,10 +130,12 @@ element("edit-code").addEventListener("click", () => {
   const base = app === undefined ? undefined : startingPoint(app);
   if (app !== undefined && base !== undefined) startEditing(app, base.id);
 });
-element("close-editor").addEventListener("click", () => {
-  editing = undefined;
-  render();
-});
+element("close-editor").addEventListener("click", () =>
+  unlessUnsaved(() => {
+    editing = undefined;
+    render();
+  }),
+);
 element("code-editor").addEventListener("submit", (event) => {
   event.preventDefault();
   saveEdit();
@@ -354,6 +356,15 @@ function startEditing(app: AppView, from: string): void {
   editor.load(code);
 }
 
+/** Does something that closes the editor or loads other code into it, asking first when that would lose changes not saved yet. */
+function unlessUnsaved(then: () => void): void {
+  if (editing === undefined || !unsaved) return then();
+  const dialog = element<HTMLDialogElement>("discard-dialog");
+  dialog.returnValue = "";
+  dialog.addEventListener("close", () => dialog.returnValue === "discard" && then(), { once: true });
+  dialog.showModal();
+}
+
 function saveEdit(): void {
   if (editing === undefined || !unsaved) return;
   post({ type: "save", app: editing.app, from: editing.from, routes: editor.edit().after, message: element<HTMLInputElement>("code-message").value });
@@ -463,10 +474,11 @@ function askToRename(app: string, to: string, typed: string): void {
   dialog.showModal();
 }
 
-/** The page follows a renamed app, before the state with its new name comes: its conversation stays on screen, and the editor and the picked version close. */
+/** The page follows a renamed app, before the state with its new name comes: its conversation and its editor stay, and the picked version closes. */
 function followRename(from: string, to: string): void {
   if (state !== undefined) state = { ...state, apps: state.apps.map((app) => (app.name === from ? { ...app, name: to } : app)) };
-  if (editing?.app === from) editing = undefined;
+  // The editor keeps what is in it: the versions keep their ids under the new name.
+  if (editing?.app === from) editing = { ...editing, app: to };
   if (picked?.app === from) picked = undefined;
   if (view.kind === "app" && view.name === from) go({ ...view, name: to });
   else render();
@@ -734,7 +746,7 @@ function renderHistory(app: AppView | undefined, showing: Showing, idle: boolean
   if (app === undefined || version === undefined) return panel.replaceChildren();
   // Editing needs the version's code, which the panel fetches to show what changed.
   const editable = showing.code(app.name, version.id) !== undefined;
-  const actions = idle ? { deploy: (id: string) => askToDeploy(app.name, id), ...(editable ? { edit: (id: string) => startEditing(app, id) } : {}) } : {};
+  const actions = idle ? { deploy: (id: string) => askToDeploy(app.name, id), ...(editable ? { edit: (id: string) => unlessUnsaved(() => startEditing(app, id)) } : {}) } : {};
   panel.replaceChildren(...versionPanel(app, version, showing, { pick: (id) => pick({ app: app.name, version: id }), close: () => pick(undefined), ...actions }));
 }
 
