@@ -553,6 +553,32 @@ pre.live::after {
   color: var(--text);
 }
 
+/* Diffs, the way git shows them. */
+pre.diff > span {
+  display: block;
+}
+
+.diff-added {
+  color: var(--success);
+}
+
+pre.diff > .diff-added {
+  background: light-dark(#dcfce7, #052e16);
+}
+
+.diff-removed {
+  color: var(--error);
+}
+
+pre.diff > .diff-removed {
+  background: light-dark(#fee2e2, #450a0a);
+}
+
+.diff-hunk,
+.diff-note {
+  color: var(--muted);
+}
+
 pre.problem {
   max-height: 12rem;
   color: var(--error);

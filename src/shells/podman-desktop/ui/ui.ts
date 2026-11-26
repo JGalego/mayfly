@@ -4,7 +4,7 @@ import type { Usage } from "../../../engine/usage.ts";
 import type { FromUi, ToUi, Work } from "../messages.ts";
 import { isProvider, PROVIDERS } from "../settings.ts";
 import { h, keepTime } from "./dom.ts";
-import { makingOf, progressView, tickClocks, type Showing } from "./progress.ts";
+import { makingOf, progressView, tickClocks, whatChanged, type Showing } from "./progress.ts";
 
 // Podman Desktop puts this function on every webview page, to send messages to the extension.
 declare function acquirePodmanDesktopApi(): { postMessage(message: FromUi): void };
@@ -257,7 +257,10 @@ function renderChat(state: State, app: AppView | undefined): void {
 function madeOf(said: Turn, app: AppView, showing: Showing): Node[] {
   if (said.from !== "mayfly" || said.versions.length === 0) return [];
   const versions = said.versions.flatMap((id) => app.versions.find((version) => version.id === id) ?? []);
-  return [makingOf(app.name, versions, said.took, showing)];
+  const made = makingOf(app.name, versions, said.took, showing);
+  const [first, last] = [versions[0], versions.at(-1)];
+  const changed = showing.peek && first?.parent != null && last?.problem === null;
+  return changed ? [whatChanged(app.name, first.parent, last.id, showing), made] : [made];
 }
 
 function showingFor({ peek }: State): Showing {

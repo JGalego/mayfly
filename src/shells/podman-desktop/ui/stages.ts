@@ -13,6 +13,8 @@ export interface Stage {
   /** The kept version whose code this is, for a finished request, and its length. The code itself is fetched when wanted. */
   readonly version?: string;
   readonly lines?: number;
+  /** The version it started from, to show what it changed. */
+  readonly parent?: string;
   readonly problem?: string;
 }
 
@@ -68,12 +70,12 @@ export function elapsed(since: number, now: number): string {
 /** The stages of a finished request, rebuilt from the versions it made. */
 export function stagesOfVersions(versions: readonly VersionView[]): Stage[] {
   const stages: Stage[] = [];
-  for (const { id, attempt, lines, problem } of versions) {
+  for (const { id, parent, attempt, lines, problem } of versions) {
     if (lines === 0) {
       stages.push({ kind: "writing", attempt, problem: problem ?? "" });
       continue;
     }
-    stages.push({ kind: "writing", attempt, version: id, lines }, { kind: "building", attempt });
+    stages.push({ kind: "writing", attempt, version: id, lines, ...(parent === null ? {} : { parent }) }, { kind: "building", attempt });
     stages.push(problem === null ? { kind: "trying", attempt } : { kind: "trying", attempt, problem });
   }
   const last = versions.at(-1);

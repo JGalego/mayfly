@@ -1,6 +1,6 @@
 import type { VersionView } from "../../../engine/engine.ts";
 import type { Progress } from "../messages.ts";
-import { codeView } from "./code.ts";
+import { changes, codeView } from "./code.ts";
 import { h, keepTime } from "./dom.ts";
 import { elapsed, lineCount, stagesOf, stagesOfVersions, type Stage, type StageKind } from "./stages.ts";
 
@@ -42,6 +42,11 @@ export function progressView({ since, steps }: Progress, title: string, showing:
   return h("div", "progress", h("p", "progress-title", title), h("p", "quiet", clock, " · usually about a minute"), h("ol", "stages", ...rows));
 }
 
+/** Behind the curtain, what a request changed in the app: from the version running before it to the one it made. */
+export function whatChanged(app: string, before: string, after: string, showing: Showing): HTMLDetailsElement {
+  return diffFold(app, before, after, { key: `changed:${app}:${after}`, label: "What changed" }, showing);
+}
+
 /** How a finished request was made, kept under its reply and folded away. */
 export function makingOf(app: string, versions: readonly VersionView[], took: number, showing: Showing): HTMLDetailsElement {
   const attempts = versions.length === 1 ? "1 attempt" : `${versions.length} attempts`;
@@ -78,6 +83,9 @@ function details(stage: Stage, showing: Showing, code?: { key: string; open: boo
   const shown: Node[] = [];
   if (showing.peek && stage.code !== undefined && stage.live === true) shown.push(codeView(stage.code, "listing live"));
   else if (showing.peek && code !== undefined && (stage.code !== undefined || stage.version !== undefined)) shown.push(codeFold(stage, showing, code));
+  if (showing.peek && code?.app !== undefined && stage.version !== undefined && stage.parent !== undefined) {
+    shown.push(diffFold(code.app, stage.parent, stage.version, { key: `diff:${code.app}:${stage.version}`, label: "Changes from the version before" }, showing));
+  }
   if (stage.problem !== undefined) shown.push(showing.peek ? h("pre", "problem", stage.problem) : h("p", "quiet", "It didn't pass, so Mayfly tried again."));
   return shown;
 }
@@ -89,6 +97,17 @@ function codeFold(stage: Stage, showing: Showing, { key, open, app }: { key: str
   const lines = stage.lines ?? (stage.code === undefined ? 0 : lineCount(stage.code));
   const body = code === undefined ? h("p", "quiet", "Fetching the code…") : codeView(code, "listing");
   return disclosure(h("details", "code", h("summary", "", `routes.ts · ${lines} lines`), body), key, open, showing);
+}
+
+/** Two versions' differences, fetched the first time the fold is opened. */
+function diffFold(app: string, before: string, after: string, { key, label }: { key: string; label: string }, showing: Showing): HTMLDetailsElement {
+  const isOpen = showing.isOpen(key, false);
+  const old = isOpen ? showing.code(app, before) : undefined;
+  const now = isOpen ? showing.code(app, after) : undefined;
+  const shown = old === undefined || now === undefined ? undefined : changes(old, now);
+  const summary = h("summary", "", label);
+  if (shown !== undefined) summary.append(" · ", h("span", "diff-added", `+${shown.added}`), " ", h("span", "diff-removed", `−${shown.removed}`));
+  return disclosure(h("details", "code", summary, shown?.view ?? h("p", "quiet", "Fetching the code…")), key, false, showing);
 }
 
 /** Keeps a fold open or closed across redraws, as the person left it. */
