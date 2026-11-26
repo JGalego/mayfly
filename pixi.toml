@@ -1,0 +1,12 @@
+# Tools that check the runtime image, pinned by pixi.lock so they match locally and in CI.
+[workspace]
+name = "mayfly"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+conftest = "==0.71.1"
+grype = "==0.122.1"
+
+[tasks]
+check-image = "runtime/check.sh"

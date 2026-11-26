@@ -1,0 +1,24 @@
+version: 6
+environments:
+  default:
+    channels:
+    - url: https://conda.anaconda.org/conda-forge/
+    packages:
+      linux-64:
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/conftest-0.71.1-hfc2019e_0.conda
+      - conda: https://conda.anaconda.org/conda-forge/linux-64/grype-0.122.1-hfc2019e_0.conda
+packages:
+- conda: https://conda.anaconda.org/conda-forge/linux-64/conftest-0.71.1-hfc2019e_0.conda
+  sha256: c26b9064fc0c7745d7b5a149143aa02cebe3a41346ffd918333f49b0e2e214a8
+  md5: 6ef890b4be9b4f05a8678fc40eaa9270
+  license: Apache-2.0
+  license_family: APACHE
+  size: 21596179
+  timestamp: 1791288205726
+- conda: https://conda.anaconda.org/conda-forge/linux-64/grype-0.122.1-hfc2019e_0.conda
+  sha256: ecbf1ac352ee7f0b78d6d1b6f0db26363d03bb96ae1cb9a8dd3f9de27a7f2636
+  md5: 0b67c736c0a06feecb06465555a56256
+  license: Apache-2.0
+  license_family: APACHE
+  size: 56337349
+  timestamp: 1795031918730

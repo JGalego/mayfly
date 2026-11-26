@@ -1,8 +1,9 @@
 default_install_hook_types: [pre-commit, commit-msg]
 
+# Every hook repo is pinned to a commit, with its tag alongside. Update with `pre-commit autoupdate --freeze`.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v6.0.0
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c # frozen: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer
@@ -12,10 +13,20 @@ repos:
       - id: detect-private-key
 
   - repo: https://github.com/compilerla/conventional-pre-commit
-    rev: v4.5.0
+    rev: 33b50eb042bee26eac0ee96ad84aa9c1b4dccdd8 # frozen: v4.5.0
     hooks:
       - id: conventional-pre-commit
         stages: [commit-msg]
+
+  - repo: https://github.com/AleksaC/hadolint-py
+    rev: 6e7504451511eaeb62a3e7f14d63b0296cbf86eb # frozen: v2.15.1
+    hooks:
+      - id: hadolint
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: 745eface02aef23e168a8afb6b5737818efbea95 # frozen: v0.11.0.1
+    hooks:
+      - id: shellcheck
 
   - repo: local
     hooks:
@@ -36,3 +47,15 @@ repos:
         entry: npm test
         pass_filenames: false
         files: \.ts$
+      - id: policy-tests
+        name: policy tests
+        language: system
+        entry: pixi run --frozen conftest verify --policy policy
+        pass_filenames: false
+        files: ^policy/
+      - id: containerfile-policy
+        name: Containerfile follows policy
+        language: system
+        entry: pixi run --frozen conftest test --parser dockerfile --namespace containerfile --policy policy runtime/Containerfile
+        pass_filenames: false
+        files: ^(runtime/Containerfile|policy/)

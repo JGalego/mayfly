@@ -8,24 +8,29 @@ on:
 permissions:
   contents: read
 
+# Actions are pinned to a commit, with their tag alongside.
 jobs:
   checks:
     name: Hooks, typecheck and unit tests
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
-      - run: npm ci
-      - run: pipx run pre-commit run --all-files --show-diff-on-failure
+      - uses: prefix-dev/setup-pixi@9936258fee697aff89b3fed6ca1f80a382ef694e # v0.11.3
+        with:
+          locked: true
+          cache: true
+      - run: npm ci && npm ci --prefix runtime
+      - run: pipx run pre-commit==4.7.0 run --all-files --show-diff-on-failure
 
   commits:
     name: Commit messages
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - name: Check each new commit message
@@ -38,21 +43,22 @@ jobs:
           [[ "$BASE" =~ ^0+$ ]] && range="$HEAD"
           for sha in $(git rev-list --no-merges "$range"); do
             git log -1 --format=%B "$sha" > "$RUNNER_TEMP/message"
-            pipx run pre-commit run --hook-stage commit-msg --commit-msg-filename "$RUNNER_TEMP/message"
+            pipx run pre-commit==4.7.0 run --hook-stage commit-msg --commit-msg-filename "$RUNNER_TEMP/message"
           done
 
-  integration:
-    name: Integration tests on Podman 5
+  image:
+    name: Runtime image proof and integration tests on Podman 5
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
-      - uses: prefix-dev/setup-pixi@v0.11.3
+      - uses: prefix-dev/setup-pixi@9936258fee697aff89b3fed6ca1f80a382ef694e # v0.11.3
         with:
-          run-install: false
+          locked: true
+          cache: true
       - name: Install Podman 5
         run: |
           pixi global install "podman>=5"
@@ -69,5 +75,7 @@ jobs:
           # Ubuntu blocks user namespaces for binaries without an AppArmor profile, which rootless Podman needs.
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
           "$HOME/.pixi/bin/podman" --version
-      - run: npm ci
+      - run: npm ci && npm ci --prefix runtime
+      - name: Prove the runtime image meets policy
+        run: pixi run check-image
       - run: npm run test:integration
