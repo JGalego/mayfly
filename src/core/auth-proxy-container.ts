@@ -1,4 +1,4 @@
-import { AUTH_CONFIG_KEYS } from "./auth-config-map.ts";
+import { AUTH_SECRET_KEYS } from "./auth-secret.ts";
 import { APP_PORT, ROLES_CLAIM } from "./contract.ts";
 import { HARDENED } from "./hardening.ts";
 import type { Container, EnvVar } from "./kube.ts";
@@ -20,7 +20,9 @@ export function buildAuthProxyContainer({ appName, hostPort }: AuthProxyInput): 
     name: "auth-proxy",
     image: IMAGE,
     args: [...signInArgs(appName, hostPort), ...authorizationArgs(), ...forwardingArgs()],
-    env: [...configEnv(appName), ...secretEnv(appName)],
+    // Identity provider and allowed roles live in the ConfigMap, so a recipient never edits the pod.
+    envFrom: [{ configMapRef: { name: authConfigName(appName) } }],
+    env: secretEnv(appName),
     ports: [{ containerPort: PORT, hostPort, hostIP: LOOPBACK }],
     livenessProbe: { httpGet: { path: "/ping", port: PORT } },
     securityContext: HARDENED,
@@ -33,6 +35,8 @@ function signInArgs(appName: string, hostPort: number): string[] {
     "--provider=oidc",
     `--redirect-url=http://localhost:${hostPort}/oauth2/callback`,
     "--skip-provider-button=true",
+    // Ask for consent once, not at every sign-in.
+    "--approval-prompt=auto",
     // Browsers share localhost cookies across ports, so each app needs its own.
     `--cookie-name=${mayflyName(appName)}`,
     // Plain HTTP on loopback, where a Secure cookie never comes back.
@@ -56,25 +60,12 @@ function forwardingArgs(): string[] {
   ];
 }
 
-// Kept out of the pod so a recipient changes one ConfigMap, not the pod.
-function configEnv(appName: string): EnvVar[] {
-  return [
-    fromConfigMap("OAUTH2_PROXY_OIDC_ISSUER_URL", AUTH_CONFIG_KEYS.issuerUrl, appName),
-    fromConfigMap("OAUTH2_PROXY_CLIENT_ID", AUTH_CONFIG_KEYS.clientId, appName),
-    fromConfigMap("OAUTH2_PROXY_ALLOWED_GROUPS", AUTH_CONFIG_KEYS.allowedRoles, appName),
-  ];
-}
-
 // Secrets by reference only: their values never enter a spec.
 function secretEnv(appName: string): EnvVar[] {
   return [
-    fromSecret("OAUTH2_PROXY_CLIENT_SECRET", "client-secret", appName),
-    fromSecret("OAUTH2_PROXY_COOKIE_SECRET", "cookie-secret", appName),
+    fromSecret("OAUTH2_PROXY_CLIENT_SECRET", AUTH_SECRET_KEYS.clientSecret, appName),
+    fromSecret("OAUTH2_PROXY_COOKIE_SECRET", AUTH_SECRET_KEYS.cookieSecret, appName),
   ];
-}
-
-function fromConfigMap(variable: string, key: string, appName: string): EnvVar {
-  return { name: variable, valueFrom: { configMapKeyRef: { name: authConfigName(appName), key } } };
 }
 
 function fromSecret(variable: string, key: string, appName: string): EnvVar {

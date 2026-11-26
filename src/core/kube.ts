@@ -14,12 +14,22 @@ export interface ConfigMap {
   readonly data: Readonly<Record<string, string>>;
 }
 
+export interface Secret {
+  readonly apiVersion: "v1";
+  readonly kind: "Secret";
+  readonly metadata: { readonly name: string };
+  readonly stringData: Readonly<Record<string, string>>;
+}
+
+export type KubeObject = Pod | ConfigMap | Secret;
+
 /** Every container Mayfly writes is health-checked, hardened and capped. */
 export interface Container {
   readonly name: string;
   readonly image: string;
   readonly args?: readonly string[];
   readonly env?: readonly EnvVar[];
+  readonly envFrom?: readonly { readonly configMapRef: { readonly name: string } }[];
   readonly ports?: readonly ContainerPort[];
   readonly livenessProbe: Probe;
   readonly securityContext: SecurityContext;
@@ -28,15 +38,9 @@ export interface Container {
 
 export type EnvVar =
   | { readonly name: string; readonly value: string }
-  | { readonly name: string; readonly valueFrom: EnvVarSource };
+  | { readonly name: string; readonly valueFrom: { readonly secretKeyRef: SecretKeyRef } };
 
-/** Exactly one is set. */
-export interface EnvVarSource {
-  readonly configMapKeyRef?: KeyRef;
-  readonly secretKeyRef?: KeyRef;
-}
-
-export interface KeyRef {
+export interface SecretKeyRef {
   readonly name: string;
   readonly key: string;
 }

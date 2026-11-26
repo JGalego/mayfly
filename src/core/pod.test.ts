@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { buildPod } from "./pod.ts";
-import type { Container, EnvVarSource, Pod } from "./kube.ts";
+import type { Container, Pod } from "./kube.ts";
 
 const pod = buildPod({
   manifest: { name: "expenses", image: "localhost/mayfly-expenses:1" },
@@ -55,16 +55,16 @@ describe("the pod Mayfly runs for an app", () => {
     assert.ok(proxy.args?.includes("--oidc-groups-claim=groups"));
   });
 
-  it("takes the identity provider and allowed roles from the app's ConfigMap", () => {
-    assert.deepEqual(envFrom(proxy, "configMapKeyRef"), {
-      OAUTH2_PROXY_OIDC_ISSUER_URL: "mayfly-expenses-auth/issuer-url",
-      OAUTH2_PROXY_CLIENT_ID: "mayfly-expenses-auth/client-id",
-      OAUTH2_PROXY_ALLOWED_GROUPS: "mayfly-expenses-auth/allowed-roles",
-    });
+  it("asks for consent once, not at every sign-in", () => {
+    assert.ok(proxy.args?.includes("--approval-prompt=auto"));
+  });
+
+  it("takes the identity provider settings and allowed roles from the app's ConfigMap", () => {
+    assert.deepEqual(proxy.envFrom, [{ configMapRef: { name: "mayfly-expenses-auth" } }]);
   });
 
   it("takes the proxy's secrets from the app's Secret by reference, never inline", () => {
-    assert.deepEqual(envFrom(proxy, "secretKeyRef"), {
+    assert.deepEqual(secretRefs(proxy), {
       OAUTH2_PROXY_CLIENT_SECRET: "mayfly-expenses-auth/client-secret",
       OAUTH2_PROXY_COOKIE_SECRET: "mayfly-expenses-auth/cookie-secret",
     });
@@ -103,12 +103,13 @@ function containerNamed(pod: Pod, name: string): Container {
   return container;
 }
 
-/** Each variable drawn from the given source, as "resource/key". */
-function envFrom(container: Container, source: keyof EnvVarSource): Record<string, string> {
+/** Each variable drawn from a Secret, as "secret/key". */
+function secretRefs(container: Container): Record<string, string> {
   return Object.fromEntries(
     (container.env ?? []).flatMap((env) => {
-      const ref = "valueFrom" in env ? env.valueFrom[source] : undefined;
-      return ref ? [[env.name, `${ref.name}/${ref.key}`]] : [];
+      if (!("valueFrom" in env)) return [];
+      const { name, key } = env.valueFrom.secretKeyRef;
+      return [[env.name, `${name}/${key}`]];
     }),
   );
 }
