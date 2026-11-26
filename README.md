@@ -133,10 +133,10 @@ stateDiagram-v2
   unhealthy --> running: passes again
   unhealthy --> starting: Podman restarts it
   running --> stopped: it stops
-  stopped --> working: Start
-  running --> working: a change
-  never --> working: a change
+  stopped --> starting: Start
 ```
+
+Asking for a change turns any light orange, until a new version is deployed or the app is left as it was.
 
 | Light | What it means | What to do |
 |---|---|---|
