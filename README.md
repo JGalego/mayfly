@@ -121,3 +121,7 @@ npm run test:integration                 # signs in through Dex to a real app on
 ```
 
 CI runs the hooks, checks every commit message, proves the runtime image, and runs the integration tests on Podman 5.
+
+## License
+
+[MIT](LICENSE)

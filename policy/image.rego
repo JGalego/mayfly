@@ -10,6 +10,7 @@ required_labels := {
 	"org.opencontainers.image.title",
 	"org.opencontainers.image.source",
 	"org.opencontainers.image.revision",
+	"org.opencontainers.image.licenses",
 }
 
 # Nothing an attacker could use to run commands, install things or fetch payloads.

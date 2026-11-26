@@ -10,6 +10,7 @@ required_labels := {
 	"org.opencontainers.image.title",
 	"org.opencontainers.image.source",
 	"org.opencontainers.image.revision",
+	"org.opencontainers.image.licenses",
 }
 
 # Guards every other rule: a policy that sees no FROM is reading the wrong input and would pass anything.

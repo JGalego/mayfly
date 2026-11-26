@@ -11,6 +11,7 @@ good := {
 			"org.opencontainers.image.title": "t",
 			"org.opencontainers.image.source": "s",
 			"org.opencontainers.image.revision": "r",
+			"org.opencontainers.image.licenses": "MIT",
 		},
 	},
 	"size": 150000000,
@@ -71,6 +72,10 @@ test_size_budget if {
 
 test_secret_looking_env_is_refused if {
 	count(image.deny) == 1 with input as object.union(good, {"config": object.union(good.config, {"Env": ["OPENAI_API_KEY=sk"]})})
+}
+
+test_the_license_label_is_required if {
+	image.deny["label org.opencontainers.image.licenses is required"] with input as json.remove(good, ["config/Labels/org.opencontainers.image.licenses"])
 }
 
 test_labels_are_required if {

@@ -8,6 +8,7 @@ good := [
 		"org.opencontainers.image.title", "\"t\"", "=",
 		"org.opencontainers.image.source", "\"s\"", "=",
 		"org.opencontainers.image.revision", "\"r\"", "=",
+		"org.opencontainers.image.licenses", "\"MIT\"", "=",
 	], "JSON": false},
 	{"Cmd": "copy", "Flags": [], "Value": ["src", "./runtime"], "JSON": false},
 	{"Cmd": "user", "Flags": [], "Value": ["65532:65532"], "JSON": false},
@@ -64,6 +65,14 @@ test_ordinary_env_is_fine if {
 
 test_labels_are_required if {
 	containerfile.deny["LABEL org.opencontainers.image.revision is required"] with input as [c | some c in good; c.Cmd != "label"]
+}
+
+test_the_license_label_is_required if {
+	containerfile.deny["LABEL org.opencontainers.image.licenses is required"] with input as replacing("label", {"Cmd": "label", "Flags": [], "Value": [
+		"org.opencontainers.image.title", "\"t\"", "=",
+		"org.opencontainers.image.source", "\"s\"", "=",
+		"org.opencontainers.image.revision", "\"r\"", "=",
+	]})
 }
 
 test_input_without_from_fails_rather_than_passes if {
