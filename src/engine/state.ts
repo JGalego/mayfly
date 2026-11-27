@@ -105,6 +105,15 @@ export interface ModelCall {
   readonly question?: true;
 }
 
+/** A phone the owner paired to make apps from. Mayfly keeps a hash of the phone's token, never the token. */
+export interface PairedPhone {
+  readonly id: string;
+  /** What kind of phone it is, as its browser says, such as "iPhone". */
+  readonly name: string;
+  readonly pairedAt: number;
+  readonly tokenHash: string;
+}
+
 export interface State {
   readonly owner: Owner | null;
   /** Everyone the owner can share apps with. */
@@ -118,9 +127,11 @@ export interface State {
   readonly phoneHost: string | null;
   /** The loopback port people sign in on, once another program took the identity provider's own; null until then. */
   readonly signInPort: number | null;
+  /** The phones the owner makes apps from. */
+  readonly phones: readonly PairedPhone[];
 }
 
-export const EMPTY_STATE: State = { owner: null, people: [], apps: [], spent: NO_USAGE, calls: [], phoneHost: null, signInPort: null };
+export const EMPTY_STATE: State = { owner: null, people: [], apps: [], spent: NO_USAGE, calls: [], phoneHost: null, signInPort: null, phones: [] };
 
 /** The owner's sign-in group, which every app lets in. */
 export const OWNER_ROLE = "owner";

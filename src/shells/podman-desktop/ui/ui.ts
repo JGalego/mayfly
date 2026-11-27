@@ -3,18 +3,18 @@ import type { ModelCall, Turn } from "../../../engine/state.ts";
 import type { FromUi, Progress, ToUi, Upload, Work } from "../messages.ts";
 import type { Examination } from "../doctor.ts";
 import type { ModelView } from "../messages.ts";
-import { h, keepTime } from "./dom.ts";
+import { h } from "./dom.ts";
 import { changes, codeView } from "./code.ts";
 import { codeEditor } from "./editor.ts";
 import { findBar } from "./find-bar.ts";
 import { threadFind } from "./thread-find.ts";
-import { fileLook, imageUrl, sentImage, uploads } from "./uploads.ts";
-import { kindOf } from "../../../engine/attachments.ts";
+import { imageUrl, uploads } from "./uploads.ts";
 import { chooseTab, keyboardTabs } from "./tabs.ts";
 import { commandMenu } from "./command-menu.ts";
-import { leadingCommand, parse, suggestions, type Command } from "./commands.ts";
+import { markCommands } from "./command-mark.ts";
+import { parse, suggestions, type Command } from "./commands.ts";
 import { nameChip, withChips } from "./chips.ts";
-import { markdownView } from "./markdown-view.ts";
+import { filesOf, pendingView, spinner, turn, turnItem, type Speaking } from "./turns.ts";
 import { doctorView } from "./doctor-view.ts";
 import { healthView } from "./health.ts";
 import { lightFor, type Light } from "./lights.ts";
@@ -30,7 +30,9 @@ import { offerEmail, renderPeople, renderShare, settleSharing, setUpPeople, show
 import { renderMail, savedMail, setUpMail } from "./mail.ts";
 import { qrCode } from "./qr.ts";
 import { onPhone } from "../../../core/phone.ts";
-import { makingOf, progressView, tickClocks, whatChanged, type Showing } from "./progress.ts";
+import { phonePageUrl } from "../phone-creation.ts";
+import type { PhoneView } from "../../../engine/engine.ts";
+import { makingOf, tickClocks, whatChanged, type Showing } from "./progress.ts";
 
 // Podman Desktop puts this function on every webview page, to send messages to the extension.
 declare function acquirePodmanDesktopApi(): { postMessage(message: FromUi): void };
@@ -47,7 +49,9 @@ const SETTINGS_TABS: readonly SettingsTab[] = ["general", "people", "models", "l
 // Logs and usage are for developers.
 const DEVELOPER_TABS: readonly SettingsTab[] = ["logs", "usage"];
 
-const TITLES: Record<Exclude<Progress["kind"], "remove">, string> = { create: "Creating app", change: "Updating app", ask: "Answering", deploy: "Deploying", save: "Testing edit", rename: "Renaming", start: "Starting" };
+
+// Links open by way of the extension, and thumbnails are fetched the first time they're wanted.
+const SPEAKING: Speaking = { open: openLink, thumbnail: thumbnailOf, logo: () => element<HTMLImageElement>("logo").src };
 
 const NOTICE_MS = 4000;
 const CONFIRM_MS = 4000;
@@ -70,7 +74,7 @@ addIcons(document);
 
 const podmanDesktop = acquirePodmanDesktopApi();
 const request = element<HTMLTextAreaElement>("request");
-const requestBackdrop = element("request-backdrop");
+const markCommand = markCommands(request, element("request-backdrop"));
 const composerModel = element<HTMLSelectElement>("composer-model");
 const developer = element<HTMLInputElement>("developer");
 
@@ -122,6 +126,9 @@ let newAppModel: string | undefined;
 let passwordShown: number | undefined;
 /** Whether phone access is being turned on or off, which runs every app again. */
 let phoneSwitching = false;
+/** How many phones were paired at the last state, so the pairing code goes once another pairs. */
+let pairedBefore = 0;
+let pairingTimer: ReturnType<typeof setTimeout> | undefined;
 /** The phone address the QR code shows, so it's drawn again only when that changes. */
 let phoneUrlShown: string | undefined;
 
@@ -233,8 +240,6 @@ element("composer").addEventListener("submit", (event) => {
   event.preventDefault();
   send();
 });
-request.addEventListener("input", markCommand);
-request.addEventListener("scroll", followScroll);
 request.addEventListener("keydown", (event) => {
   if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
   event.preventDefault();
@@ -258,6 +263,10 @@ element("new-password").addEventListener("click", () => {
 for (const id of ["show-password", "settings-show-password"]) element(id).addEventListener("click", () => (passwordShown === undefined ? post({ type: "show-password" }) : hidePassword()));
 developer.addEventListener("change", () => post({ type: "developer", on: developer.checked }));
 element<HTMLInputElement>("autostart").addEventListener("change", (event) => post({ type: "autostart", on: (event.target as HTMLInputElement).checked }));
+element<HTMLInputElement>("phone-creation").addEventListener("change", (event) => {
+  post({ type: "phone-creation", on: (event.target as HTMLInputElement).checked });
+});
+element("pair-phone").addEventListener("click", () => post({ type: "pair-phone" }));
 element<HTMLInputElement>("phone-access").addEventListener("change", (event) => {
   phoneSwitching = true;
   post({ type: "phone", on: (event.target as HTMLInputElement).checked });
@@ -282,6 +291,8 @@ function receive(message: ToUi): void {
     case "progress":
       if (state !== undefined) state = { ...state, working: message.working };
       return render();
+    case "pairing":
+      return showPairing(message);
     case "code":
       written.set(`${message.app}:${message.version}`, { routes: message.routes, thinking: message.thinking });
       return render();
@@ -749,6 +760,7 @@ function render(): void {
   developer.checked = state.developer;
   element<HTMLInputElement>("autostart").checked = state.autostart;
   renderPhoneSetting(state);
+  renderPhoneCreation(state);
   if (view.kind === "settings") renderSettings(state, view.tab);
   else renderChat(state, app);
   renderStatusbar(state, app, health);
@@ -764,6 +776,41 @@ function renderPhoneSetting({ phoneHost }: State): void {
     : phoneHost !== null
       ? `Apps open at ${phoneHost} on your tailnet and turning this off restarts them`
       : "Tailscale lists this computer's name in public certificate logs but the apps stay on your tailnet";
+}
+
+function renderPhoneCreation({ phoneHost, phoneCreation, phones }: State): void {
+  const box = element<HTMLInputElement>("phone-creation");
+  box.checked = phoneCreation;
+  box.disabled = phoneHost === null;
+  const note = element("phone-creation-note");
+  if (phoneHost === null) note.replaceChildren("Needs phone access");
+  else if (!phoneCreation) note.replaceChildren("A page for making and changing apps from a phone you pair");
+  else note.replaceChildren("Paired phones make and change apps at ", nameChip(phonePageUrl(phoneHost)), " but can't see settings or remove anything");
+  element("phone-pairing").hidden = !phoneCreation;
+  element("paired-phones").replaceChildren(...phones.map(pairedPhone));
+  // The code is spent once a phone pairs with it.
+  if (phones.length > pairedBefore) hidePairing();
+  pairedBefore = phones.length;
+}
+
+function pairedPhone({ id, name, pairedAt }: PhoneView): HTMLLIElement {
+  const forget = h("button", "quiet-button", "Forget");
+  forget.type = "button";
+  forget.addEventListener("click", () => post({ type: "forget-phone", id }));
+  return h("li", "paired-phone", h("span", "", name), h("span", "quiet", `Paired ${new Date(pairedAt).toLocaleDateString()}`), forget);
+}
+
+/** The pairing code, as a QR code for the phone's camera, until it expires. Never as text: it works once, for whoever has it. */
+function showPairing({ url, expires }: { readonly url: string; readonly expires: number }): void {
+  element("pairing-qr").replaceChildren(qrCode(url, "QR code to pair a phone"));
+  element("pairing").hidden = false;
+  clearTimeout(pairingTimer);
+  pairingTimer = setTimeout(hidePairing, Math.max(0, expires - Date.now()));
+}
+
+function hidePairing(): void {
+  element("pairing").hidden = true;
+  element("pairing-qr").replaceChildren();
 }
 
 /** The app's address on the phone, as a QR code to scan and as text, while phone access is on. */
@@ -857,7 +904,7 @@ function renderChat(state: State, app: AppView | undefined): void {
   openApp.classList.toggle("primary", !stopped);
   openApp.classList.toggle("secondary", stopped);
   for (const tab of element("app-tabs").querySelectorAll("button")) tab.disabled = removing;
-  const failure = failed !== undefined && failed.app === (app?.name ?? null) && working === null ? [turn("mayfly", h("p", "failure", failed.text))] : [];
+  const failure = failed !== undefined && failed.app === (app?.name ?? null) && working === null ? [turn("mayfly", h("p", "failure", failed.text), SPEAKING)] : [];
   element("welcome").hidden = app !== undefined || working !== null || failure.length > 0;
   // A nudge, not a gate: OpenAI always wants a key, while a compatible endpoint, like a local model, may need none.
   const model = activeModel(state, app);
@@ -867,9 +914,9 @@ function renderChat(state: State, app: AppView | undefined): void {
   const said = app?.conversation ?? [];
   // The turns are built again only when what they show changes: not on each step of the work, which only the last turns show.
   const key = [app?.name, said.length, said.at(-1)?.at, state.developer, foldsChanged, written.size, app?.versions.length, thumbnails.size].join("|");
-  if (builtTurns?.key !== key) builtTurns = { key, items: said.map((turn) => turnItem(turn, app === undefined ? [] : [...filesOf(app.name, turn), ...madeOf(turn, app, showing)])) };
-  const asked = working === null ? [] : [turnItem({ from: "person", text: working.request, at: working.since })];
-  const pending = working === null ? failure : [...asked, turn("mayfly", pendingView(working, showing))];
+  if (builtTurns?.key !== key) builtTurns = { key, items: said.map((turn) => turnItem(turn, SPEAKING, app === undefined ? [] : [...filesOf(app.name, turn, SPEAKING), ...madeOf(turn, app, showing)])) };
+  const asked = working === null ? [] : [turnItem({ from: "person", text: working.request, at: working.since }, SPEAKING)];
+  const pending = working === null ? failure : [...asked, turn("mayfly", pendingView(working, showing, SPEAKING), SPEAKING)];
   const thread = element("thread");
   const following = thread.scrollHeight - thread.scrollTop - thread.clientHeight < FOLLOW_PX;
   // History and Code are for developers.
@@ -970,22 +1017,6 @@ function showTurns(built: typeof builtTurns, pending: readonly HTMLElement[]): v
   pendingShown = pending;
 }
 
-/** The files a person attached to a turn: images as thumbnails, fetched the first time they are wanted, and text files by name. */
-function filesOf(app: string, said: Turn): Node[] {
-  const files = said.from === "person" ? (said.attachments ?? []) : [];
-  if (files.length === 0) return [];
-  return [
-    h(
-      "ul",
-      "turn-files",
-      ...files.map((file) => {
-        const url = kindOf(file) === "image" ? thumbnailOf(app, file.id) : undefined;
-        return url === undefined ? h("li", "file-chip", ...fileLook(file.name, file.type, file.bytes, undefined)) : sentImage(file.name, file.bytes, url);
-      }),
-    ),
-  ];
-}
-
 function thumbnailOf(app: string, id: string): string | undefined {
   if (!thumbnails.has(id) && !askedFiles.has(id)) {
     askedFiles.add(id);
@@ -999,72 +1030,17 @@ function openLink(url: string): void {
   post({ type: "open-link", url });
 }
 
-function turnItem(said: Turn, extras: readonly Node[] = []): HTMLLIElement {
-  const { from, text, at } = said;
-  // Mayfly's replies, and its model's, can be Markdown. What a person typed shows as they typed it.
-  const failure = said.from === "mayfly" && said.failed === true;
-  const words = from === "mayfly" ? h("div", failure ? "md failure" : "md", ...markdownView(text, openLink)) : h("p", "", ...typedWords(text));
-  // When it was said, for anyone who wants to know.
-  if (at !== 0) words.title = new Date(at).toLocaleString();
-  return turn(from, h("div", "", words, ...extras));
-}
-
 function setRequest(text: string): void {
   request.value = text;
   markCommand();
-}
-
-// A textarea can't style part of its text, so a command at its start is set apart on a copy behind it.
-function markCommand(): void {
-  const typed = leadingCommand(request.value);
-  requestBackdrop.replaceChildren(...(typed === undefined ? [] : [h("span", "typed-command", typed.command)]));
-  followScroll();
-}
-
-function followScroll(): void {
-  requestBackdrop.style.setProperty("--scrolled", `${-request.scrollTop}px`);
-}
-
-// A command stands out in the conversation, as it did in the composer.
-function typedWords(text: string): (Node | string)[] {
-  const typed = leadingCommand(text);
-  return typed === undefined ? withChips(text) : [h("span", "typed-command", typed.command), ...withChips(typed.rest)];
-}
-
-function turn(from: Turn["from"], body: HTMLElement): HTMLLIElement {
-  const item = document.createElement("li");
-  item.className = `turn ${from}`;
-  if (from === "mayfly") item.append(avatar());
-  item.append(body);
-  return item;
 }
 
 function versionChip(id: string): HTMLElement {
   return h("code", "version-id", id);
 }
 
-/** The work under way, as Mayfly's next turn in the conversation: an answer as it is written, or the stages of the work. */
-function pendingView(working: Progress, showing: Showing): HTMLElement {
-  if (working.kind === "remove") return h("p", "", spinner(), " Stopping and removing ", nameChip(working.app ?? ""), "…");
-  if (working.kind !== "ask") return progressView(working, TITLES[working.kind], showing);
-  const draft = working.steps.findLast((step) => step.kind === "draft");
-  return draft?.kind === "draft" ? h("div", "md", ...markdownView(draft.text, openLink)) : h("p", "", spinner(), " Thinking about your question…");
-}
-
-function spinner(): HTMLSpanElement {
-  return keepTime(h("span", "spinner small"));
-}
-
 function scrollToEnd(box: HTMLElement): void {
   box.scrollTop = box.scrollHeight;
-}
-
-function avatar(): HTMLImageElement {
-  const image = document.createElement("img");
-  image.src = element<HTMLImageElement>("logo").src;
-  image.alt = "";
-  image.className = "avatar";
-  return image;
 }
 
 /**

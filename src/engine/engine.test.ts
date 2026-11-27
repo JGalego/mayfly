@@ -25,6 +25,23 @@ describe("changes made at once", () => {
     assert.equal(synced.at(-1)?.owner?.password, owner.password);
   });
 
+  it("keep a phone forgotten while an app deploys", async () => {
+    const { engine, holdDeploy } = setUp([reply("lunch")]);
+    const lunch = await engine.create("split lunch bills");
+    const { code } = await engine.offerPairing();
+    const token = await engine.pair(code, "iPhone");
+    const [phone] = await engine.phones();
+    const release = holdDeploy();
+
+    const deploying = engine.deploy("lunch", lunch.head ?? "");
+    await settled();
+    const forgetting = engine.forgetPhone(phone?.id ?? "");
+    release();
+    await Promise.all([deploying, forgetting]);
+
+    assert.equal(await engine.pairedPhone(token), null);
+  });
+
   it("keep an app starred while another deploys", async () => {
     const { engine, holdDeploy } = setUp([reply("lunch"), reply("notes")]);
     const lunch = await engine.create("split lunch bills");
@@ -772,6 +789,39 @@ describe("phone access", () => {
     assert.equal(await engine.phoneAccess(), null);
     assert.deepEqual(served, new Map());
     assert.deepEqual(containersOf(deployed.at(-1)), ["auth-proxy", "app"]);
+  });
+});
+
+describe("pairing a phone", () => {
+  it("pairs the phone that brings the code, once, and lists it without what proves it", async () => {
+    const { engine } = setUp([]);
+    const { code } = await engine.offerPairing();
+
+    const token = await engine.pair(code, "iPhone");
+
+    assert.equal((await engine.pairedPhone(token))?.name, "iPhone");
+    assert.deepEqual((await engine.phones()).map((phone) => Object.keys(phone).sort()), [["id", "name", "pairedAt"]]);
+    await assert.rejects(engine.pair(code, "Another phone"), /doesn't work/);
+  });
+
+  it("stops an earlier code working once it offers a new one", async () => {
+    const { engine } = setUp([]);
+    const { code: earlier } = await engine.offerPairing();
+    const { code } = await engine.offerPairing();
+
+    await assert.rejects(engine.pair(earlier, "iPhone"), /doesn't work/);
+    assert.match(await engine.pair(code, "iPhone"), /^[\w-]{43}$/);
+  });
+
+  it("forgets a phone, whose token then stops working", async () => {
+    const { engine } = setUp([]);
+    const token = await engine.pair((await engine.offerPairing()).code, "iPhone");
+    const [phone] = await engine.phones();
+
+    await engine.forgetPhone(phone?.id ?? "");
+
+    assert.equal(await engine.pairedPhone(token), null);
+    assert.deepEqual(await engine.phones(), []);
   });
 });
 

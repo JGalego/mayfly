@@ -19,8 +19,11 @@ export interface Uploads {
   put(files: readonly Upload[]): void;
 }
 
-/** Attaching files in the composer: from its button, by pasting or by dropping them. Mayfly's own rules say which files it takes. */
-export function uploads({ input, button, list, composer }: UploadParts, refuse: (why: string) => void): Uploads {
+/**
+ * Attaching files in the composer: from its button, by pasting or by dropping them. Mayfly's own rules say which files it takes.
+ * Each file is readied first, as the phone scales photos down; one that can't be keeps its own shape, for the rules to judge.
+ */
+export function uploads({ input, button, list, composer }: UploadParts, refuse: (why: string) => void, ready: (file: File) => Promise<File> = async (file) => file): Uploads {
   let waiting: Upload[] = [];
   const draw = (): void => {
     list.replaceChildren(...waiting.map((file, at) => chip(file, () => remove(at))));
@@ -31,7 +34,8 @@ export function uploads({ input, button, list, composer }: UploadParts, refuse: 
     draw();
   };
   const add = async (files: readonly File[]): Promise<void> => {
-    const read = await Promise.all(files.map(async (file) => ({ name: file.name, type: file.type, data: new Uint8Array(await file.arrayBuffer()) })));
+    const readied = await Promise.all(files.map((file) => ready(file).catch(() => file)));
+    const read = await Promise.all(readied.map(async (file) => ({ name: file.name, type: file.type, data: new Uint8Array(await file.arrayBuffer()) })));
     const decoded = [...waiting.map(decode), ...read];
     const problem = problemWithFiles(decoded);
     if (problem !== undefined) return refuse(problem);

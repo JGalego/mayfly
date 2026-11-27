@@ -7,6 +7,7 @@ import { mailto, newPasswordMail, sharedMail, welcomeMail, type Mail } from "./i
 import { mailAccountView, outgoing, readMailAccount, saveMailAccount, type MailAccountView, type MailPorts } from "./mail-account.ts";
 import type { Activity, FromUi, MailAbout, Progress, ToUi, Upload, Work } from "./messages.ts";
 import { makeDefault, modelViews, readModel, removeModel, saveModel } from "./model-settings.ts";
+import { phonePageUrl } from "./phone-creation.ts";
 import type { Models, ModelSetting } from "./settings.ts";
 
 const MAX_REQUEST = 2000;
@@ -36,7 +37,12 @@ export interface ControllerPorts {
     /** Whether to start the apps Podman is not running when Podman Desktop starts. Off unless the person turns it on. */
     autostart(): boolean;
     saveAutostart(on: boolean): Promise<void>;
+    /** Whether to serve the phone page, for making apps from a paired phone. Off unless the person turns it on. */
+    phoneCreation(): boolean;
+    savePhoneCreation(on: boolean): Promise<void>;
   };
+  /** The phone page, served on the private network while making apps from the phone is on. */
+  readonly phonePage: { start(): Promise<void>; stop(): Promise<void> };
   /** Checks that Mayfly has everything it needs, telling what it has found so far as it goes. */
   readonly doctor: (tell: (sofar: Examination) => void) => Promise<Examination>;
   /** API keys, each kept for the endpoint it was given for. */
@@ -122,6 +128,14 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       return showState(session);
     case "phone":
       return setPhone(request.on, session);
+    case "phone-creation":
+      return setPhoneCreation(request.on, session);
+    case "pair-phone":
+      return offerPairing(session);
+    case "forget-phone":
+      await session.engine.forgetPhone(request.id);
+      note(session, "info", "Forgot a phone");
+      return showState(session);
     case "start-stopped":
       return startStopped(session);
     case "updated":
@@ -381,11 +395,43 @@ async function setPhone(on: boolean, session: Session): Promise<void> {
     note(session, "info", `Phone access on at ${host}`);
     await session.post({ type: "notice", text: `Your phone opens apps at \`${host}\` with Tailscale` });
   } else {
+    // The phone page is on the private network too, so it goes first.
+    if (session.settings.phoneCreation()) await stopPhoneCreation(session);
     await session.engine.turnOffPhone();
     note(session, "info", "Phone access off");
     await session.post({ type: "notice", text: "Phone access is off" });
   }
   await showState(session);
+}
+
+async function setPhoneCreation(on: boolean, session: Session): Promise<void> {
+  if (!on) {
+    await stopPhoneCreation(session);
+    note(session, "info", "Making apps from the phone off");
+    return showState(session);
+  }
+  const host = await session.engine.phoneAccess();
+  if (host === null) return void (await session.post({ type: "error", text: "Turn on phone access first" }));
+  await session.phonePage.start();
+  await session.settings.savePhoneCreation(true);
+  note(session, "info", "Making apps from the phone on");
+  await session.post({ type: "notice", text: `Pair your phone, then make apps from it at \`${phonePageUrl(host)}\`.` });
+  await showState(session);
+}
+
+// A phone paired for the page has nothing to open once the page is gone, so none stays paired.
+async function stopPhoneCreation(session: Session): Promise<void> {
+  await session.phonePage.stop();
+  for (const phone of await session.engine.phones()) await session.engine.forgetPhone(phone.id);
+  await session.settings.savePhoneCreation(false);
+}
+
+async function offerPairing(session: Session): Promise<void> {
+  const host = await session.engine.phoneAccess();
+  if (host === null || !session.settings.phoneCreation()) return void (await session.post({ type: "error", text: "Turn on Make apps from my phone first" }));
+  const { code, expires } = await session.engine.offerPairing();
+  // In the fragment, which browsers never send, so the code reaches only the page.
+  await session.post({ type: "pairing", url: `${phonePageUrl(host)}#pair=${code}`, expires });
 }
 
 // Adding, removing and sharing run apps again, so like other work they wait their turn.
@@ -472,6 +518,8 @@ async function showState(session: Session): Promise<void> {
     autostart: session.settings.autostart(),
     phoneHost: await session.engine.phoneAccess(),
     mail: await mailAccountView(session),
+    phoneCreation: session.settings.phoneCreation(),
+    phones: await session.engine.phones(),
   });
 }
 
@@ -532,10 +580,14 @@ function readRequest(message: unknown): FromUi | undefined {
     case "autostart":
     case "focus":
     case "phone":
+    case "phone-creation":
       return typeof on === "boolean" ? { type, on } : undefined;
     case "start-stopped":
     case "updated":
+    case "pair-phone":
       return { type };
+    case "forget-phone":
+      return typeof id === "string" ? { type, id } : undefined;
     case "save":
       return typeof app === "string" && typeof from === "string" && typeof routes === "string" && typeof words === "string" ? { type, app, from, routes, message: words } : undefined;
     case "ask": {
