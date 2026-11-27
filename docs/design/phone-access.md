@@ -1,6 +1,6 @@
 # Design: open apps from your phone
 
-Status: in progress on `feat/phone-access`. The phone door is built in core, and the spike signed a phone in through it.
+Status: built on `feat/phone-access`, all six steps. What's left is a try of the branch build in Podman Desktop, and after merging, moving the extension's runtime pin to the runtime `main` publishes.
 
 Today every app and Dex listen on `127.0.0.1`, and sign-in uses `http://localhost` URLs, so only the machine running Mayfly can open its apps. The goal is for the owner to open them from their phone too, with the same sign-in, without exposing them to the local network or the internet, and without changing how they open on the computer.
 
@@ -121,6 +121,6 @@ Each step is its own commit on this branch, behind the setting, so `main` stays 
 3. ~~**Engine.**~~ Done: the tailnet name in the state while phone access is on, `turnOnPhone` and `turnOffPhone`, phone doors and Serve mappings kept in line with the apps, and Dex clients listing both doors' callbacks. Turning it on refuses, saying what to do, until Tailscale is ready.
 4. ~~**Shell.**~~ Done: **Settings → General → Open apps from my phone**, with the certificate log warning and the rename suggestion. A "Phone access" setup check while it's on. **On your phone** in each app's header, with its address as a QR code, drawn with [uqr](https://github.com/unjs/uqr).
 5. ~~**Runtime.**~~ Done: the runtime drops `Tailscale-*` headers before the app sees them. Apps get it once `main` publishes the new runtime and the extension's pin moves to it.
-6. **README.** How to set it up, and what it publishes.
+6. ~~**README.**~~ Done: how to set it up and what it publishes, in both READMEs, and the phone door in the pod diagram.
 
 Later: the private-address mode for networks other than Tailscale.
