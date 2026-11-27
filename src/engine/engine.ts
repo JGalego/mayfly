@@ -650,8 +650,17 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       });
     },
 
-    async newPassword() {
-      return updateOwner((owner) => ({ ...owner, password: newPassword() }));
+    newPassword() {
+      return changing(async () => {
+        const state = withOwner(await store.load());
+        // Each app keeps its own session, which a new password ends too: a new cookie secret, and the apps run again with it.
+        const owner = { ...state.owner, password: newPassword() };
+        const next: State = { ...state, owner, apps: state.apps.map((app) => ({ ...app, cookieSecret: newSecret() })) };
+        await store.save(next);
+        const ready = anyRunning(next) ? await runAll(next) : next;
+        if (ready !== next) await store.save(ready);
+        return owner;
+      });
     },
 
     async people() {

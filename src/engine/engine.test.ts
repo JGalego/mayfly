@@ -503,6 +503,16 @@ describe("the engine", () => {
     await assert.rejects(engine.changeEmail("Ana@example.com"), /`ana@example.com` is someone you share apps with/);
   });
 
+  it("signs the owner out of every app with a new password, giving each a new cookie secret and running it again", async () => {
+    const { engine, deployed } = setUp([reply("lunch")]);
+    await engine.create("split lunch bills");
+    const before = cookieSecretIn(deployed.at(-1));
+
+    await engine.newPassword();
+
+    assert.notEqual(cookieSecretIn(deployed.at(-1)), before);
+  });
+
   it("creates the owner once, with a long random password", async () => {
     const { engine } = setUp([]);
 
@@ -817,6 +827,12 @@ function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: st
   };
   const engine = createEngine({ store, deployer, observer, identity, models, builder, files, phoneNetwork });
   return { engine, deployed, removed, synced, forgotten, served, log, asked, logged, kept, deployFailures, takenPorts, holdDeploy };
+}
+
+/** The cookie secret an app's proxy got, from the Secret among its objects. */
+function cookieSecretIn(objects: readonly KubeObject[] | undefined): string | undefined {
+  const secret = objects?.find((object) => object.kind === "Secret");
+  return secret?.kind === "Secret" ? secret.stringData["cookie-secret"] : undefined;
 }
 
 function names(objects: readonly KubeObject[] | undefined): string[] {

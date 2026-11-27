@@ -690,7 +690,7 @@ function makeNewPassword(): void {
     return post({ type: "new-password" });
   }
   newPasswordArmed = true;
-  control.textContent = "Confirm reset (old password expires)";
+  control.textContent = "Confirm reset (signs out every device)";
   window.setTimeout(() => {
     newPasswordArmed = false;
     control.textContent = "Reset password";
