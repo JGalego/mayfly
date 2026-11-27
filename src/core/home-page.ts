@@ -1,7 +1,8 @@
-import { SIGN_OUT_PATH } from "./contract.ts";
+import { HOME_PAGE_TIMEOUT_MS, SIGN_OUT_PATH } from "./contract.ts";
 
 /** What an app's home page answered, as the trial run saw it. */
 export interface HomePage {
+  /** 0 when it gave no answer in time. */
   readonly status: number;
   readonly type: string;
   readonly body: string;
@@ -12,6 +13,7 @@ const SIGN_OUT_LINK = new RegExp(`\\b(?:href|action)\\s*=\\s*["']?${SIGN_OUT_PAT
 
 /** Why the home page breaks the contract, in words for the model to fix it, or null when it keeps it. */
 export function homePageProblem({ status, type, body }: HomePage): string | null {
+  if (status === 0) return `GET / gave no answer within ${HOME_PAGE_TIMEOUT_MS / 1000} seconds. Answer it at once, without waiting on anything that may never come.`;
   if (status !== 200 || !type.startsWith("text/html")) return `GET / answered ${status} ${type || "with no content type"}, not an HTML page.`;
   if (!SIGN_OUT_LINK.test(body)) return `The home page has no link to ${SIGN_OUT_PATH}, so people cannot sign out. Add a small "Sign out" link to it.`;
   return null;

@@ -31,6 +31,15 @@ describe("the Podman builder", () => {
     assert.match(trial.ok ? "" : trial.problem, /GET \/ answered 404/);
   });
 
+  it("reports an app whose home page never answers, once it has waited long enough", async () => {
+    const started = Date.now();
+    const trial = await buildAndTry("hangs", 'import { Hono } from "hono";\nexport default new Hono().get("/", () => new Promise(() => {}));\n');
+
+    assert.equal(trial.ok, false);
+    assert.match(trial.ok ? "" : trial.problem, /gave no answer within 10 seconds/);
+    assert.ok(Date.now() - started < 60_000);
+  });
+
   it("tags an image by its code, so the same routes give the same image", async () => {
     const routes = 'import { Hono } from "hono";\nexport default new Hono();\n';
 
