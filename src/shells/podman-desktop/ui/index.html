@@ -54,7 +54,7 @@
               <p class="popover-title">Open on your phone</p>
               <div id="phone-qr"></div>
               <code id="phone-url" class="phone-url"></code>
-              <p class="quiet">Scan it with your phone's camera. Your phone needs Tailscale, signed in to the same account.</p>
+              <p class="quiet">Scan it with a phone signed in to the same Tailscale account</p>
             </div>
           </div>
           <button id="start-app" class="primary" type="button" title="Start the app and sign-in service" data-icon="play" hidden>Start</button>
@@ -119,7 +119,7 @@
                   <div id="code-gutter" aria-hidden="true"></div>
                   <div class="code-area">
                     <pre id="code-shadow" aria-hidden="true"></pre>
-                    <textarea id="code-text" spellcheck="false" wrap="off" aria-label="routes.ts" title="Tab indents and Shift+Tab outdents. Ctrl+F finds and replaces. To leave the editor by keyboard, press Esc, then Tab."></textarea>
+                    <textarea id="code-text" spellcheck="false" wrap="off" aria-label="routes.ts" title="Tab indents · Shift+Tab outdents · Ctrl+F finds and replaces · Esc then Tab leaves the editor"></textarea>
                   </div>
                 </div>
                 <div id="editor-status" class="editor-status" hidden></div>
@@ -141,7 +141,7 @@
         <textarea id="request" rows="2" maxlength="2000" aria-label="Your request" aria-autocomplete="list" aria-controls="command-menu" aria-expanded="false"></textarea>
         <div class="composer-actions">
           <input id="file-input" type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif,.txt,.md,.csv,.tsv,.json" hidden>
-          <button id="attach" class="quiet-button" type="button" aria-label="Attach images or text files" title="Attach images or text files: a mockup, or data for the app" data-icon="paperclip"></button>
+          <button id="attach" class="quiet-button" type="button" aria-label="Attach images or text files" title="Attach a mockup or data for the app" data-icon="paperclip"></button>
           <select id="composer-model" aria-label="App model" title="App model"></select>
           <button id="send" class="primary" type="submit" data-icon="rocket">Send</button>
         </div>
@@ -169,23 +169,22 @@
           <section>
             <h2>Advanced</h2>
             <label class="check"><input id="developer" type="checkbox" aria-describedby="developer-hint"> Enable developer mode</label>
-            <p id="developer-hint" class="hint">Shows app code, version history and logs, plus health and model usage in Settings.</p>
+            <p id="developer-hint" class="hint">Shows each app's code and versions plus logs and usage</p>
             <label class="check"><input id="autostart" type="checkbox" aria-describedby="autostart-hint"> Start stopped apps automatically</label>
-            <p id="autostart-hint" class="hint">Starts stopped apps when Podman Desktop opens and Podman is ready.</p>
+            <p id="autostart-hint" class="hint">When Podman Desktop opens</p>
           </section>
           <section>
             <div class="section-head">
               <h2>Setup checks</h2>
               <button id="run-doctor" class="quiet-button" type="button">Check again</button>
             </div>
-            <p class="hint">Checks whether Podman, the app runtime and sign-in are ready.</p>
             <ul id="doctor" class="checks"></ul>
           </section>
         </div>
         <div id="settings-people-tab" class="settings-page" role="tabpanel" aria-labelledby="settings-tab-people">
           <section>
             <h2>App credentials</h2>
-            <p class="hint">You sign in to every app with this email and password.</p>
+            <p class="hint">You sign in to every app with this email and password</p>
             <form id="owner-form" class="sign-in-row">
               <input id="owner-email" type="email" required autocomplete="off" aria-label="Email">
               <button class="quiet-button" type="submit">Save</button>
@@ -200,18 +199,18 @@
           </section>
           <section>
             <h2>Other people</h2>
-            <p class="hint">Share apps with them. Each signs in with their own email and password.</p>
-            <p id="people-phone-note" class="hint" hidden>They open apps through Tailscale, as your phone does. Turn on phone access in General first.</p>
+            <p class="hint">Each person signs in with their own email and password</p>
+            <p id="people-phone-note" class="hint" hidden>Turn on phone access in General so they can reach your apps</p>
             <ul id="people" class="model-list" hidden></ul>
             <form id="person-form" class="sign-in-row">
               <input id="person-email" type="email" required autocomplete="off" placeholder="name@example.com" aria-label="Their email">
               <button class="quiet-button" type="submit" data-icon="plus">Add user</button>
             </form>
-            <p class="hint">Mayfly makes them a password, and offers to email it to them.</p>
+            <p class="hint">Mayfly makes them a password and offers to email it</p>
           </section>
           <section>
             <h2>Email</h2>
-            <p class="hint">Mayfly sends sign-ins and links from your mail account. Without one, it drafts each email in your mail app for you to send.</p>
+            <p class="hint">Mayfly sends sign-ins and links from your mail account or drafts them in your mail app</p>
             <ul id="mail-account" class="model-list" hidden></ul>
             <button id="add-mail" class="quiet-button add-model" type="button">+ Add a mail account</button>
             <form id="mail-form" class="settings-form" hidden>
@@ -220,15 +219,15 @@
               <input id="mail-host" type="text" required autocomplete="off" spellcheck="false" placeholder="smtp.gmail.com">
               <label for="mail-port">Port</label>
               <input id="mail-port" type="number" required min="1" max="65535" aria-describedby="mail-port-hint">
-              <p id="mail-port-hint" class="hint">Usually 465, or 587. Mayfly always encrypts the connection and checks the server's certificate.</p>
+              <p id="mail-port-hint" class="hint">Usually 465 or 587 and always over TLS with the server's certificate checked</p>
               <label for="mail-username">Username</label>
               <input id="mail-username" type="text" required autocomplete="off" spellcheck="false" placeholder="you@gmail.com">
               <label for="mail-password">Password</label>
               <input id="mail-password" type="password" autocomplete="off" aria-describedby="mail-password-hint">
-              <p id="mail-password-hint" class="hint">An app password, where your provider offers them. Stored in Podman Desktop's secret storage and sent only to this server.</p>
+              <p id="mail-password-hint" class="hint">An app password kept in Podman Desktop's secret storage and sent only to this server</p>
               <label for="mail-from">From</label>
               <input id="mail-from" type="email" autocomplete="off" spellcheck="false" placeholder="Same as the username" aria-describedby="mail-from-hint">
-              <p id="mail-from-hint" class="hint">The address people see the email come from.</p>
+              <p id="mail-from-hint" class="hint">The address people see the email come from</p>
               <div class="editor-actions">
                 <button id="cancel-mail" class="quiet-button" type="button">Cancel</button>
                 <button id="save-mail" class="primary" type="submit">Save</button>
@@ -237,33 +236,33 @@
           </section>
           <section>
             <h2>Tailscale</h2>
-            <p class="hint">To reach your apps, each person needs this computer shared with them in Tailscale.</p>
+            <p class="hint">Each person needs this computer shared with them in Tailscale</p>
             <button id="share-tailscale" class="quiet-button" type="button" data-icon-after="external">Share this computer in Tailscale</button>
           </section>
         </div>
         <div id="settings-models-tab" class="settings-page" role="tabpanel" aria-labelledby="settings-tab-models">
           <section>
-            <p class="hint">New apps use the default model unless you choose another.</p>
-            <p class="hint">Requests and attachments go to the selected provider. When you ask about or change an app, its code goes too, and /fix sends the errors it logged.</p>
+            <p class="hint">New apps use the default model unless you choose another</p>
+            <p class="hint">Requests go to the chosen provider with their files and the app's code and /fix sends its errors too</p>
             <ul id="model-list" class="model-list"></ul>
             <button id="add-model" class="quiet-button add-model" type="button">+ Add a model</button>
             <form id="model-form" class="settings-form" hidden>
               <h3 id="model-form-title">Add a model</h3>
               <label for="provider">Provider</label>
               <select id="provider" aria-describedby="provider-hint"></select>
-              <p id="provider-hint" class="hint">OpenAI, or any service with an OpenAI-compatible API.</p>
+              <p id="provider-hint" class="hint">OpenAI or any service with an OpenAI-compatible API</p>
               <label for="endpoint" class="compatible-only">Endpoint</label>
               <input id="endpoint" class="compatible-only" type="url" placeholder="http://localhost:11434/v1" aria-describedby="endpoint-hint">
-              <p id="endpoint-hint" class="hint compatible-only">The API's base URL, such as a local model server's.</p>
+              <p id="endpoint-hint" class="hint compatible-only">The API's base URL</p>
               <label for="model-name">Model</label>
               <input id="model-name" type="text" maxlength="200" required placeholder="gpt-6.2-sol" aria-describedby="model-name-hint">
-              <p id="model-name-hint" class="hint">The model's name, as the provider lists it.</p>
+              <p id="model-name-hint" class="hint">As the provider lists it</p>
               <label for="model-called">Name</label>
               <input id="model-called" type="text" maxlength="40" autocomplete="off" placeholder="Optional" aria-describedby="model-called-hint">
-              <p id="model-called-hint" class="hint">What Mayfly calls it. Without one, it goes by its provider and model.</p>
+              <p id="model-called-hint" class="hint">What Mayfly calls it instead of its provider and model</p>
               <label for="api-key">API key</label>
               <input id="api-key" type="password" autocomplete="off" aria-describedby="api-key-hint">
-              <p id="api-key-hint" class="hint">Stored in Podman Desktop's secret storage and sent only to the saved API endpoint.</p>
+              <p id="api-key-hint" class="hint">Kept in Podman Desktop's secret storage and sent only to this endpoint</p>
               <div class="editor-actions">
                 <button id="cancel-model" class="quiet-button" type="button">Cancel</button>
                 <button class="primary" type="submit">Save</button>
@@ -277,14 +276,13 @@
               <h2>Health</h2>
               <button id="refresh-health" class="quiet-button" type="button">Refresh</button>
             </div>
-            <p class="hint">Podman's container status for apps and the sign-in service.</p>
+            <p class="hint">Container status for apps and the sign-in service</p>
             <ul id="health" class="health-list"></ul>
           </section>
           <div id="settings-logs"></div>
         </div>
         <div id="settings-usage-tab" class="settings-page" role="tabpanel" aria-labelledby="settings-tab-usage">
           <section>
-            <p class="hint">Token counts and trial results, grouped by app, model or provider.</p>
             <div id="ledger"></div>
           </section>
         </div>
@@ -301,7 +299,7 @@
     <dialog id="remove-dialog" aria-labelledby="remove-title">
       <form method="dialog">
         <h2 id="remove-title">Remove this app?</h2>
-        <p>This stops the app and deletes its conversation, the files attached in it, and all versions. Data stored in browsers is not removed.</p>
+        <p>This stops the app and deletes its versions and conversation but not data kept in browsers</p>
         <div class="editor-actions">
           <button value="keep" class="quiet-button" autofocus>Cancel</button>
           <button id="confirm-remove" value="remove" class="danger">Remove</button>
@@ -321,7 +319,7 @@
     <dialog id="discard-dialog" aria-labelledby="discard-title">
       <form method="dialog">
         <h2 id="discard-title">Discard your changes?</h2>
-        <p>Unsaved edits to <code class="name-chip">routes.ts</code> will be lost.</p>
+        <p>Unsaved edits to <code class="name-chip">routes.ts</code> will be lost</p>
         <div class="editor-actions">
           <button value="keep" class="quiet-button" autofocus>Keep editing</button>
           <button value="discard" class="danger">Discard</button>
@@ -331,7 +329,7 @@
     <dialog id="rename-dialog" aria-labelledby="rename-title">
       <form method="dialog">
         <h2 id="rename-title"></h2>
-        <p>The address stays the same, but users must sign in again.</p>
+        <p>The address stays the same but people sign in again</p>
         <div class="editor-actions">
           <button value="keep" class="quiet-button" autofocus>Cancel</button>
           <button value="rename" class="primary">Rename &amp; redeploy</button>

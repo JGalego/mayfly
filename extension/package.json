@@ -1,7 +1,7 @@
 {
   "name": "mayfly",
   "displayName": "Mayfly",
-  "description": "Preview: describe a small web app, and Mayfly builds it and runs it in Podman, behind sign-in.",
+  "description": "Preview: describe a small web app and Mayfly builds and runs it in Podman behind sign-in",
   "version": "0.3.3",
   "icon": "icon.png",
   "publisher": "jgalego",
@@ -23,7 +23,7 @@
         "mayfly.developerMode": {
           "type": "boolean",
           "default": false,
-          "description": "Show code, version history, app health, logs and model usage"
+          "description": "Show each app's code and versions plus logs and usage"
         }
       }
     }
