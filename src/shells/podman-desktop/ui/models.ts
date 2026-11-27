@@ -9,6 +9,7 @@ type State = Extract<ToUi, { type: "state" }>;
 const provider = element<HTMLSelectElement>("provider");
 const endpoint = element<HTMLInputElement>("endpoint");
 const modelName = element<HTMLInputElement>("model-name");
+const called = element<HTMLInputElement>("model-called");
 const apiKey = element<HTMLInputElement>("api-key");
 
 /** The model the form edits: an id, "" for a new one, or undefined while the form is closed. */
@@ -32,7 +33,7 @@ export function setUpModels(post: (message: FromUi) => void, redraw: () => void)
     event.preventDefault();
     if (editing === undefined || !isProvider(provider.value)) return;
     saving = true;
-    post({ type: "save-model", model: { id: editing, provider: provider.value, baseUrl: endpoint.value, model: modelName.value }, apiKey: apiKey.value });
+    post({ type: "save-model", model: { id: editing, provider: provider.value, baseUrl: endpoint.value, model: modelName.value, name: called.value }, apiKey: apiKey.value });
     apiKey.value = "";
   });
 }
@@ -43,6 +44,7 @@ export function openForm(model: ModelView | undefined): void {
   provider.value = model?.provider ?? "openai";
   endpoint.value = model?.baseUrl ?? "";
   modelName.value = model?.model ?? "";
+  called.value = model?.name ?? "";
   apiKey.value = "";
   apiKey.placeholder = model?.hasApiKey === true ? "Leave blank to keep the saved key" : "";
   element("model-form-title").textContent = model === undefined ? "Add a model" : `Change ${model.label}`;
@@ -68,7 +70,8 @@ export function renderModels(state: State, checks: readonly ModelCheck[] | undef
 function modelCard(model: ModelView, isDefault: boolean, check: HTMLElement[], post: (message: FromUi) => void, redraw: () => void): HTMLLIElement {
   const where = model.provider === "openai" ? "api.openai.com" : model.baseUrl;
   const name = h("p", "model-label", model.label, ...(isDefault ? [" ", h("span", "badge", "Default")] : []));
-  const facts = h("p", "quiet", `${where} · ${model.hasApiKey ? "key saved" : "no API key"}`);
+  // A name hides which model it is, so the facts say.
+  const facts = h("p", "quiet", [...(model.name === undefined ? [] : [model.model]), where, model.hasApiKey ? "key saved" : "no API key"].join(" · "));
   const actions = [
     ...(isDefault ? [] : [button("Make default", () => post({ type: "default-model", id: model.id }))]),
     button("Change", () => {

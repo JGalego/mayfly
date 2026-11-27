@@ -17,7 +17,7 @@ import { examine, type ModelProbe } from "./doctor.ts";
 import type { MailAccount } from "./mail-account.ts";
 import { LOGO } from "./mail-html.ts";
 import type { ModelPorts } from "./model-settings.ts";
-import { endpointOf, FIRST_MODELS, isProvider, labelOf, modelFor, providerOf, type Models, type ModelSetting } from "./settings.ts";
+import { endpointOf, FIRST_MODELS, isProvider, labelOf, modelFor, nameOf, providerOf, type Models, type ModelSetting } from "./settings.ts";
 
 // The published, signed runtime this version builds apps on: a list of its amd64 and arm64 images, from which Podman
 // pulls the machine's own. The README shows how to verify it.
@@ -147,9 +147,8 @@ function keyStore(secrets: api.SecretStorage): KeyStore {
 
 // The key is read on each call, so a newly saved one works without restarting anything.
 function configuredModel(setting: ModelSetting, keys: KeyStore): ModelProvider {
-  const name = labelOf(setting);
   return {
-    name,
+    name: labelOf(setting),
     provider: providerOf(setting),
     // Without a key when none is saved, as local providers often need none. One that does says so, and the person hears where to add it.
     async complete(system, messages, listener) {
@@ -158,7 +157,7 @@ function configuredModel(setting: ModelSetting, keys: KeyStore): ModelProvider {
       try {
         return await openAiCompatibleModel({ baseUrl, ...(apiKey ? { apiKey } : {}), model: setting.model }).complete(system, messages, listener);
       } catch (error) {
-        if (error instanceof KeyNeeded) throw new Error(`\`${name}\` needs an API key. Add it in Settings → Models.`);
+        if (error instanceof KeyNeeded) throw new Error(`\`${nameOf(setting)}\` needs an API key. Add it in Settings → Models.`);
         throw error;
       }
     },
