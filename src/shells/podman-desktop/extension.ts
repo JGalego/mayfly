@@ -15,8 +15,9 @@ import { examine, type ModelProbe } from "./doctor.ts";
 import type { ModelPorts } from "./model-settings.ts";
 import { endpointOf, FIRST_MODELS, isProvider, labelOf, modelFor, providerOf, type Models, type ModelSetting } from "./settings.ts";
 
-// The published, signed runtime this version builds apps on. The README shows how to verify it.
-const RUNTIME_IMAGE = "ghcr.io/jgalego/mayfly-runtime@sha256:1d30bd9e46727f4f116861a24851c84c267bd79803f75b040c9d223846bebd05";
+// The published, signed runtime this version builds apps on: a list of its amd64 and arm64 images, from which Podman
+// pulls the machine's own. The README shows how to verify it.
+const RUNTIME_IMAGE = "ghcr.io/jgalego/mayfly-runtime@sha256:056f9b203e573deff89d130449b1e89fb1eb488a2834f7a63ffddd4a81c83050";
 
 type Panel = ReturnType<typeof api.window.createWebviewPanel>;
 
