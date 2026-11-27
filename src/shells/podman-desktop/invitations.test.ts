@@ -29,6 +29,13 @@ describe("the emails Mayfly drafts for the owner to send", () => {
     assert.match(mail.body, /old one no longer works/);
   });
 
+  it("says in the subject and the text that the apps are made with Mayfly", () => {
+    for (const mail of [welcomeMail(ana), sharedMail(ana.email, "lunch-split", "https://mayfly.tail1a2b.ts.net:38100/"), newPasswordMail(ana)]) {
+      assert.match(mail.subject, /Mayfly/);
+      assert.match(mail.body, /Mayfly/);
+    }
+  });
+
   it("opens in the mail app as a draft, with line breaks mail apps keep", () => {
     const link = new URL(mailto({ to: "ana@example.com", subject: "Hi & bye", body: "one\ntwo" }));
 

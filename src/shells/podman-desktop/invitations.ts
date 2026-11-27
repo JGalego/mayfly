@@ -14,11 +14,11 @@ interface Credentials {
 export function welcomeMail({ email, password }: Credentials): Mail {
   return {
     to: email,
-    subject: "Your sign-in for my apps",
+    subject: "Your sign-in for my Mayfly apps",
     body: [
       "Hi,",
       "",
-      "I've added you to some apps I made. When one asks you to sign in, use:",
+      "I've added you to some apps I made with Mayfly. When one asks you to sign in, use:",
       "",
       `Email: ${email}`,
       `Password: ${password}`,
@@ -33,16 +33,16 @@ export function welcomeMail({ email, password }: Credentials): Mail {
 export function sharedMail(email: string, app: string, url: string): Mail {
   return {
     to: email,
-    subject: `${app} is ready for you`,
-    body: ["Hi,", "", `You can now open ${app}: ${url}`, "", `Sign in as ${email}, with the password I sent you. Tailscale needs to be on, on the device you open it from.`].join("\n"),
+    subject: `${app}, made with Mayfly, is ready for you`,
+    body: ["Hi,", "", `You can now open ${app}, an app I made with Mayfly: ${url}`, "", `Sign in as ${email}, with the password I sent you. Tailscale needs to be on, on the device you open it from.`].join("\n"),
   };
 }
 
 export function newPasswordMail({ email, password }: Credentials): Mail {
   return {
     to: email,
-    subject: "Your new password for my apps",
-    body: ["Hi,", "", "Your password for my apps has changed. Sign in with:", "", `Email: ${email}`, `Password: ${password}`, "", "The old one no longer works."].join("\n"),
+    subject: "Your new password for my Mayfly apps",
+    body: ["Hi,", "", "Your password for my Mayfly apps has changed. Sign in with:", "", `Email: ${email}`, `Password: ${password}`, "", "The old one no longer works."].join("\n"),
   };
 }
 

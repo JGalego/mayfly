@@ -552,7 +552,7 @@ describe("the Mayfly panel's controller", () => {
 
     assert.ok(calls.includes("share lunch-split ana@example.com true"));
     assert.ok(posted.some((message) => message.type === "offer-email" && message.about === "shared"));
-    assert.match(decodeURIComponent(opened.at(-1) ?? ""), /You can now open lunch-split: https:\/\/mayfly\.tail1a2b\.ts\.net:38100\//);
+    assert.match(decodeURIComponent(opened.at(-1) ?? ""), /You can now open lunch-split, an app I made with Mayfly: https:\/\/mayfly\.tail1a2b\.ts\.net:38100\//);
   });
 
   it("won't share an app while phone access is off, since no one else could reach it", async () => {
