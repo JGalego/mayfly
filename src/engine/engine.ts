@@ -23,8 +23,8 @@ const EMAIL = /^[^\s@]+@[^\s@]+$/;
 const MADE = "App deployed.";
 const CHANGED = "Update deployed.";
 const SAVED = "Saved. Trial passed. Deploy to run this version.";
-// What to do before phone access can be turned on, for each way Tailscale isn't ready.
-const PHONE_NOT_READY: Record<Exclude<PhoneNetworkStatus["state"], "ready">, string> = {
+/** What to do before phone access can be turned on, for each way Tailscale isn't ready. */
+export const PHONE_NOT_READY: Record<Exclude<PhoneNetworkStatus["state"], "ready">, string> = {
   missing: "Install Tailscale from tailscale.com/download and sign in, then try again.",
   off: "Tailscale is off. Turn it on, then try again.",
   "signed-out": "Sign in to Tailscale, then try again.",

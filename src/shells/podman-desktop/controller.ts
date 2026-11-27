@@ -98,6 +98,8 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
     case "autostart":
       await session.settings.saveAutostart(request.on);
       return showState(session);
+    case "phone":
+      return setPhone(request.on, session);
     case "start-stopped":
       return startStopped(session);
     case "focus":
@@ -331,6 +333,21 @@ async function saveDeveloper(on: boolean, session: Session): Promise<void> {
   await showState(session);
 }
 
+// Turning it on or off runs every app again, so like other work it waits its turn.
+async function setPhone(on: boolean, session: Session): Promise<void> {
+  if (session.working !== null) return void (await session.post({ type: "error", text: BUSY }));
+  if (on) {
+    const host = await session.engine.turnOnPhone();
+    note(session, "info", `Phone access on at ${host}`);
+    await session.post({ type: "notice", text: `Phone access is on. With Tailscale, your phone opens apps at ${host}.` });
+  } else {
+    await session.engine.turnOffPhone();
+    note(session, "info", "Phone access off");
+    await session.post({ type: "notice", text: "Phone access is off." });
+  }
+  await showState(session);
+}
+
 async function showState(session: Session): Promise<void> {
   await session.post({
     type: "state",
@@ -342,6 +359,7 @@ async function showState(session: Session): Promise<void> {
     working: session.working,
     developer: session.settings.developer(),
     autostart: session.settings.autostart(),
+    phoneHost: await session.engine.phoneAccess(),
   });
 }
 
@@ -383,6 +401,7 @@ function readRequest(message: unknown): FromUi | undefined {
     case "developer":
     case "autostart":
     case "focus":
+    case "phone":
       return typeof on === "boolean" ? { type, on } : undefined;
     case "start-stopped":
       return { type };

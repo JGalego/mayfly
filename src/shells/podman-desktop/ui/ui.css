@@ -349,6 +349,38 @@ main {
   gap: 0.5rem;
 }
 
+/* An app's address on the phone, to scan or to type. */
+.phone {
+  top: calc(100% + 0.4rem);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  width: 18rem;
+  text-align: center;
+}
+
+.phone .popover-title {
+  align-self: flex-start;
+}
+
+/* Dark on white in either theme: what phone cameras read best. */
+.qr {
+  display: block;
+  width: 11rem;
+  height: 11rem;
+  border-radius: 6px;
+  fill: #000;
+  background: #fff;
+}
+
+.phone-url {
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
 .sign-in .chip {
   justify-content: space-between;
   gap: 1rem;

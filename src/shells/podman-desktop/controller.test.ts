@@ -44,6 +44,7 @@ describe("the Mayfly panel's controller", () => {
       working: null,
       developer: false,
       autostart: false,
+      phoneHost: null,
     });
   });
 
@@ -258,6 +259,28 @@ describe("the Mayfly panel's controller", () => {
     await handle({ type: "autostart", on: true });
 
     assert.deepEqual([stateOf(posted.at(-2))?.autostart, stateOf(posted.at(-1))?.autostart], [false, true]);
+  });
+
+  it("turns phone access on, saying where the phone opens the apps, and off again", async () => {
+    const { handle, posted, calls } = setUp({ apps: [lunch] });
+
+    await handle({ type: "phone", on: true });
+    const on = stateOf(posted.at(-1))?.phoneHost;
+    await handle({ type: "phone", on: false });
+
+    assert.deepEqual(calls, ["turn on phone", "turn off phone"]);
+    assert.equal(on, "mayfly.tail1a2b.ts.net");
+    assert.ok(posted.some((message) => message.type === "notice" && message.text.includes("mayfly.tail1a2b.ts.net")));
+    assert.equal(stateOf(posted.at(-1))?.phoneHost, null);
+  });
+
+  it("says why phone access can't be turned on yet", async () => {
+    const { handle, posted } = setUp({ apps: [lunch], phoneFails: "Sign in to Tailscale, then try again." });
+
+    await handle({ type: "phone", on: true });
+
+    assert.ok(posted.some((message) => message.type === "error" && message.text === "Sign in to Tailscale, then try again."));
+    assert.equal(stateOf(posted.at(-1))?.phoneHost, null);
   });
 
   it("starts each stopped app in turn, as work it shows", async () => {
@@ -495,9 +518,12 @@ interface Options {
   waitForCreate?: boolean;
   /** The apps Podman is not running. */
   stopped?: string[];
+  /** Why turning phone access on fails, if it does. */
+  phoneFails?: string;
 }
 
-function setUp({ apps, created: made = lunch, steps = [], developer: developing = false, keyFor = [OPENAI_ENDPOINT], createFails, changeFails, waitForCreate = false, stopped: stoppedApps = [] }: Options) {
+function setUp({ apps, created: made = lunch, steps = [], developer: developing = false, keyFor = [OPENAI_ENDPOINT], createFails, changeFails, waitForCreate = false, stopped: stoppedApps = [], phoneFails }: Options) {
+  let phoneHost: string | null = null;
   const posted: ToUi[] = [];
   const notes: { text: string; failed: boolean; seen: boolean }[] = [];
   const opened: string[] = [];
@@ -577,9 +603,16 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
     logs: async (pod, container) => [`2026-11-26T15:04:05Z ${pod} ${container}`],
     health: async () => [{ name: "lunch-split", kind: "app", pod: "mayfly-lunch-split", containers: [] }],
     stopped: async () => stoppedApps,
-    phoneAccess: async () => null,
-    turnOnPhone: async () => "mayfly.tail1a2b.ts.net",
-    turnOffPhone: async () => {},
+    phoneAccess: async () => phoneHost,
+    turnOnPhone: async () => {
+      calls.push("turn on phone");
+      if (phoneFails !== undefined) throw new Error(phoneFails);
+      return (phoneHost = "mayfly.tail1a2b.ts.net");
+    },
+    turnOffPhone: async () => {
+      calls.push("turn off phone");
+      phoneHost = null;
+    },
   };
   const handle = createController({
     engine,

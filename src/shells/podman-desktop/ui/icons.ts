@@ -21,6 +21,7 @@ const ICONS = {
   logs: [path("M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01")],
   menu: [path("M4 6h16M4 12h16M4 18h16")],
   paperclip: [path("M20 11.5l-8.3 8.3a5 5 0 0 1-7.1-7.1l8.8-8.8a3.3 3.3 0 0 1 4.7 4.7l-8.8 8.8a1.7 1.7 0 0 1-2.4-2.4l8.1-8.1")],
+  phone: [["rect", { x: 7, y: 2, width: 10, height: 20, rx: 2 }], path("M11 18h2")],
   pencil: [path("M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16z"), path("M13.5 6.5l4 4")],
   play: [path("M8 5l11 7-11 7z")],
   plus: [path("M12 5v14M5 12h14")],

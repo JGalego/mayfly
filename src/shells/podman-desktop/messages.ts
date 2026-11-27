@@ -69,6 +69,8 @@ export type FromUi =
   | { readonly type: "attachment"; readonly app: string; readonly id: string }
   | { readonly type: "fix" | "retry" | "undo" | "start"; readonly app: string }
   | { readonly type: "autostart"; readonly on: boolean }
+  /** Lets the phone open the apps through Tailscale, or no longer. */
+  | { readonly type: "phone"; readonly on: boolean }
   /** Whether the page has the focus, which it loses when Podman Desktop's window goes to the background. */
   | { readonly type: "focus"; readonly on: boolean }
   /** Sent by the extension, not the page, when Podman Desktop starts and the person wants stopped apps started. */
@@ -92,6 +94,8 @@ export type ToUi =
       readonly developer: boolean;
       /** Whether to start the apps Podman is not running when Podman Desktop starts. */
       readonly autostart: boolean;
+      /** The computer's name the phone opens apps on, or null while phone access is off. */
+      readonly phoneHost: string | null;
     }
   | { readonly type: "progress"; readonly working: Progress }
   | { readonly type: "created"; readonly name: string }

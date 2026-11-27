@@ -119,7 +119,7 @@ Each step is its own commit on this branch, behind the setting, so `main` stays 
 1. ~~**Core, tests first.**~~ Done: the phone door container (its port, redirect URL, sign-in page and Secure cookie) from the app and the tailnet name.
 2. ~~**Adapter.**~~ Done: a thin Tailscale CLI wrapper that finds the CLI, reads its status, serves a port and stops serving it. Its integration tests skip when Tailscale isn't ready. From WSL, `MAYFLY_TAILSCALE="/mnt/c/Program Files/Tailscale/tailscale.exe"` points them at Windows' CLI.
 3. ~~**Engine.**~~ Done: the tailnet name in the state while phone access is on, `turnOnPhone` and `turnOffPhone`, phone doors and Serve mappings kept in line with the apps, and Dex clients listing both doors' callbacks. Turning it on refuses, saying what to do, until Tailscale is ready.
-4. **Shell.** The setting and its checks in Settings → General, with the certificate log warning and the rename suggestion. A Tailscale check in the doctor. A QR code for each app's phone address.
+4. ~~**Shell.**~~ Done: **Settings → General → Open apps from my phone**, with the certificate log warning and the rename suggestion. A "Phone access" setup check while it's on. **On your phone** in each app's header, with its address as a QR code, drawn with [uqr](https://github.com/unjs/uqr).
 5. **Runtime.** Drop `Tailscale-*` headers before the app sees them.
 6. **README.** How to set it up, and what it publishes.
 

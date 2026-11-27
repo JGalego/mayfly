@@ -1,3 +1,6 @@
+import { PHONE_NOT_READY } from "../../engine/engine.ts";
+import type { PhoneNetworkStatus } from "../../engine/ports.ts";
+
 /** One thing Mayfly needs, whether it has it, and what to do when it does not. */
 export interface Check {
   readonly name: string;
@@ -33,6 +36,9 @@ export interface DoctorPorts {
   /** The sign-in service's containers' states, empty when it is not running. */
   readonly signIn: () => Promise<readonly string[]>;
   readonly models: () => Promise<readonly ModelProbe[]>;
+  /** The computer's name the phone opens apps on, or null while phone access is off. */
+  readonly phoneHost: () => Promise<string | null>;
+  readonly phoneNetwork: () => Promise<PhoneNetworkStatus>;
 }
 
 const NEEDED_PODMAN = 5;
@@ -41,7 +47,9 @@ const NEEDED_PODMAN = 5;
 export async function examine(ports: DoctorPorts): Promise<Examination> {
   const podman = await checkPodman(ports);
   const runtime = podman.status === "pass" ? [await checkRuntime(ports), await checkSignIn(ports)] : [];
-  return { ready: [podman, ...runtime], models: await Promise.all((await ports.models()).map(checkModel)) };
+  const host = await ports.phoneHost();
+  const phone = host === null ? [] : [await checkPhone(host, ports)];
+  return { ready: [podman, ...runtime, ...phone], models: await Promise.all((await ports.models()).map(checkModel)) };
 }
 
 async function checkPodman({ podman }: DoctorPorts): Promise<Check> {
@@ -66,6 +74,14 @@ async function checkSignIn({ signIn }: DoctorPorts): Promise<Check> {
   if (states.length === 0) return { name, status: "warn", detail: "The sign-in service starts when you run an app." };
   if (states.every((state) => state === "running")) return { name, status: "pass", detail: "Running." };
   return { name, status: "fail", detail: "The sign-in service is not running. Check its logs in Settings." };
+}
+
+async function checkPhone(host: string, { phoneNetwork }: DoctorPorts): Promise<Check> {
+  const name = "Phone access";
+  const network = await phoneNetwork();
+  if (network.state !== "ready") return { name, status: "fail", detail: PHONE_NOT_READY[network.state] };
+  if (network.host !== host) return { name, status: "warn", detail: `Tailscale now calls this computer ${network.host}. Turn phone access off and on again to use that name.` };
+  return { name, status: "pass", detail: `Your phone opens apps at ${host}.` };
 }
 
 async function checkModel({ id, model, hasKey, list }: ModelProbe): Promise<ModelCheck> {

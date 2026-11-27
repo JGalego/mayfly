@@ -37,6 +37,15 @@
               <button id="copy-password" class="chip" type="button" title="Copy password"><span class="dots" aria-label="password">••••••••</span><span class="chip-note"><span class="to-copy" data-icon="copy">Copy</span><span class="copied-note" data-icon="check">Copied</span></span></button>
             </div>
           </div>
+          <div id="phone-anchor" class="popover-anchor" hidden>
+            <button id="show-phone" class="secondary" type="button" aria-expanded="false" aria-controls="phone-popover" data-icon="phone">On your phone</button>
+            <div id="phone-popover" class="popover phone" hidden>
+              <p class="popover-title">Open on your phone</p>
+              <div id="phone-qr"></div>
+              <code id="phone-url" class="phone-url"></code>
+              <p class="quiet">Scan it with your phone's camera. Your phone needs Tailscale, signed in to the same account.</p>
+            </div>
+          </div>
           <button id="start-app" class="primary" type="button" title="Start the app and sign-in service" data-icon="play" hidden>Start</button>
           <button id="open-app" class="primary" type="button" title="Opens in your browser" data-icon-after="external">Open app</button>
         </div>
@@ -158,6 +167,11 @@
               <button id="settings-copy-password" class="quiet-button" type="button">Copy password</button>
               <button id="new-password" class="quiet-button" type="button">Reset password</button>
             </div>
+          </section>
+          <section>
+            <h2>Phone</h2>
+            <label class="check"><input id="phone-access" type="checkbox"> Open apps from my phone</label>
+            <p id="phone-note" class="quiet"></p>
           </section>
           <section>
             <h2>Advanced</h2>
