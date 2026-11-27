@@ -4,7 +4,7 @@ import { createServer } from "node:net";
 import { NO_USAGE } from "../../engine/usage.ts";
 import type { ToUi } from "./messages.ts";
 import { openPages } from "./pages.ts";
-import { startPhoneServer, type PhoneServer, type PhoneServerPorts } from "./phone-server.ts";
+import { pageFiles, startPhoneServer, type PhoneServer, type PhoneServerPorts } from "./phone-server.ts";
 
 const TOKEN = "phone-token";
 const IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 19_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.1 Mobile/15E148 Safari/604.1";
@@ -22,6 +22,8 @@ const state: ToUi = {
   autostart: false,
   phoneHost: "mayfly.tail1a2b.ts.net",
   mail: null,
+  phoneCreation: true,
+  phones: [],
 };
 
 const servers: PhoneServer[] = [];
@@ -130,6 +132,17 @@ describe("the phone page's server", () => {
 
     assert.notEqual(server.port, port);
     taken.close();
+  });
+});
+
+describe("the phone page's files", () => {
+  it("come from the page's folder, each with its type", async () => {
+    const file = pageFiles(new URL("phone/", import.meta.url).pathname);
+
+    assert.equal((await file("index.html"))?.type, "text/html; charset=utf-8");
+    assert.equal((await file("phone.css"))?.type, "text/css; charset=utf-8");
+    assert.equal(await file("missing.css"), undefined);
+    assert.equal(await file("phone.ts"), undefined);
   });
 });
 

@@ -29,6 +29,8 @@ import { offerEmail, renderPeople, renderShare, settleSharing, setUpPeople, show
 import { renderMail, savedMail, setUpMail } from "./mail.ts";
 import { qrCode } from "./qr.ts";
 import { onPhone } from "../../../core/phone.ts";
+import { phonePageUrl } from "../phone-creation.ts";
+import type { PhoneView } from "../../../engine/engine.ts";
 import { makingOf, tickClocks, whatChanged, type Showing } from "./progress.ts";
 
 // Podman Desktop puts this function on every webview page, to send messages to the extension.
@@ -122,6 +124,9 @@ let newAppModel: string | undefined;
 let passwordShown: number | undefined;
 /** Whether phone access is being turned on or off, which runs every app again. */
 let phoneSwitching = false;
+/** How many phones were paired at the last state, so the pairing code goes once another pairs. */
+let pairedBefore = 0;
+let pairingTimer: ReturnType<typeof setTimeout> | undefined;
 /** The phone address the QR code shows, so it's drawn again only when that changes. */
 let phoneUrlShown: string | undefined;
 
@@ -256,6 +261,10 @@ element("new-password").addEventListener("click", () => {
 for (const id of ["show-password", "settings-show-password"]) element(id).addEventListener("click", () => (passwordShown === undefined ? post({ type: "show-password" }) : hidePassword()));
 developer.addEventListener("change", () => post({ type: "developer", on: developer.checked }));
 element<HTMLInputElement>("autostart").addEventListener("change", (event) => post({ type: "autostart", on: (event.target as HTMLInputElement).checked }));
+element<HTMLInputElement>("phone-creation").addEventListener("change", (event) => {
+  post({ type: "phone-creation", on: (event.target as HTMLInputElement).checked });
+});
+element("pair-phone").addEventListener("click", () => post({ type: "pair-phone" }));
 element<HTMLInputElement>("phone-access").addEventListener("change", (event) => {
   phoneSwitching = true;
   post({ type: "phone", on: (event.target as HTMLInputElement).checked });
@@ -280,6 +289,8 @@ function receive(message: ToUi): void {
     case "progress":
       if (state !== undefined) state = { ...state, working: message.working };
       return render();
+    case "pairing":
+      return showPairing(message);
     case "code":
       written.set(`${message.app}:${message.version}`, { routes: message.routes, thinking: message.thinking });
       return render();
@@ -750,6 +761,7 @@ function render(): void {
   developer.checked = state.developer;
   element<HTMLInputElement>("autostart").checked = state.autostart;
   renderPhoneSetting(state);
+  renderPhoneCreation(state);
   if (view.kind === "settings") renderSettings(state, view.tab);
   else renderChat(state, app);
   renderStatusbar(state, app, health);
@@ -765,6 +777,41 @@ function renderPhoneSetting({ phoneHost }: State): void {
     : phoneHost !== null
       ? `Apps are available at ${phoneHost} on your Tailscale network. Turning this off restarts deployed apps.`
       : "Tailscale HTTPS puts this device's name in public certificate logs, but apps stay on your Tailscale network. Turning this on restarts deployed apps.";
+}
+
+function renderPhoneCreation({ phoneHost, phoneCreation, phones }: State): void {
+  const box = element<HTMLInputElement>("phone-creation");
+  box.checked = phoneCreation;
+  box.disabled = phoneHost === null;
+  const note = element("phone-creation-note");
+  if (phoneHost === null) note.replaceChildren("Needs phone access on.");
+  else if (!phoneCreation) note.replaceChildren("A page on your phone for making and changing apps, paired with this computer.");
+  else note.replaceChildren("Your phone makes and changes apps at ", nameChip(phonePageUrl(phoneHost)), ". It can't see settings, people or passwords, or remove anything. Turning this off forgets every paired phone.");
+  element("phone-pairing").hidden = !phoneCreation;
+  element("paired-phones").replaceChildren(...phones.map(pairedPhone));
+  // The code is spent once a phone pairs with it.
+  if (phones.length > pairedBefore) hidePairing();
+  pairedBefore = phones.length;
+}
+
+function pairedPhone({ id, name, pairedAt }: PhoneView): HTMLLIElement {
+  const forget = h("button", "quiet-button", "Forget");
+  forget.type = "button";
+  forget.addEventListener("click", () => post({ type: "forget-phone", id }));
+  return h("li", "paired-phone", h("span", "", name), h("span", "quiet", `Paired ${new Date(pairedAt).toLocaleDateString()}`), forget);
+}
+
+/** The pairing code, as a QR code for the phone's camera, until it expires. Never as text: it works once, for whoever has it. */
+function showPairing({ url, expires }: { readonly url: string; readonly expires: number }): void {
+  element("pairing-qr").replaceChildren(qrCode(url, "QR code to pair a phone"));
+  element("pairing").hidden = false;
+  clearTimeout(pairingTimer);
+  pairingTimer = setTimeout(hidePairing, Math.max(0, expires - Date.now()));
+}
+
+function hidePairing(): void {
+  element("pairing").hidden = true;
+  element("pairing-qr").replaceChildren();
 }
 
 /** The app's address on the phone, as a QR code to scan and as text, while phone access is on. */

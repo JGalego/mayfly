@@ -1,4 +1,6 @@
+import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { extname, join } from "node:path";
 import type { FromUi, ToUi } from "./messages.ts";
 import type { Pages } from "./pages.ts";
 import { forPhone, phoneMayAsk } from "./phone-page.ts";
@@ -30,6 +32,29 @@ export interface PhoneServerPorts {
   };
   /** One of the phone page's files, by name. */
   readonly file: (name: string) => Promise<PageFile | undefined>;
+}
+
+// The page's own kinds of file, and nothing else, such as its sources.
+const PAGE_TYPES: Readonly<Record<string, string>> = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".webmanifest": "application/manifest+json",
+};
+
+/** The phone page's files, from the folder the build puts them in. */
+export function pageFiles(folder: string): PhoneServerPorts["file"] {
+  return async (name) => {
+    const type = PAGE_TYPES[extname(name)];
+    if (type === undefined) return undefined;
+    try {
+      return { type, body: await readFile(join(folder, name)) };
+    } catch {
+      return undefined;
+    }
+  };
 }
 
 export interface PhoneServer {

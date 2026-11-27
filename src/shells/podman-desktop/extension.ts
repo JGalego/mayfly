@@ -18,6 +18,8 @@ import type { MailAccount } from "./mail-account.ts";
 import { LOGO } from "./mail-html.ts";
 import type { ModelPorts } from "./model-settings.ts";
 import { openPages } from "./pages.ts";
+import { phoneCreation, type PhoneCreation } from "./phone-creation.ts";
+import { pageFiles, startPhoneServer } from "./phone-server.ts";
 import { endpointOf, FIRST_MODELS, isProvider, labelOf, modelFor, providerOf, type Models, type ModelSetting } from "./settings.ts";
 
 // The published, signed runtime this version builds apps on: a list of its amd64 and arm64 images, from which Podman
@@ -44,7 +46,31 @@ export async function activate(context: api.ExtensionContext): Promise<void> {
   // One controller for every page, so work goes on when the tab closes, and each page shows it as it happens.
   const pages = openPages();
   let panel: Panel | undefined;
-  const handle = createController(await controllerPorts(context, { engine, keys, models, phoneNetwork }, pages.post, () => panel?.active === true));
+  // The phone page hands what a phone asks to the controller, which turns the page on and off.
+  const phonePage = phoneCreation({
+    startServer: (candidates) =>
+      startPhoneServer(
+        {
+          handle: (message) => handle(message),
+          pages,
+          phones: {
+            async pair(code, name) {
+              const token = await engine.pair(code, name);
+              // Settings lists the phone at once, and stops showing the code it spent.
+              void handle({ type: "ready" });
+              return token;
+            },
+            paired: async (token) => (await engine.pairedPhone(token)) !== null,
+          },
+          file: pageFiles(api.Uri.joinPath(context.extensionUri, "media", "phone").fsPath),
+        },
+        candidates,
+      ),
+    network: phoneNetwork,
+  });
+  // Frees the page's port when Podman Desktop closes or reloads Mayfly.
+  context.subscriptions.push({ dispose: () => void phonePage.close() });
+  const handle = createController(await controllerPorts(context, { engine, keys, models, phoneNetwork, phonePage }, pages.post, () => panel?.active === true));
   const show = async (): Promise<void> => {
     if (panel !== undefined) return panel.reveal();
     const opened = await openPanel(context);
@@ -58,6 +84,9 @@ export async function activate(context: api.ExtensionContext): Promise<void> {
   };
   context.subscriptions.push(api.commands.registerCommand("mayfly.open", show));
   await show();
+  if (settings().get<boolean>("phoneCreation") === true && (await engine.phoneAccess()) !== null) {
+    phonePage.start().catch((error: unknown) => api.window.showNotification({ title: "Mayfly", body: `The phone page didn't start: ${error instanceof Error ? error.message : String(error)}`, type: "error" }));
+  }
   whenPodmanAnswers(context, () => void startApps(context, handle));
 }
 
@@ -107,10 +136,11 @@ interface Services {
   readonly keys: KeyStore;
   readonly models: ModelStore;
   readonly phoneNetwork: PhoneNetwork;
+  readonly phonePage: PhoneCreation;
 }
 
 /** What the controller works with. Looking says whether the person has Mayfly's tab in front of them. */
-async function controllerPorts(context: api.ExtensionContext, { engine, keys, models, phoneNetwork }: Services, post: ControllerPorts["post"], looking: () => boolean): Promise<ControllerPorts> {
+async function controllerPorts(context: api.ExtensionContext, { engine, keys, models, phoneNetwork, phonePage }: Services, post: ControllerPorts["post"], looking: () => boolean): Promise<ControllerPorts> {
   const logo = await readFile(api.Uri.joinPath(context.extensionUri, "icon.png").fsPath);
   return {
     engine,
@@ -137,7 +167,10 @@ async function controllerPorts(context: api.ExtensionContext, { engine, keys, mo
       saveDeveloper: (on) => settings().update("developerMode", on),
       autostart: () => settings().get<boolean>("autostart") ?? false,
       saveAutostart: (on) => settings().update("autostart", on),
+      phoneCreation: () => settings().get<boolean>("phoneCreation") ?? false,
+      savePhoneCreation: (on) => settings().update("phoneCreation", on),
     },
+    phonePage,
     keys,
     mail: mailAccount(context.secrets, logo),
   };

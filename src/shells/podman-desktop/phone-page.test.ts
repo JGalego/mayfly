@@ -30,6 +30,8 @@ const state: ToUi = {
   autostart: false,
   phoneHost: "mayfly.tail1a2b.ts.net",
   mail: { host: "smtp.example.com", port: 465, username: "me@example.com", from: "me@example.com" },
+  phoneCreation: true,
+  phones: [{ id: "a1b2c3d4", name: "Ana's iPhone", pairedAt: 1 }],
 };
 
 describe("what the phone may ask", () => {
@@ -62,6 +64,10 @@ describe("what the phone may ask", () => {
       { type: "new-password" },
       { type: "save-mail", account: { host: "h", port: 465, username: "u", from: "u@example.com" }, password: "p" },
       { type: "phone", on: false },
+      { type: "phone-creation", on: false },
+      { type: "pair-phone" },
+      { type: "forget-phone", id: "a1b2c3d4" },
+      { type: "updated" },
       { type: "developer", on: true },
       { type: "code", app: "lunch", version: "1a2b3c4d" },
       { type: "logs", pod: "mayfly-lunch", container: "app" },
@@ -81,10 +87,10 @@ describe("what the phone hears", () => {
     });
   });
 
-  it("nothing of the owner, the people, the models or the mail account", () => {
+  it("nothing of the owner, the people, the models, the mail account or the paired phones", () => {
     const heard = JSON.stringify(forPhone(state));
 
-    for (const secret of ["me@example.com", "ana@example.com", "smtp.example.com", "openai"]) assert.ok(!heard.includes(secret), secret);
+    for (const secret of ["me@example.com", "ana@example.com", "smtp.example.com", "openai", "a1b2c3d4"]) assert.ok(!heard.includes(secret), secret);
   });
 
   it("nothing while phone access is off", () => {
@@ -98,7 +104,7 @@ describe("what the phone hears", () => {
     assert.deepEqual(forPhone({ type: "created", name: "lunch" }), { type: "created", name: "lunch" });
   });
 
-  it("never a password, an offer to email someone, or what only developers see", () => {
+  it("never a password, a pairing code, an offer to email someone, or what only developers see", () => {
     const withheld: ToUi[] = [
       { type: "password", password: "six-words" },
       { type: "offer-email", about: "welcome", email: "ana@example.com" },
@@ -106,6 +112,7 @@ describe("what the phone hears", () => {
       { type: "logs", pod: "mayfly-lunch", container: "app", lines: [] },
       { type: "ledger", calls: [] },
       { type: "activity", entries: [] },
+      { type: "pairing", url: "https://mayfly.tail1a2b.ts.net:38099/#pair=pairing-code", expires: 1 },
     ];
 
     assert.deepEqual(withheld.map(forPhone), withheld.map(() => null));

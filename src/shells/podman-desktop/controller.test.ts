@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { RecordedFailure, type AppView, type Engine } from "../../engine/engine.ts";
+import { RecordedFailure, type AppView, type Engine, type PhoneView } from "../../engine/engine.ts";
 import type { ModelCall } from "../../engine/state.ts";
 import type { Step, Watcher } from "../../engine/step.ts";
 import { createController } from "./controller.ts";
@@ -49,6 +49,8 @@ describe("the Mayfly panel's controller", () => {
       autostart: false,
       phoneHost: null,
       mail: null,
+      phoneCreation: false,
+      phones: [],
     });
   });
 
@@ -263,6 +265,79 @@ describe("the Mayfly panel's controller", () => {
     await handle({ type: "autostart", on: true });
 
     assert.deepEqual([stateOf(posted.at(-2))?.autostart, stateOf(posted.at(-1))?.autostart], [false, true]);
+  });
+
+  describe("making apps from the phone", () => {
+    const phones = [
+      { id: "a1b2c3d4", name: "iPhone", pairedAt: 1 },
+      { id: "e5f6a7b8", name: "iPad", pairedAt: 2 },
+    ];
+
+    it("turns on only once phone access is on, serving the phone page", async () => {
+      const { handle, posted, calls } = setUp({ apps: [lunch] });
+
+      await handle({ type: "phone-creation", on: true });
+      const refused = posted.at(-1);
+      await handle({ type: "phone", on: true });
+      await handle({ type: "phone-creation", on: true });
+
+      assert.deepEqual(refused, { type: "error", text: "Turn on phone access first." });
+      assert.deepEqual(calls, ["turn on phone", "serve the phone page"]);
+      assert.equal(stateOf(posted.at(-1))?.phoneCreation, true);
+    });
+
+    it("turns off by stopping the phone page and forgetting every paired phone", async () => {
+      const { handle, posted, calls } = setUp({ apps: [lunch], phones });
+      await handle({ type: "phone", on: true });
+      await handle({ type: "phone-creation", on: true });
+
+      await handle({ type: "phone-creation", on: false });
+
+      assert.deepEqual(calls.slice(2), ["stop the phone page", "forget phone a1b2c3d4", "forget phone e5f6a7b8"]);
+      assert.deepEqual([stateOf(posted.at(-1))?.phoneCreation, stateOf(posted.at(-1))?.phones], [false, []]);
+    });
+
+    it("turns off with phone access, which the page needs", async () => {
+      const { handle, posted, calls } = setUp({ apps: [lunch] });
+      await handle({ type: "phone", on: true });
+      await handle({ type: "phone-creation", on: true });
+
+      await handle({ type: "phone", on: false });
+
+      assert.deepEqual(calls.slice(2), ["stop the phone page", "turn off phone"]);
+      assert.equal(stateOf(posted.at(-1))?.phoneCreation, false);
+    });
+
+    it("shows a link to pair a phone: the page on the phone's address, with a one-time code the browser never sends", async () => {
+      const { handle, posted } = setUp({ apps: [lunch] });
+      await handle({ type: "phone", on: true });
+      await handle({ type: "phone-creation", on: true });
+
+      await handle({ type: "pair-phone" });
+
+      assert.deepEqual(posted.at(-1), { type: "pairing", url: "https://mayfly.tail1a2b.ts.net:38099/#pair=pairing-code", expires: 1234 });
+    });
+
+    it("pairs no phone while it's off", async () => {
+      const { handle, posted } = setUp({ apps: [lunch] });
+      await handle({ type: "phone", on: true });
+
+      await handle({ type: "pair-phone" });
+
+      assert.deepEqual(posted.at(-1), { type: "error", text: "Turn on Make apps from my phone first." });
+    });
+
+    it("lists the paired phones, and forgets one", async () => {
+      const { handle, posted, calls } = setUp({ apps: [lunch], phones });
+      await handle({ type: "ready" });
+      const listed = stateOf(posted.at(-1))?.phones;
+
+      await handle({ type: "forget-phone", id: "a1b2c3d4" });
+
+      assert.deepEqual(listed, phones);
+      assert.deepEqual(calls, ["forget phone a1b2c3d4"]);
+      assert.deepEqual(stateOf(posted.at(-1))?.phones, [phones[1]]);
+    });
   });
 
   it("turns phone access on, saying where the phone opens the apps, and off again", async () => {
@@ -697,6 +772,7 @@ interface Options {
   /** The apps Podman is not running. */
   stopped?: string[];
   running?: string[];
+  phones?: PhoneView[];
   /** Why turning phone access on fails, if it does. */
   phoneFails?: string;
   /** Why the mail server won't let Mayfly sign in, if it won't. */
@@ -705,8 +781,10 @@ interface Options {
   sendFails?: string;
 }
 
-function setUp({ apps, created: made = lunch, steps = [], developer: developing = false, keyFor = [OPENAI_ENDPOINT], createFails, changeFails, waitForCreate = false, stopped: stoppedApps = [], running: runningApps = [], phoneFails, signInFails, sendFails }: Options) {
+function setUp({ apps, created: made = lunch, steps = [], developer: developing = false, keyFor = [OPENAI_ENDPOINT], createFails, changeFails, waitForCreate = false, stopped: stoppedApps = [], running: runningApps = [], phones: paired = [], phoneFails, signInFails, sendFails }: Options) {
   let phoneHost: string | null = null;
+  let phoneCreation = false;
+  let phones = [...paired];
   let account: MailAccount | undefined;
   const verified: MailAccount[] = [];
   const sent: Outgoing[] = [];
@@ -801,11 +879,14 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
       calls.push("turn off phone");
       phoneHost = null;
     },
-    offerPairing: async () => ({ code: "pairing-code", expires: 0 }),
+    offerPairing: async () => ({ code: "pairing-code", expires: 1234 }),
     pair: async () => "phone-token",
     pairedPhone: async () => null,
-    phones: async () => [],
-    forgetPhone: async () => {},
+    phones: async () => phones,
+    forgetPhone: async (id) => {
+      calls.push(`forget phone ${id}`);
+      phones = phones.filter((phone) => phone.id !== id);
+    },
     people: async () => [...people.keys()],
     person: async (email) => ({ email, password: people.get(email) ?? "", group: "person-1" }),
     addPerson: async (email) => {
@@ -833,6 +914,12 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
       saveDeveloper: async (on) => void (developer = on),
       autostart: () => autostart,
       saveAutostart: async (on) => void (autostart = on),
+      phoneCreation: () => phoneCreation,
+      savePhoneCreation: async (on) => void (phoneCreation = on),
+    },
+    phonePage: {
+      start: async () => void calls.push("serve the phone page"),
+      stop: async () => void calls.push("stop the phone page"),
     },
     keys: {
       has: async (endpoint) => keys.has(endpoint),

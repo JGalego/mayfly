@@ -32,6 +32,16 @@ describe("making apps from the phone", () => {
     assert.equal(closed.count, 1);
   });
 
+  it("closes the page when Podman Desktop closes, leaving it on the private network, where the phone hears Mayfly isn't answering", async () => {
+    const { creation, stopped, closed } = setUp();
+    await creation.start();
+
+    await creation.close();
+
+    assert.deepEqual(stopped, []);
+    assert.equal(closed.count, 1);
+  });
+
   it("stops serving the page if the private network won't take it", async () => {
     const { creation, closed } = setUp(18099, new Error("Sign in to Tailscale, then try again."));
 

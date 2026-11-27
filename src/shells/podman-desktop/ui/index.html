@@ -188,6 +188,16 @@
             <h2>Phone</h2>
             <label class="check"><input id="phone-access" type="checkbox" aria-describedby="phone-note"> Open apps from my phone</label>
             <p id="phone-note" class="hint"></p>
+            <label class="check"><input id="phone-creation" type="checkbox" aria-describedby="phone-creation-note"> Make apps from my phone</label>
+            <p id="phone-creation-note" class="hint"></p>
+            <div id="phone-pairing" class="phone-pairing" hidden>
+              <button id="pair-phone" class="secondary" type="button" data-icon="phone">Pair a phone</button>
+              <div id="pairing" class="pairing" hidden>
+                <div id="pairing-qr"></div>
+                <p class="quiet">Scan it with the phone's camera. It works once, for 5 minutes.</p>
+              </div>
+              <ul id="paired-phones" class="paired-phones" aria-label="Paired phones"></ul>
+            </div>
           </section>
           <section>
             <h2>Advanced</h2>
