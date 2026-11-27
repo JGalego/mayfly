@@ -4,7 +4,7 @@ export interface Pod {
   readonly apiVersion: "v1";
   readonly kind: "Pod";
   readonly metadata: { readonly name: string };
-  readonly spec: { readonly containers: readonly Container[]; readonly volumes?: readonly Volume[] };
+  readonly spec: { readonly containers: readonly Container[]; readonly volumes?: readonly Volume[]; readonly securityContext?: PodSecurityContext };
 }
 
 export interface ConfigMap {
@@ -95,11 +95,17 @@ export interface Probe {
   readonly failureThreshold: number;
 }
 
+/** Settings of the pod's own kernel namespaces, which all its containers share. */
+export interface PodSecurityContext {
+  readonly sysctls: readonly { readonly name: string; readonly value: string }[];
+}
+
 export interface SecurityContext {
   readonly runAsNonRoot: true;
   readonly runAsUser: number;
   readonly runAsGroup: number;
   readonly allowPrivilegeEscalation: false;
   readonly readOnlyRootFilesystem: true;
-  readonly capabilities: { readonly drop: readonly ["ALL"] };
+  /** All dropped, and at most the one to listen on a privileged port given back. */
+  readonly capabilities: { readonly drop: readonly ["ALL"]; readonly add?: readonly ["NET_BIND_SERVICE"] };
 }

@@ -97,15 +97,17 @@ describe("the pod Mayfly runs for an app", () => {
 
   it("hardens every container the same way, whatever the manifest says", () => {
     for (const container of [...pod.spec.containers, ...withPhone.spec.containers]) {
-      assert.deepEqual(container.securityContext, {
-        runAsNonRoot: true,
-        runAsUser: 65534,
-        runAsGroup: 65534,
-        allowPrivilegeEscalation: false,
-        readOnlyRootFilesystem: true,
-        capabilities: { drop: ["ALL"] },
-      });
+      const { capabilities, ...rest } = container.securityContext;
+      assert.deepEqual(rest, { runAsNonRoot: true, runAsUser: 65534, runAsGroup: 65534, allowPrivilegeEscalation: false, readOnlyRootFilesystem: true });
+      assert.deepEqual(capabilities.drop, ["ALL"]);
     }
+  });
+
+  it("keeps the proxies' ports for the proxies: below the app's port only they may listen, so the app can never answer in their place", () => {
+    assert.deepEqual(pod.spec.securityContext, { sysctls: [{ name: "net.ipv4.ip_unprivileged_port_start", value: "8080" }] });
+    assert.deepEqual(proxy.securityContext.capabilities.add, ["NET_BIND_SERVICE"]);
+    assert.deepEqual(door.securityContext.capabilities.add, ["NET_BIND_SERVICE"]);
+    assert.equal(app.securityContext.capabilities.add, undefined);
   });
 
   it("caps every container's CPU and memory", () => {

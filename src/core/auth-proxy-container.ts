@@ -70,7 +70,8 @@ function door(name: string, appName: string, origin: Origin, ports: { readonly l
     env: secretEnv(appName),
     ports: [{ containerPort: ports.listen, hostPort: ports.publish, hostIP: LOOPBACK }],
     volumeMounts: [{ name: CONFIG_VOLUME, mountPath: CONFIG_DIR, readOnly: true }],
-    securityContext: HARDENED,
+    // The one right it's given back: to listen on its port, which the pod keeps from the app.
+    securityContext: { ...HARDENED, capabilities: { drop: ["ALL"], add: ["NET_BIND_SERVICE"] } },
     resources: { limits: { cpu: "100m", memory: "64Mi" } },
   };
 }

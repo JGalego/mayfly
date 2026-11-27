@@ -1,4 +1,5 @@
 import { buildAppContainer } from "./app-container.ts";
+import { APP_PORT } from "./contract.ts";
 import { appUrl } from "./app-url.ts";
 import { buildAuthProxyContainer, buildPhoneDoorContainer, proxyConfigVolume } from "./auth-proxy-container.ts";
 import type { Pod } from "./kube.ts";
@@ -28,6 +29,9 @@ export function buildPod({ manifest, hostPort, endSessionUrl, phone }: PodInput)
     spec: {
       containers: [buildAuthProxyContainer({ appName, hostPort, endSessionUrl }), ...phoneDoor, buildAppContainer(manifest, signOutTargets(doors(hostPort, endSessionUrl, phone)))],
       volumes: [proxyConfigVolume(appName)],
+      // Every port below the app's is privileged in the pod, so only the proxies, which may, can listen on theirs. Were the app
+      // to take a proxy's port while it restarted, it would answer the browser itself, and hear every cookie it sends.
+      securityContext: { sysctls: [{ name: "net.ipv4.ip_unprivileged_port_start", value: String(APP_PORT) }] },
     },
   };
 }
