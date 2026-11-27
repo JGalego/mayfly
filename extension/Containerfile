@@ -11,6 +11,6 @@ LABEL org.opencontainers.image.title="Mayfly" \
       org.opencontainers.image.licenses="AGPL-3.0-only" \
       io.podman-desktop.api.version=">= 1.26.0"
 
-COPY package.json icon.png /extension/
+COPY package.json icon.png README.md /extension/
 COPY dist /extension/dist
 COPY media /extension/media
