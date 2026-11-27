@@ -92,18 +92,18 @@ A later mode could serve any private network: the phone door listens on the netw
 ## Security
 
 - **Two gates.** The tailnet decides which devices can connect, and Dex still decides who signs in. Nothing is reachable from the LAN or the internet.
-- **Identity comes only from the proxy.** Serve adds `Tailscale-User-Login` and similar headers, which oauth2-proxy passes through to the app. The app's identity comes only from the proxy's `X-Forwarded-*` headers. The runtime should drop Tailscale's headers, so no app comes to rely on them.
+- **Identity comes only from the proxy.** Serve adds `Tailscale-User-Login` and similar headers. The spike saw the tailnet user's email arrive at the phone door, and oauth2-proxy passes such headers through to the app. The app's identity comes only from the proxy's `X-Forwarded-*` headers. The runtime should drop Tailscale's headers, so no app comes to rely on them.
 - **If Tailscale stops,** only the phone loses access. The computer still opens apps on localhost, and the doctor reports it.
 
 ## Questions for the spike
 
-1. Does Serve accept any HTTPS and HTTP port, including 5556 and 18100 and up? Funnel is limited to 443, 8443 and 10000. The Serve docs list no limit, but don't say there is none either.
-2. Can Serve listen on the tailnet address's port 18100 while Podman holds `127.0.0.1:18100`? Check on Linux, and with the Podman machine on Windows (WSL's mirrored networking included) and on macOS.
-3. Does one Dex sign in through both doors end to end, including its static files and session cookie on the tailnet name?
+1. ~~Does Serve accept any HTTPS and HTTP port?~~ Answered on Windows: it accepted HTTP on 5556, 18197 to 18199 and 65000, and HTTPS on 18198. Serve routes by hostname: the full name and the short name `mayfly` work, and the bare tailnet IP gets a 404. Phone addresses must use the full name, which is also the only one the certificate covers.
+2. Can Serve listen on the tailnet address's port 18100 while Podman holds `127.0.0.1:18100`? Answered on Windows: yes, whichever binds first. Serve on port 5556 worked while the Podman machine held `127.0.0.1:5556`. A Windows process could bind `127.0.0.1:18197` after Serve held that port, and Serve still reached its target. One catch: with WSL's mirrored networking, a process inside WSL shares port numbers with Windows across addresses. So a WSL process on `127.0.0.1:18199` and Serve on 18199 block each other. That affects testing from WSL, not the Podman machine. Linux and macOS are still to check.
+3. Does one Dex sign in through both doors end to end, including its static files and session cookie on the tailnet name? The computer can open its own tailnet name, so its own browser can answer this once a phone door exists, without a phone.
 4. Does the HTTP mode need only MagicDNS, and does the phone resolve the name?
 5. ~~Which fields of `tailscale status --json` give the tailnet name and say whether HTTPS is enabled?~~ Answered on Windows: `Self.DNSName` is the machine's tailnet name with a trailing dot, and `CertDomains` lists it once HTTPS certificates are enabled. `Self.HostName` is the OS hostname, not the tailnet name. Tailscale warns the format may change.
-6. How long does the first HTTPS request wait while the certificate is issued, and what does the person see meanwhile?
-7. Where is the CLI on each platform, and what does Linux need? `tailscale set --operator=$USER` lets a non-root user manage Serve. On macOS, the App Store build's CLI is `/Applications/Tailscale.app/Contents/MacOS/Tailscale`.
+6. ~~How long does the first HTTPS request wait while the certificate is issued?~~ Answered on Windows: 0.92 s for the first request and 0.10 s for the next, with a certificate Windows trusts. Nobody needs to wait for anything.
+7. Where is the CLI on each platform, and what does Linux need? On Windows it's `C:\Program Files\Tailscale\tailscale.exe`, and serving ports works without elevation. On Linux, `tailscale set --operator=$USER` lets a non-root user manage Serve. On macOS, the App Store build's CLI is `/Applications/Tailscale.app/Contents/MacOS/Tailscale`. Linux and macOS are still to check.
 8. Does `tailscale serve --http` work against a Headscale server?
 
 ## Setting up Tailscale for the spike
