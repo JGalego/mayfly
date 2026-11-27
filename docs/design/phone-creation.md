@@ -61,7 +61,7 @@ Mayfly runs inside Podman Desktop, so the page answers only while the computer i
 - **The loopback port trusts nobody.** A request without a valid token gets a 401, whoever sends it. In the spike, containers reached neither the computer's loopback nor its tailnet address, but nothing depends on that.
 - **The page loads only itself.** A Content-Security-Policy allows scripts, styles and connections from its own origin only.
 
-Found along the way, and confirmed by question 7: by the same RFC, an app sees Dex's single sign-on cookie and the other apps' oauth2-proxy cookies, since oauth2-proxy forwards the `Cookie` header, and it can use them to act as whoever opened it in every other app. That's a bug in what's released, for a fix of its own. The fix belongs in front of the app, not in the runtime: the app's code runs in the runtime's process and could read the headers before the runtime drops them.
+Found along the way, and confirmed by question 7: by the same RFC, an app received Dex's single sign-on cookie and the other apps' oauth2-proxy cookies, and could use them to act as whoever opened it in every other app. Fixed in 0.3.1, in front of the app rather than in the runtime, whose process the app's code shares: the proxy drops the `Cookie` header, and Mayfly starts running apps again after an update so the fix reaches them.
 
 ## Options considered
 
