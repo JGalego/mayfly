@@ -101,10 +101,24 @@ A later mode could serve any private network: the phone door listens on the netw
 2. Can Serve listen on the tailnet address's port 18100 while Podman holds `127.0.0.1:18100`? Check on Linux, and with the Podman machine on Windows (WSL's mirrored networking included) and on macOS.
 3. Does one Dex sign in through both doors end to end, including its static files and session cookie on the tailnet name?
 4. Does the HTTP mode need only MagicDNS, and does the phone resolve the name?
-5. Which fields of `tailscale status --json` give the tailnet name and say whether HTTPS is enabled? Tailscale warns the format may change.
+5. ~~Which fields of `tailscale status --json` give the tailnet name and say whether HTTPS is enabled?~~ Answered on Windows: `Self.DNSName` is the machine's tailnet name with a trailing dot, and `CertDomains` lists it once HTTPS certificates are enabled. `Self.HostName` is the OS hostname, not the tailnet name. Tailscale warns the format may change.
 6. How long does the first HTTPS request wait while the certificate is issued, and what does the person see meanwhile?
 7. Where is the CLI on each platform, and what does Linux need? `tailscale set --operator=$USER` lets a non-root user manage Serve. On macOS, the App Store build's CLI is `/Applications/Tailscale.app/Contents/MacOS/Tailscale`.
 8. Does `tailscale serve --http` work against a Headscale server?
+
+## Setting up Tailscale for the spike
+
+On Windows, install Tailscale on Windows itself, where Podman Desktop runs, not inside WSL. From WSL, its CLI is `/mnt/c/Program Files/Tailscale/tailscale.exe`.
+
+1. Create an account at https://login.tailscale.com/start with a personal Google, Microsoft, GitHub or Apple account. That's the free Personal plan.
+2. Install Tailscale on the computer from https://tailscale.com/download, then log in from its tray or menu bar icon with the same account.
+3. Install the Tailscale app on the phone from the App Store or Google Play, sign in with the same account, and allow the VPN.
+4. At https://login.tailscale.com/admin/machines, open the computer's **…** menu → **Edit machine name**, untick **Auto-generate from OS hostname**, and name it `mayfly`.
+5. At https://login.tailscale.com/admin/dns:
+   1. Keep the `tail….ts.net` tailnet name or pick a random two-word one. It can't change after HTTPS is enabled.
+   2. Make sure MagicDNS is on.
+   3. Under **HTTPS Certificates**, choose **Enable HTTPS**. This publishes `mayfly.<tailnet>.ts.net` in public certificate logs. Skip it to try only the HTTP mode.
+6. The phone app should list `mayfly` as connected.
 
 ## Plan
 
