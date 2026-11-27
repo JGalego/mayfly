@@ -123,3 +123,35 @@ describe("the runtime around a generated app", () => {
     assert.equal(response.status, 413);
   });
 });
+
+describe("requests from other apps' pages", () => {
+  const post = (headers: Record<string, string>) => app.request("/", { method: "POST", body: "pay Rui", headers: { ...signedIn, host: "localhost:18100", ...headers } });
+
+  it("refuses a change another app's page asks for, since the browser sends this app's session with it", async () => {
+    const response = await post({ "sec-fetch-site": "same-site", origin: "http://localhost:18101" });
+
+    assert.equal(response.status, 403);
+  });
+
+  it("takes a change the app's own page asks for", async () => {
+    const response = await post({ "sec-fetch-site": "same-origin", origin: "http://localhost:18100" });
+
+    assert.equal(await response.text(), "pay Rui");
+  });
+
+  it("goes by the page's origin when the browser is too old to say where a request comes from", async () => {
+    assert.equal((await post({ origin: "http://localhost:18101" })).status, 403);
+    assert.equal((await post({ origin: "null" })).status, 403);
+    assert.equal((await post({ origin: "https://localhost:18100" })).status, 200);
+  });
+
+  it("takes a request from no browser's page, which carries no browser's cookies", async () => {
+    assert.equal((await post({})).status, 200);
+  });
+
+  it("lets any page link to the app", async () => {
+    const response = await app.request("/", { headers: { ...signedIn, "sec-fetch-site": "cross-site" } });
+
+    assert.equal(response.status, 200);
+  });
+});

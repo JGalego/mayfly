@@ -6,6 +6,7 @@ import type { Env } from "./env.ts";
 import { requireIdentity } from "./identity.ts";
 import { log } from "./log.ts";
 import { logRequests } from "./request-log.ts";
+import { sameOriginOnly } from "./same-origin.ts";
 import { signOut, SIGN_OUT_PATH, type SignOutTargets } from "./sign-out.ts";
 
 const ONE_MEGABYTE = 1024 * 1024;
@@ -19,6 +20,7 @@ export function buildApp(routes: Hono<Env>, signOutTargets: SignOutTargets = {})
   app.use(secureHeaders({ contentSecurityPolicy: CONTENT_SECURITY_POLICY }));
   app.use(bodyLimit({ maxSize: ONE_MEGABYTE }));
   app.use(requireIdentity());
+  app.use(sameOriginOnly());
   app.all(SIGN_OUT_PATH, signOut(signOutTargets));
   app.route("/", routes);
   app.onError(hideError);
