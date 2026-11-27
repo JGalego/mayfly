@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import type { ConfigMap, KubeObject } from "../core/kube.ts";
+import type { ConfigMap, KubeObject, Pod } from "../core/kube.ts";
 import { createEngine, RecordedFailure } from "./engine.ts";
-import type { Builder, Deployer, FileStore, IdentitySource, Message, ModelProvider, Observer, StateStore, Trial } from "./ports.ts";
+import type { Builder, Deployer, FileStore, IdentitySource, Message, ModelProvider, Observer, PhoneNetwork, PhoneNetworkStatus, StateStore, Trial } from "./ports.ts";
 import { EMPTY_STATE, type State } from "./state.ts";
 
 const COST = { input: 100, output: 20, thinking: 0 };
@@ -469,7 +469,74 @@ function textOf(content: Message["content"]): string {
 }
 
 // A reply, or an error the model's service fails with instead.
-function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: string | null) => string = () => "the test model") {
+describe("phone access", () => {
+  it("is off until turned on", async () => {
+    const { engine } = setUp([]);
+
+    assert.equal(await engine.phoneAccess(), null);
+  });
+
+  it("refuses to turn on until the private network is ready, saying what to do, and changes nothing", async () => {
+    const { engine, served } = setUp([], [], undefined, { state: "no-https" });
+
+    await assert.rejects(engine.turnOnPhone(), /Enable HTTPS/);
+    assert.equal(await engine.phoneAccess(), null);
+    assert.deepEqual(served, new Map());
+  });
+
+  it("turns on by serving sign-in and each running app's phone door, and running the apps with it", async () => {
+    const { engine, served, deployed, synced } = setUp([reply("lunch"), reply("notes"), reply("notes"), reply("notes")], [{ ok: true }, crashed, crashed, crashed]);
+    await engine.create("split lunch bills");
+    await engine.create("keep notes");
+
+    const host = await engine.turnOnPhone();
+
+    assert.equal(host, "mayfly.tail1a2b.ts.net");
+    assert.equal(await engine.phoneAccess(), host);
+    assert.deepEqual(served, new Map([[5556, 5556], [18100, 28100]]));
+    assert.deepEqual(containersOf(deployed.at(-1)), ["auth-proxy", "phone-door", "app"]);
+    assert.equal(synced.at(-1)?.phoneHost, host);
+  });
+
+  it("gives an app made while it's on a phone door from the start", async () => {
+    const { engine, served, deployed } = setUp([reply("lunch")]);
+    await engine.turnOnPhone();
+
+    await engine.create("split lunch bills");
+
+    assert.deepEqual(served, new Map([[5556, 5556], [18100, 28100]]));
+    assert.deepEqual(containersOf(deployed.at(-1)), ["auth-proxy", "phone-door", "app"]);
+  });
+
+  it("stops serving a removed app's port, and sign-in's with the last app", async () => {
+    const { engine, served } = setUp([reply("lunch")]);
+    await engine.turnOnPhone();
+    await engine.create("split lunch bills");
+
+    await engine.remove("lunch");
+
+    assert.deepEqual(served, new Map());
+  });
+
+  it("turns off by serving nothing and running the apps through their localhost door only", async () => {
+    const { engine, served, deployed } = setUp([reply("lunch")]);
+    await engine.turnOnPhone();
+    await engine.create("split lunch bills");
+
+    await engine.turnOffPhone();
+
+    assert.equal(await engine.phoneAccess(), null);
+    assert.deepEqual(served, new Map());
+    assert.deepEqual(containersOf(deployed.at(-1)), ["auth-proxy", "app"]);
+  });
+});
+
+function containersOf(objects: readonly KubeObject[] | undefined): string[] {
+  const pod = objects?.find((o): o is Pod => o.kind === "Pod");
+  return pod?.spec.containers.map((c) => c.name) ?? [];
+}
+
+function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: string | null) => string = () => "the test model", network: PhoneNetworkStatus = { state: "ready", host: "mayfly.tail1a2b.ts.net" }) {
   const log: string[] = [];
   const asked: string[] = [];
   /** What the app's logs say, when a test needs them to say something. */
@@ -490,9 +557,10 @@ function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: st
   };
   const identity: IdentitySource = {
     pod: "mayfly-dex",
+    signInPort: 5556,
     sync: async (next) => void (log.push("sync"), synced.push(next)),
     stop: async () => void log.push("stop"),
-    settingsFor: () => ({ OAUTH2_PROXY_CLIENT_ID: "fake" }),
+    settingsFor: () => ({ OAUTH2_PROXY_CLIENT_ID: "fake", OAUTH2_PROXY_LOGIN_URL: "http://localhost:5556/dex/auth" }),
   };
   const models = (id: string | null): ModelProvider => ({
     name: named(id),
@@ -524,8 +592,15 @@ function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: st
     },
     get: async (id) => kept.get(id) ?? Promise.reject(new Error(`no file ${id}`)),
   };
-  const engine = createEngine({ store, deployer, observer, identity, models, builder, files });
-  return { engine, deployed, removed, synced, forgotten, log, asked, logged, kept };
+  // What the private network serves for the phone: each port, and the loopback port it forwards to.
+  const served = new Map<number, number>();
+  const phoneNetwork: PhoneNetwork = {
+    status: async () => network,
+    serve: async (port, to) => void served.set(port, to),
+    stop: async (port) => void served.delete(port),
+  };
+  const engine = createEngine({ store, deployer, observer, identity, models, builder, files, phoneNetwork });
+  return { engine, deployed, removed, synced, forgotten, served, log, asked, logged, kept };
 }
 
 function names(objects: readonly KubeObject[] | undefined): string[] {

@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { appUrl } from "../core/app-url.ts";
+import { phonePort } from "../core/phone.ts";
 import { appObjects } from "./app-objects.ts";
 import { generateApp, listenFor, type Ask, type Attempt, type Generation } from "./generate.ts";
 import { ASK_PROMPT, fixFor, questionFor, withFiles } from "./prompt.ts";
@@ -7,7 +8,7 @@ import type { Attachment, FileData } from "./attachments.ts";
 import { errorsIn } from "./log-errors.ts";
 import { mayflyName } from "../core/names.ts";
 import { parseAppName } from "../core/manifest.ts";
-import type { ContainerHealth, ModelProvider, Ports } from "./ports.ts";
+import type { ContainerHealth, ModelProvider, PhoneNetworkStatus, Ports } from "./ports.ts";
 import { newPassword, newSecret } from "./secrets.ts";
 import { findApp, findVersion, runningVersion, withApp, withoutApp, type App, type Author, type ModelCall, type Owner, type State, type Turn, type Version } from "./state.ts";
 import { UNWATCHED, type Watcher } from "./step.ts";
@@ -22,6 +23,13 @@ const EMAIL = /^[^\s@]+@[^\s@]+$/;
 const MADE = "App deployed.";
 const CHANGED = "Update deployed.";
 const SAVED = "Saved. Trial passed. Deploy to run this version.";
+// What to do before phone access can be turned on, for each way Tailscale isn't ready.
+const PHONE_NOT_READY: Record<Exclude<PhoneNetworkStatus["state"], "ready">, string> = {
+  missing: "Install Tailscale from tailscale.com/download and sign in, then try again.",
+  off: "Tailscale is off. Turn it on, then try again.",
+  "signed-out": "Sign in to Tailscale, then try again.",
+  "no-https": "Your tailnet doesn't give this computer HTTPS certificates yet. In Tailscale's admin console, open DNS and choose Enable HTTPS, then try again.",
+};
 
 /** Work that failed, and that the app's conversation already says failed and why. */
 export class RecordedFailure extends Error {}
@@ -104,9 +112,15 @@ export interface Engine {
   health(): Promise<ServiceHealth[]>;
   /** The last lines one container of an app's pod, or the sign-in service's, wrote. No other pod's. */
   logs(pod: string, container: string): Promise<string[]>;
+  /** The computer's name the phone opens apps on, or null while phone access is off. */
+  phoneAccess(): Promise<string | null>;
+  /** Lets the phone open the apps over the private network, through a second door each. Refuses, saying what to do, until the network is ready. */
+  turnOnPhone(): Promise<string>;
+  /** Closes the phone's doors. The apps carry on at their localhost addresses. */
+  turnOffPhone(): Promise<void>;
 }
 
-export function createEngine({ store, deployer, observer, identity, models, builder, files }: Ports): Engine {
+export function createEngine({ store, deployer, observer, identity, models, builder, files, phoneNetwork }: Ports): Engine {
   async function generate(ask: Ask, model: ModelProvider, watch: Watcher): Promise<Generated> {
     const meter = metered(model);
     // Each attempt is one call, so a call's outcome is its attempt's. Work cut short leaves its calls' outcomes unknown.
@@ -173,7 +187,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     if (running !== undefined) {
       watch({ kind: "deploying" });
       await syncSignIn(nextState);
-      await deployer.deploy(appObjects(next, running.image, identity.settingsFor(next)));
+      await runApp(nextState, next, running.image);
     }
     await store.save(nextState);
     return appView(existingApp(nextState, name));
@@ -188,9 +202,32 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     return next.owner;
   }
 
-  /** Sign-in is there for the apps: it runs while any does, and goes with the last. */
+  /** Sign-in is there for the apps: it runs while any does, and goes with the last, for the phone too. */
   async function syncSignIn(state: State): Promise<void> {
-    await (anyRunning(state) ? identity.sync(state) : identity.stop());
+    const port = identity.signInPort;
+    if (!anyRunning(state)) {
+      await identity.stop();
+      if (state.phoneHost !== null) await phoneNetwork.stop(port);
+      return;
+    }
+    await identity.sync(state);
+    if (state.phoneHost !== null) await phoneNetwork.serve(port, port);
+  }
+
+  /** Runs an app's image, and while phone access is on, through its phone door too. */
+  async function runApp(state: State, app: App, image: string): Promise<void> {
+    await deployer.deploy(appObjects(app, image, identity.settingsFor(app), state.phoneHost));
+    if (state.phoneHost !== null) await phoneNetwork.serve(app.hostPort, phonePort(app.hostPort));
+  }
+
+  /** Runs every app that has a version to run again, with or without its phone door as the state says, and sign-in with them. */
+  async function runAll(state: State): Promise<void> {
+    await syncSignIn(state);
+    for (const app of state.apps) {
+      const running = runningVersion(app);
+      // Built again, as when starting it, in case its image is gone.
+      if (running !== undefined) await runApp(state, app, await builder.build(app.name, running.routes));
+    }
   }
 
   const engine: Engine = {
@@ -255,7 +292,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
         const image = await builder.build(name, running.routes);
         watch({ kind: "deploying" });
         await syncSignIn(state);
-        await deployer.deploy(appObjects(app, image, identity.settingsFor(app)));
+        await runApp(state, app, image);
         return appView(app);
       });
     },
@@ -305,7 +342,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
           watch({ kind: "deploying" });
           await deployer.remove(appObjects(app, running.image, identity.settingsFor(app)));
           await syncSignIn(next);
-          await deployer.deploy(appObjects(renamed, image, identity.settingsFor(renamed)));
+          await runApp(next, renamed, image);
         } else await syncSignIn(next);
         await builder.forget(name);
         await store.save(next);
@@ -369,7 +406,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
         const nextState = withApp(state, next);
         watch({ kind: "deploying" });
         await syncSignIn(nextState);
-        await deployer.deploy(appObjects(next, image, identity.settingsFor(next)));
+        await runApp(nextState, next, image);
         await store.save(nextState);
         return appView(next);
       });
@@ -396,11 +433,39 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       const state = await store.load();
       const app = existingApp(state, name);
       const running = runningVersion(app);
-      if (running !== undefined) await deployer.remove(appObjects(app, running.image, identity.settingsFor(app)));
+      if (running !== undefined) {
+        await deployer.remove(appObjects(app, running.image, identity.settingsFor(app)));
+        if (state.phoneHost !== null) await phoneNetwork.stop(app.hostPort);
+      }
       await builder.forget(name);
       const next = withoutApp(state, name);
       await syncSignIn(next);
       await store.save(next);
+    },
+
+    async phoneAccess() {
+      return (await store.load()).phoneHost;
+    },
+
+    async turnOnPhone() {
+      const network = await phoneNetwork.status();
+      if (network.state !== "ready") throw new Error(PHONE_NOT_READY[network.state]);
+      const next = { ...(await store.load()), phoneHost: network.host };
+      // Saved first: if serving fails partway, it's on, and turning it off or on again puts everything right.
+      await store.save(next);
+      await runAll(next);
+      return network.host;
+    },
+
+    async turnOffPhone() {
+      const state = await store.load();
+      if (state.phoneHost === null) return;
+      // Stopped first: if that fails partway, it's still on, for another try.
+      for (const app of state.apps) if (app.head !== null) await phoneNetwork.stop(app.hostPort);
+      await phoneNetwork.stop(identity.signInPort);
+      const next = { ...state, phoneHost: null };
+      await store.save(next);
+      await runAll(next);
     },
 
     async owner() {

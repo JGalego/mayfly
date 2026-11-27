@@ -48,6 +48,8 @@ export interface Observer {
 export interface IdentitySource {
   /** The pod that signs people in, to watch it like the apps. */
   readonly pod: string;
+  /** The loopback port people sign in on, which the phone reaches through the private network too. */
+  readonly signInPort: number;
   /** Brings the identity provider in line with the owner and apps in the state. */
   sync(state: State): Promise<void>;
   /** Stops and removes the identity provider. */
@@ -121,4 +123,5 @@ export interface Ports {
   readonly models: (id: string | null) => ModelProvider;
   readonly builder: Builder;
   readonly files: FileStore;
+  readonly phoneNetwork: PhoneNetwork;
 }

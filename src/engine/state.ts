@@ -102,9 +102,11 @@ export interface State {
   readonly spent: Usage;
   /** Every call to a model, oldest first: the ledger the spending is broken down from. */
   readonly calls: readonly ModelCall[];
+  /** The computer's name the phone opens apps on, while phone access is on. */
+  readonly phoneHost: string | null;
 }
 
-export const EMPTY_STATE: State = { owner: null, apps: [], spent: NO_USAGE, calls: [] };
+export const EMPTY_STATE: State = { owner: null, apps: [], spent: NO_USAGE, calls: [], phoneHost: null };
 
 /** The role the owner holds, and the only one a new app lets in. */
 export const OWNER_ROLE = "owner";

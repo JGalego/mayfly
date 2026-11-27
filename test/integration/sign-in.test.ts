@@ -16,7 +16,7 @@ const APP = appUrl(HOST_PORT);
 
 const owner = { email: "owner@mayfly.test", username: "owner", password: secret(), groups: ["owner"] };
 const guest = { email: "guest@mayfly.test", username: "guest", password: secret(), groups: ["guest"] };
-const client = { id: "mayfly-echo", secret: secret(), redirectUri: callbackUrl(HOST_PORT) };
+const client = { id: "mayfly-echo", secret: secret(), redirectUris: [callbackUrl(HOST_PORT)] };
 
 let dex: KubeObject[] = [];
 let app: KubeObject[] = [];

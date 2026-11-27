@@ -8,6 +8,7 @@ import { fileStore } from "../../adapters/files/file-store.ts";
 import { KeyNeeded, listModels, openAiCompatibleModel } from "../../adapters/openai-compatible/openai-compatible-model.ts";
 import { podmanBuilder } from "../../adapters/podman/podman-builder.ts";
 import { imageExists, podmanDeployer, podmanObserver, versions } from "../../adapters/podman/podman.ts";
+import { tailscaleNetwork } from "../../adapters/tailscale/tailscale.ts";
 import { createEngine, type Engine } from "../../engine/engine.ts";
 import type { ModelProvider } from "../../engine/ports.ts";
 import { createController, type ControllerPorts } from "./controller.ts";
@@ -33,6 +34,7 @@ export async function activate(context: api.ExtensionContext): Promise<void> {
     models: (id) => configuredModel(modelFor(models.models(), id), keys),
     builder: podmanBuilder(RUNTIME_IMAGE),
     files: fileStore(join(context.storagePath, "files")),
+    phoneNetwork: tailscaleNetwork(),
   });
   let panel: Panel | undefined;
   let handle: Handler = async () => {};

@@ -14,6 +14,8 @@ const BRAND = `${NAME}-brand`;
 const WEB = "/srv/dex/web";
 const LOGO = "static/mayfly/logo.svg";
 const PORT = 5556;
+/** Where people sign in, on loopback. */
+export const SIGN_IN_PORT = PORT;
 const ISSUER = `http://localhost:${PORT}/dex`;
 // Inside a pod, localhost is the pod itself, so auth proxies reach Dex by name on the Mayfly network.
 const ON_NETWORK = `http://${NAME}:${PORT}/dex`;
@@ -28,7 +30,7 @@ export interface DexUser {
 export interface DexClient {
   readonly id: string;
   readonly secret: string;
-  readonly redirectUri: string;
+  readonly redirectUris: readonly string[];
 }
 
 export interface DexInput {
@@ -72,8 +74,8 @@ async function staticPassword({ email, username, password, groups }: DexUser) {
   return { email, username, userID: username, groups, hash: await hash(password, 10) };
 }
 
-function staticClient({ id, secret, redirectUri }: DexClient) {
-  return { id, secret, name: id, redirectURIs: [redirectUri] };
+function staticClient({ id, secret, redirectUris }: DexClient) {
+  return { id, secret, name: id, redirectURIs: redirectUris };
 }
 
 // A Secret, not a ConfigMap: the config holds client secrets and password hashes.

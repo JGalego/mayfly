@@ -577,6 +577,9 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
     logs: async (pod, container) => [`2026-11-26T15:04:05Z ${pod} ${container}`],
     health: async () => [{ name: "lunch-split", kind: "app", pod: "mayfly-lunch-split", containers: [] }],
     stopped: async () => stoppedApps,
+    phoneAccess: async () => null,
+    turnOnPhone: async () => "mayfly.tail1a2b.ts.net",
+    turnOffPhone: async () => {},
   };
   const handle = createController({
     engine,
