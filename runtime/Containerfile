@@ -1,6 +1,7 @@
 # The runtime every generated app starts from: Node 24 on a Wolfi base with no shell or package manager,
 # plus Mayfly's fixed code. A generated app adds one file, /app/routes.ts. Build it with build.sh.
-FROM localhost/mayfly-runtime-base@sha256:d421322539ff61d7535af49bbc321d2a3c4be912504e1600def6d452bdbfe3a8
+# The base is a list of its amd64 and arm64 images, and each build takes the one for its --platform.
+FROM localhost/mayfly-runtime-base@sha256:20b959ad5960230b65a77b746bdbf5d991ade4d7a129c2554e167acdcc990531
 
 ARG REVISION
 LABEL org.opencontainers.image.title="mayfly-runtime" \

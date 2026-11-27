@@ -58,7 +58,7 @@ Mayfly deploys an OCI image and Kubernetes objects with `podman kube play`. Cont
 
 ## The runtime image
 
-The runtime image uses Node 24 on [Wolfi](https://github.com/wolfi-dev), built with [apko](https://github.com/chainguard-dev/apko) from locked packages. It has no shell or package manager. Its code is root-owned and read-only to the app. The runtime also sets security headers, limits request bodies to 1 MiB and handles shutdown.
+The runtime image uses Node 24 on [Wolfi](https://github.com/wolfi-dev), built with [apko](https://github.com/chainguard-dev/apko) from locked packages, for amd64 and arm64. It has no shell or package manager. Its code is root-owned and read-only to the app. The runtime also sets security headers, limits request bodies to 1 MiB and handles shutdown.
 
 `pixi run check-image` runs these checks locally and in CI:
 

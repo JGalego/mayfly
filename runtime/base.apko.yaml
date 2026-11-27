@@ -27,3 +27,4 @@ entrypoint:
   command: /usr/bin/node
 archs:
   - x86_64
+  - aarch64

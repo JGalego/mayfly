@@ -51,7 +51,7 @@ jobs:
     name: Runtime image proof and integration tests on Podman 5
     runs-on: ubuntu-24.04
     outputs:
-      image-id: ${{ steps.proof.outputs.image-id }}
+      image-ids: ${{ steps.proof.outputs.image-ids }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -68,7 +68,8 @@ jobs:
         id: proof
         run: |
           pixi run check-image
-          echo "image-id=$(podman image inspect --format '{{.Id}}' localhost/mayfly-runtime:dev)" >> "$GITHUB_OUTPUT"
+          ids="$(podman image inspect --format '{{.Id}}' localhost/mayfly-runtime:dev-amd64 localhost/mayfly-runtime:dev-arm64 | paste -sd ' ')"
+          echo "image-ids=$ids" >> "$GITHUB_OUTPUT"
       - run: npm run test:integration
 
   publish:
@@ -98,9 +99,9 @@ jobs:
         with:
           cosign-release: v3.1.4
       - run: npm ci && npm ci --prefix runtime
-      - name: Rebuild exactly the runtime image the image job proved
+      - name: Rebuild exactly the runtime images the image job proved
         env:
-          PROVEN: ${{ needs.image.outputs.image-id }}
+          PROVEN: ${{ needs.image.outputs.image-ids }}
         run: |
           built="$(runtime/build.sh)"
           [[ "$built" == "$PROVEN" ]] || { echo "built $built, but the image job proved $PROVEN"; exit 1; }

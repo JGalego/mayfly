@@ -1,10 +1,11 @@
 name: Publish an image
 description: >-
-  Pushes a local image to GHCR tagged with the commit and main, signs it with Sigstore, and attests its SBOM and
-  build provenance. Needs podman, cosign and pixi, and a job that may write packages, id tokens and attestations.
+  Pushes a local image or manifest list to GHCR tagged with the commit and main, signs it with Sigstore, and attests
+  its SBOM and build provenance. Needs podman, cosign and pixi, and a job that may write packages, id tokens and
+  attestations.
 inputs:
   local:
-    description: The local image to publish
+    description: The local image or manifest list to publish
     required: true
   remote:
     description: Where to publish it, without a tag
@@ -26,8 +27,10 @@ runs:
         # cosign and syft read the same Docker-style credentials file.
         mkdir -p "$HOME/.docker"
         echo "$TOKEN" | podman login ghcr.io --username "$GITHUB_ACTOR" --password-stdin --authfile "$HOME/.docker/config.json"
+        push=(push)
+        podman manifest exists "$LOCAL" 2>/dev/null && push=(manifest push --all)
         for tag in "$GITHUB_SHA" main; do
-          podman push --authfile "$HOME/.docker/config.json" --digestfile "$RUNNER_TEMP/digest" "$LOCAL" "docker://$REMOTE:$tag"
+          podman "${push[@]}" --authfile "$HOME/.docker/config.json" --digestfile "$RUNNER_TEMP/digest" "$LOCAL" "docker://$REMOTE:$tag"
         done
         echo "digest=$(cat "$RUNNER_TEMP/digest")" >> "$GITHUB_OUTPUT"
     - name: Sign with Sigstore, keyless
@@ -35,7 +38,8 @@ runs:
       env:
         REMOTE: ${{ inputs.remote }}
         DIGEST: ${{ steps.push.outputs.digest }}
-      run: cosign sign --yes "$REMOTE@$DIGEST"
+      # A list's images are signed too, so each platform's verifies on its own.
+      run: cosign sign --yes --recursive "$REMOTE@$DIGEST"
     - name: List what is inside (SBOM)
       shell: bash
       env:
