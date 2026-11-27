@@ -254,10 +254,10 @@ export function createEngine({ store, deployer, observer, identity, models, buil
   }
 
   /** Changes the owner, and tells the sign-in service when it is running for some app. */
-  function updateOwner(change: (owner: Owner) => Owner): Promise<Owner> {
+  function updateOwner(change: (owner: Owner, state: State) => Owner): Promise<Owner> {
     return changing(async () => {
       const state = withOwner(await store.load());
-      const next = { ...state, owner: change(state.owner) };
+      const next = { ...state, owner: change(state.owner, state) };
       await store.save(anyRunning(next) ? await syncSignIn(next) : next);
       return next.owner;
     });
@@ -642,7 +642,12 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     async changeEmail(email) {
       const address = email.trim();
       if (!EMAIL.test(address)) throw new Error("Enter a valid email address.");
-      return updateOwner((owner) => ({ ...owner, email: address, username: address.split("@")[0] ?? address }));
+      return updateOwner((owner, state) => {
+        // Sign-in would hold two passwords for one email, and keep the person's.
+        const person = findPerson(state, address);
+        if (person !== undefined) throw new Error(`\`${person.email}\` is someone you share apps with. Use another email.`);
+        return { ...owner, email: address, username: address.split("@")[0] ?? address };
+      });
     },
 
     async newPassword() {

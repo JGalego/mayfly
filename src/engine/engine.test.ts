@@ -496,6 +496,13 @@ describe("the engine", () => {
     await assert.rejects(engine.changeEmail("not an email"), /Enter a valid email address/);
   });
 
+  it("refuses an email for the owner that someone apps are shared with has, since sign-in would hold two passwords for it", async () => {
+    const { engine } = setUp([]);
+    await engine.addPerson("ana@example.com");
+
+    await assert.rejects(engine.changeEmail("Ana@example.com"), /`ana@example.com` is someone you share apps with/);
+  });
+
   it("creates the owner once, with a long random password", async () => {
     const { engine } = setUp([]);
 
