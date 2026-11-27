@@ -62,7 +62,7 @@ Other people open your apps the way your phone does, with their own email and pa
 3. In Tailscale's admin console, share this computer with them.
 4. In an app, choose **Share** and tick who can open it. Mayfly drafts an email with the app's link.
 
-Each person has a sign-in group of their own, and each app lets in only yours and those of the people it's shared with. Taking someone off an app, removing them, or resetting their password restarts the apps involved and ends their sessions there. You stay signed in. Apps see who is signed in, so an app can treat you and others differently.
+Each person has a sign-in group of their own. Each app lets in only yours and those of the people it's shared with, which you choose in the app. Taking someone off an app, removing them, or resetting their password restarts the apps involved and ends their sessions there. You stay signed in. Apps see who is signed in, so an app can treat you and others differently.
 
 To remove Mayfly, `/remove` each app, which takes its pod and images with it, and then uninstall the extension. Sign-in and Mayfly's Podman network go with the last app. The runtime, Dex and oauth2-proxy images stay under **Images** until you remove them.
 

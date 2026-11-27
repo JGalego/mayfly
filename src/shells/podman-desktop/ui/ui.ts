@@ -780,7 +780,7 @@ function renderSettings(current: State, wanted: SettingsTab): void {
     element(`settings-${name}-tab`).hidden = tab !== name;
   }
   renderModels(current, examination?.models, post, () => render());
-  renderPeople(current.people, current.apps, current.phoneHost !== null);
+  renderPeople(current.people, current.phoneHost !== null);
   element("doctor").replaceChildren(...doctorView(examination?.ready));
   element("health").replaceChildren(...healthView(health));
   ledger.show(calls, { spent: current.spent, apps: current.apps.map((app) => app.name) });

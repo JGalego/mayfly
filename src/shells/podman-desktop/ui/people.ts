@@ -46,18 +46,17 @@ export function showPersonPassword(email: string, password: string): void {
   redraw();
 }
 
-/** Everyone the owner can share apps with, and what they can open. */
-export function renderPeople(people: readonly string[], apps: readonly AppView[], phoneOn: boolean): void {
+/** Everyone the owner can share apps with. Who opens what lives with each app, in its Share popover. */
+export function renderPeople(people: readonly string[], phoneOn: boolean): void {
   element("people-phone-note").hidden = phoneOn;
   const input = element<HTMLInputElement>("person-email");
   // Added: the field is free for the next one.
   if (people.includes(input.value.trim().toLowerCase())) input.value = "";
-  const rows = people.map((email) => ({ email, apps: apps.filter((app) => app.people.includes(email)).map((app) => app.name) }));
-  const key = JSON.stringify([rows, shown?.email, armed?.email, armed?.action]);
+  const key = JSON.stringify([people, shown?.email, armed?.email, armed?.action]);
   if (key === peopleBuilt) return;
   peopleBuilt = key;
   element("people").hidden = people.length === 0;
-  element("people").replaceChildren(...rows.map(personCard));
+  element("people").replaceChildren(...people.map(personCard));
 }
 
 /** Who can open the app: always the owner, and each person it's shared with, while phone access lets them reach it. */
@@ -99,9 +98,9 @@ function shareOption(label: string, checked: boolean, disabled: boolean, change:
   return h("li", "", h("label", "check", box, label));
 }
 
-function personCard({ email, apps }: { readonly email: string; readonly apps: readonly string[] }): HTMLElement {
+function personCard(email: string): HTMLElement {
   const showing = shown?.email === email ? shown : undefined;
-  const facts = h("div", "person-facts", h("span", "person-email", email), h("span", "hint", apps.length === 0 ? "No apps shared yet" : `Can open ${apps.join(", ")}`));
+  const facts = h("div", "person-facts", h("span", "person-email", email));
   const actions = h(
     "div",
     "person-actions",
