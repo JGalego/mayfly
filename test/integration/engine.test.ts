@@ -87,11 +87,9 @@ describe("the engine on Podman with Dex", () => {
     // The same code again: a new version, which runs once the records are backed up as they are, at 4 visits.
     writes = { name: "visits", fixture: "tally-app" };
     const { backups: [backup] } = await engine.change("visits", "count again");
-    await waitUntilUp(app.url);
-    assert.match((await browser.get(app.url)).body, /Visits: 5/);
+    assert.match(await visit(browser, app.url), /Visits: 5/);
     await engine.restore("visits", backup!.id);
-    await waitUntilUp(app.url);
-    assert.match((await browser.get(app.url)).body, /Visits: 5/);
+    assert.match(await visit(browser, app.url), /Visits: 5/);
     assert.deepEqual(JSON.parse(await engine.exportData("visits")), { [`visit:${owner.email}`]: { count: 5 } });
 
     const backups = (await engine.list()).find((kept) => kept.name === "visits")?.backups ?? [];
@@ -99,6 +97,16 @@ describe("the engine on Podman with Dex", () => {
     for (const volume of ["mayfly-visits-data", ...backups.map((kept) => `mayfly-backup-${kept.id}`)]) assert.notEqual(spawnSync("podman", ["volume", "exists", volume]).status, 0, volume);
   });
 });
+
+/** Visits the app signed in, once the app answers rather than its proxy saying it can't reach it yet, which leaves the app's count alone. */
+async function visit(browser: Browser, url: string): Promise<string> {
+  for (let attempt = 0; attempt < 60; attempt++) {
+    const page = await browser.get(url).catch(() => undefined);
+    if (page !== undefined && page.status !== 502) return page.body;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error(`${url} never answered`);
+}
 
 function imagesOf(state: State): string[] {
   return state.apps.flatMap((a) => a.versions.flatMap((v) => v.image ?? []));
