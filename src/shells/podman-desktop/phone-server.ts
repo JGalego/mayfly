@@ -152,14 +152,15 @@ function bearerToken(request: IncomingMessage): string | undefined {
 async function bodyOf(request: IncomingMessage, limit: number, response: ServerResponse): Promise<unknown> {
   const chunks: Buffer[] = [];
   let size = 0;
+  // Read to the end, keeping nothing past the limit, so the phone hears why rather than a dropped connection.
+  // Node's request timeout ends a body that never does.
   for await (const chunk of request as AsyncIterable<Buffer>) {
     size += chunk.length;
-    if (size > limit) {
-      end(response, 413);
-      request.destroy();
-      return undefined;
-    }
-    chunks.push(chunk);
+    if (size <= limit) chunks.push(chunk);
+  }
+  if (size > limit) {
+    end(response, 413);
+    return undefined;
   }
   try {
     return JSON.parse(Buffer.concat(chunks).toString("utf8"));
