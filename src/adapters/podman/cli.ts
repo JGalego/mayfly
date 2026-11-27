@@ -32,8 +32,16 @@ export function run(args: readonly string[], input = ""): Promise<Result> {
 /** Runs podman and returns what it printed, or throws with its error. */
 export async function podman(args: readonly string[], input = ""): Promise<string> {
   const { code, stdout, stderr } = await run(args, input);
-  if (code !== 0) throw new Error(`podman ${args.join(" ")} failed: ${stderr.trim()}`);
+  if (code !== 0) throw failure(args, stderr);
   return stdout;
+}
+
+/** Podman's error, said plainly when the person can fix it: a port on the host that another program holds. */
+export function failure(args: readonly string[], stderr: string): Error {
+  // Rootless Podman and the Podman machine's port forwarder both say "listen tcp <address>:<port>: bind: …".
+  const port = /listen tcp\S* \S*:(\d+): bind:/.exec(stderr)?.[1];
+  if (port !== undefined) return new Error(`Port ${port} on this computer is in use by another program. Stop that program, then try again.`);
+  return new Error(`podman ${args.join(" ")} failed: ${stderr.trim()}`);
 }
 
 /** The environment with Podman's install folders at the end of its PATH, whatever case the platform spells PATH in. */
