@@ -11,7 +11,8 @@ import { parseAppName } from "../core/manifest.ts";
 import { PortTaken, type ContainerHealth, type ModelProvider, type PhoneNetworkStatus, type Ports } from "./ports.ts";
 import { newPassword, newSecret } from "./secrets.ts";
 import { allowedGroups, EMAIL, findPerson, peopleOf, sharing, withNewPassword, withoutPerson, withPerson } from "./people.ts";
-import { findApp, findVersion, runningVersion, withApp, withoutApp, type App, type Author, type Backup, type ModelCall, type Owner, type Person, type State, type Turn, type Version } from "./state.ts";
+import { offerPairing, phoneWith, withoutPhone, withPhone, type PairingOffer } from "./phones.ts";
+import { findApp, findVersion, runningVersion, withApp, withoutApp, type App, type Author, type Backup, type ModelCall, type Owner, type PairedPhone, type Person, type State, type Turn, type Version } from "./state.ts";
 import { UNWATCHED, type Watcher } from "./step.ts";
 import { addUsage, metered, NO_USAGE, type Usage } from "./usage.ts";
 
@@ -55,6 +56,9 @@ export class RecordedFailure extends Error {
     this.app = app;
   }
 }
+
+/** A paired phone, without the hash that proves it. */
+export type PhoneView = Omit<PairedPhone, "tokenHash">;
 
 /** A version as a shell shows it: how long its code and the model's thinking are, but not them, which the shell asks for when it needs them. */
 export type VersionView = Omit<Version, "routes" | "image" | "thinking"> & { readonly lines: number; readonly thinkingWords: number };
@@ -167,12 +171,23 @@ export interface Engine {
   turnOnPhone(): Promise<string>;
   /** Closes the phone's doors. The apps carry on at their localhost addresses. */
   turnOffPhone(): Promise<void>;
+  /** A new code for pairing a phone, good once, for five minutes. Any earlier code stops working. */
+  offerPairing(): Promise<{ readonly code: string; readonly expires: number }>;
+  /** Pairs the phone that brought the code, and gives it the token it proves itself with from then on. */
+  pair(code: string, name: string): Promise<string>;
+  /** The paired phone a token belongs to, or null. */
+  pairedPhone(token: string): Promise<PhoneView | null>;
+  phones(): Promise<readonly PhoneView[]>;
+  /** Forgets a phone: its token stops working. */
+  forgetPhone(id: string): Promise<void>;
 }
 
 export function createEngine({ store, deployer, observer, identity, models, builder, data, files, phoneNetwork }: Ports): Engine {
   // Each change loads the state, often waits on Podman, then saves. One at a time, each loads what the last saved, so none
   // saves over another with an older copy. A model's answer is waited for outside, so only Podman's work holds others up.
   const changing = oneAtATime();
+  // In memory only: a code shown before Podman Desktop restarts never works after it.
+  let pairing: PairingOffer | null = null;
 
   async function generate(ask: Ask, model: ModelProvider, watch: Watcher): Promise<Generated> {
     const meter = metered(model);
@@ -747,6 +762,35 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       return changing(phoneTurnedOff);
     },
 
+    async offerPairing() {
+      const { code, offer } = offerPairing(Date.now());
+      pairing = offer;
+      return { code, expires: offer.expires };
+    },
+
+    pair(code, name) {
+      return changing(async () => {
+        // Checked and spent in one step, so two phones can't both use one code.
+        const { state, token } = withPhone(await store.load(), pairing, code, name, Date.now());
+        pairing = null;
+        await store.save(state);
+        return token;
+      });
+    },
+
+    async pairedPhone(token) {
+      const phone = phoneWith(await store.load(), token);
+      return phone === undefined ? null : phoneView(phone);
+    },
+
+    async phones() {
+      return (await store.load()).phones.map(phoneView);
+    },
+
+    forgetPhone(id) {
+      return changing(async () => store.save(withoutPhone(await store.load(), id)));
+    },
+
     async owner() {
       const state = await store.load();
       if (state.owner !== null) return state.owner;
@@ -961,6 +1005,10 @@ function charge(state: State, calls: readonly ModelCall[]): State {
     const counted = app === undefined ? charged : withApp(charged, { ...app, spent: addUsage(app.spent, call.spent) });
     return { ...counted, spent: addUsage(counted.spent, call.spent), calls: [...counted.calls, call] };
   }, state);
+}
+
+function phoneView({ tokenHash: _tokenHash, ...view }: PairedPhone): PhoneView {
+  return view;
 }
 
 function appView(app: App): AppView {

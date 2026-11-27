@@ -24,6 +24,8 @@ Mayfly is a preview. Expect rough edges, and please report them in [issues](http
 
 **Settings → General → Open apps from my phone** lets your phone open the apps over HTTPS through [Tailscale](https://tailscale.com), installed on the computer and the phone with the same account. First, in Tailscale's admin console, open **DNS**, make sure MagicDNS is on, and choose **Enable HTTPS**. Each app's **On your phone** shows a QR code to scan. The apps keep their localhost address, and nothing listens on your network.
 
+**Settings → General → Make apps from my phone** adds a page for making and changing apps from the phone. **Pair a phone** shows a QR code that works once, and Settings lists each paired phone with **Forget**. The phone can't see settings, people or passwords, or remove anything.
+
 ## How it works
 
 The model writes only the app's routes, in one TypeScript file. Mayfly supplies sign-in, health checks, logs and the container settings, the same for every app. Before deploying a version, Mayfly builds it and tries it with no network and no privileges, and sends any failure back to the model.

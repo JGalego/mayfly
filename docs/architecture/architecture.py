@@ -65,6 +65,7 @@ with Diagram("", filename=str(HERE / "architecture"), outformat="png", show=Fals
     mayfly >> link("routes.ts") >> podman
     browser >> link("127.0.0.1") >> doors
     phone >> link("tailnet", **TAILNET) >> serve >> link(**TAILNET) >> doors
+    serve >> link(xlabel="the phone page", **TAILNET) >> mayfly
     doors >> link("identity headers") >> app
     doors >> link("OIDC") >> dex
     dex >> link() >> sessions

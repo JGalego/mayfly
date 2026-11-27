@@ -1,4 +1,4 @@
-import type { AppView, ServiceHealth } from "../../engine/engine.ts";
+import type { AppView, PhoneView, ServiceHealth } from "../../engine/engine.ts";
 import type { ModelCall } from "../../engine/state.ts";
 import type { Step } from "../../engine/step.ts";
 import type { Usage } from "../../engine/usage.ts";
@@ -87,6 +87,11 @@ export type FromUi =
   | { readonly type: "autostart"; readonly on: boolean }
   /** Lets the phone open the apps through Tailscale, or no longer. */
   | { readonly type: "phone"; readonly on: boolean }
+  /** Serves the phone page for making apps, or no longer, which forgets every paired phone. */
+  | { readonly type: "phone-creation"; readonly on: boolean }
+  /** Shows a one-time code for a phone to pair with. */
+  | { readonly type: "pair-phone" }
+  | { readonly type: "forget-phone"; readonly id: string }
   /** Whether the page has the focus, which it loses when Podman Desktop's window goes to the background. */
   | { readonly type: "focus"; readonly on: boolean }
   /** Sent by the extension, not the page, when Podman Desktop starts and the person wants stopped apps started. */
@@ -122,6 +127,9 @@ export type ToUi =
       readonly phoneHost: string | null;
       /** The account Mayfly sends email from, or null while it drafts emails in the owner's mail app. */
       readonly mail: MailAccountView | null;
+      /** Whether the phone page is served, for making apps from a paired phone. */
+      readonly phoneCreation: boolean;
+      readonly phones: readonly PhoneView[];
     }
   | { readonly type: "progress"; readonly working: Progress }
   | { readonly type: "created"; readonly name: string }
@@ -138,6 +146,8 @@ export type ToUi =
   | { readonly type: "logs"; readonly pod: string; readonly container: string; readonly lines: readonly string[] }
   | { readonly type: "code"; readonly app: string; readonly version: string; readonly routes: string; readonly thinking: string }
   | { readonly type: "notice"; readonly text: string }
+  /** The phone page's link with a pairing code, for the computer to show as a QR code until it expires. */
+  | { readonly type: "pairing"; readonly url: string; readonly expires: number }
   /** Asks the owner whether to email someone about what just changed for them. */
   | ({ readonly type: "offer-email" } & MailAbout)
   /** A password the person asked to see: the owner's, or that of the person named. */

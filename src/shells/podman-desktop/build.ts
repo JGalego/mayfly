@@ -33,11 +33,26 @@ const page = await build({
   metafile: true,
 });
 
+// The phone's page, which the extension serves on loopback: its own folder, with the tab's styles and the Mayfly icon.
+const phone = await build({
+  entryPoints: { phone: `${here}phone/phone.ts`, sw: `${here}phone/sw.ts` },
+  outdir: `${out}media/phone`,
+  bundle: true,
+  platform: "browser",
+  format: "iife",
+  target: "es2022",
+  metafile: true,
+});
+
 await mkdir(`${out}media`, { recursive: true });
 for (const file of ["index.html", "ui.css"]) await copyFile(`${here}ui/${file}`, `${out}media/${file}`);
 await copyFile(`${root}assets/logo.svg`, `${out}media/logo.svg`);
+for (const file of ["index.html", "phone.css", "manifest.webmanifest"]) await copyFile(`${here}phone/${file}`, `${out}media/phone/${file}`);
+await copyFile(`${here}ui/ui.css`, `${out}media/phone/ui.css`);
+await copyFile(`${root}assets/logo.svg`, `${out}media/phone/logo.svg`);
+await copyFile(`${out}icon.png`, `${out}media/phone/icon.png`);
 await copyFile(`${root}LICENSE`, `${out}dist/LICENSE`);
-await writeFile(`${out}dist/THIRD-PARTY-NOTICES.txt`, await notices([extension.metafile, page.metafile]));
+await writeFile(`${out}dist/THIRD-PARTY-NOTICES.txt`, await notices([extension.metafile, page.metafile, phone.metafile]));
 
 /** The licence of every package bundled in, since their licences ask for it to ship with their code. */
 async function notices(metafiles: readonly Metafile[]): Promise<string> {

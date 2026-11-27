@@ -53,6 +53,16 @@ Your phone can open the apps too, over HTTPS through [Tailscale](https://tailsca
 3. In Mayfly, turn on **Settings → General → Open apps from my phone**.
 4. In an app, choose **On your phone** and scan the QR code with your phone's camera. Sign in with the same email and password.
 
+### Make apps from your phone
+
+With phone access on, your phone can make and change apps too, on a page Mayfly serves through Tailscale.
+
+1. Turn on **Settings → General → Make apps from my phone**.
+2. Choose **Pair a phone** and scan the QR code with your phone's camera. The code works once, for 5 minutes.
+3. Add the page to your phone's Home Screen, so it opens like an app.
+
+From the phone you can describe an app, attach photos and files, ask for changes, use `/ask`, `/fix`, `/retry`, `/undo` and `/start`, and open the apps. Models, people, passwords, the mail account, developer mode, and removing or renaming apps stay on the computer. **Forget** unpairs a phone, and turning the setting off unpairs them all. The page answers only while the computer is awake and Podman Desktop is open.
+
 ### Share apps with other people
 
 Other people open your apps the way your phone does, with their own email and password.
@@ -169,7 +179,7 @@ Asking for a change turns any light orange, until a new version is deployed or t
 | ⭕ Unhealthy | Running, but its health check fails. After three failures in a row Podman restarts it, and it starts again. | Read its logs, or `/fix` |
 | 🔴 Stopped | Not running, for example after the Podman machine stopped. | **Start**, or `/start`. To have Mayfly start them when Podman Desktop starts, turn on **Settings → General → Start stopped apps automatically**. |
 
-Each app runs as one pod: oauth2-proxy in front, on 127.0.0.1, and the app behind it with no port on the host, so it only sees people who are signed in and allowed. With phone access on, a second proxy in the pod, the phone door, takes the requests Tailscale Serve forwards from the computer's Tailscale name over HTTPS. Both doors sign people in with the same Dex, which keeps them signed in across apps, and signing out of an app signs them out of Dex too.
+Each app runs as one pod: oauth2-proxy in front, on 127.0.0.1, and the app behind it with no port on the host, so it only sees people who are signed in and allowed. With phone access on, a second proxy in the pod, the phone door, takes the requests Tailscale Serve forwards from the computer's Tailscale name over HTTPS. Both doors sign people in with the same Dex, which keeps them signed in across apps, and signing out of an app signs them out of Dex too. With **Make apps from my phone** on, the extension also serves the phone page on loopback, which Tailscale Serve puts on port 38099. A paired phone proves itself with a token the page keeps, not a cookie, and hears the same progress as Mayfly's tab.
 
 ![Mayfly on your computer: Podman Desktop, Podman, the app pods, Dex and Tailscale Serve](docs/architecture/architecture.png)
 
