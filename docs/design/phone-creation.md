@@ -1,6 +1,6 @@
 # Design: make apps from your phone
 
-Status: proposed, on `feat/phone-creation`. Spike next.
+Status: built on `feat/phone-creation`, for 0.4.0. Questions 3 to 6 need an iPhone before it ships.
 
 Phone access lets the phone open apps. The goal now is for the owner to make and change apps from the phone too: describe an app, attach a photo of a sketch, watch Mayfly work, and open the result. With no new account, nothing leaving the machine that doesn't already, and no more power on the phone than making apps needs.
 
@@ -93,4 +93,4 @@ Each step is its own commit on this branch, behind the setting, so `main` stays 
 3. ~~**The phone server.**~~ Done: `node:http` on loopback, with pairing, the token check, the message list and the events stream, and Serve's mapping on 38099. A forgotten phone's stream ends at the next state. Settings turns it on.
 4. ~~**The phone page.**~~ Done, and seen in Chrome at a phone's size: the apps with their lights, conversations with progress, the composer with photos scaled down, pairing from the link, the manifest, and a service worker that opens the page when Mayfly doesn't answer. Questions 3 to 6 still need an iPhone before 0.4.0.
 5. ~~**Settings.**~~ Done: **Make apps from my phone**, which needs phone access on and starts the page with Podman Desktop, the pairing QR code, and paired phones with **Forget**. Turning it on is the setup check: it says so when phone access is off or Tailscale won't serve the page.
-6. **README.** How to pair and what the phone can do, in both READMEs, and the page in the architecture diagram.
+6. ~~**README.**~~ Done: how to pair and what the phone can do, in both READMEs, and the page in the architecture diagram.
