@@ -79,7 +79,8 @@ describe("the engine on Podman with Dex", () => {
     assert.notEqual(spawnSync("podman", ["volume", "exists", "mayfly-tally-data"]).status, 0);
 
     writes = { name: "visits", fixture: "tally-strict" };
-    await assert.rejects(engine.change("visits", "note the first visit"), /`visit:` record has no `first`/);
+    const refused = await engine.change("visits", "note the first visit");
+    assert.match(refused.conversation.at(-1)?.text ?? "", /1 `visit:` record has no `first`/);
     images.push(...imagesOf(await store.load()));
     assert.match((await browser.get(app.url)).body, /Visits: 4/);
 
