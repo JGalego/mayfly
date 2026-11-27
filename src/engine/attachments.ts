@@ -30,13 +30,13 @@ export function kindOf({ name, type }: { readonly name: string; readonly type: s
 
 /** Why these files cannot go with a request, or undefined when they can. */
 export function problemWithFiles(files: readonly FileData[]): string | undefined {
-  if (files.length > MAX_FILES) return `Attach at most ${MAX_FILES} files.`;
+  if (files.length > MAX_FILES) return `Attach at most ${MAX_FILES} files`;
   for (const file of files) {
     const kind = kindOf(file);
-    if (kind === undefined) return `Mayfly takes images (PNG, JPEG, WebP, GIF) and text files (.txt, .md, .csv, .tsv, .json), not ${file.name}.`;
+    if (kind === undefined) return `Mayfly takes images and text files but not ${file.name}`;
     if (kind === "image" && file.data.length > MAX_IMAGE) return `${file.name} is larger than 5 MB.`;
     if (kind === "text" && file.data.length > MAX_TEXT) return `${file.name} is larger than 100 KB.`;
-    if (kind === "text" && textOf(file) === undefined) return `${file.name} is not text.`;
+    if (kind === "text" && textOf(file) === undefined) return `${file.name} is not text`;
   }
   return undefined;
 }

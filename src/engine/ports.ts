@@ -52,7 +52,7 @@ export class PortTaken extends Error {
   readonly port: number;
 
   constructor(port: number) {
-    super(`Port ${port} on this computer is in use by another program. Stop that program, then try again.`);
+    super(`Stop the program using port ${port} and try again`);
     this.port = port;
   }
 }

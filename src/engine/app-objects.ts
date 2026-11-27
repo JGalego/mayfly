@@ -22,6 +22,6 @@ export function appObjects(app: App, image: string, { proxy, endSessionUrl }: Si
 function phoneSignIn(host: string, idp: IdpSettings): PhoneSignIn {
   const loginUrl = idp.OAUTH2_PROXY_LOGIN_URL;
   // The phone signs in where the computer does, on its own address, so it needs to know where that is.
-  if (loginUrl === undefined) throw new Error("The identity provider names no sign-in page for the phone to use.");
+  if (loginUrl === undefined) throw new Error("The identity provider names no sign-in page for the phone");
   return { host, loginUrl };
 }

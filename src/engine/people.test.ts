@@ -29,7 +29,7 @@ describe("adding a person", () => {
     const { state: withAna } = withPerson(state, "ana@example.com");
 
     assert.throws(() => withPerson(state, "ana"), /valid email/);
-    assert.throws(() => withPerson(state, "ME@mayfly.local"), /That's you/);
+    assert.throws(() => withPerson(state, "ME@mayfly.local"), /You can open every app already/);
     assert.throws(() => withPerson(withAna, "ANA@example.com"), /already/);
   });
 });

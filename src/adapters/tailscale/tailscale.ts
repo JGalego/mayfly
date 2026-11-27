@@ -31,7 +31,7 @@ export function tailscaleNetwork(cli = findTailscale()): PhoneNetwork {
 export function statusOf({ BackendState, Self, CertDomains }: TailscaleStatus): PhoneNetworkStatus {
   if (BackendState === "NeedsLogin" || BackendState === "NeedsMachineAuth") return { state: "signed-out" };
   if (BackendState === "Stopped") return { state: "off" };
-  if (BackendState !== "Running") return { state: "failed", reason: `Tailscale reports ${BackendState ?? "no state"}.` };
+  if (BackendState !== "Running") return { state: "failed", reason: `Tailscale reports ${BackendState ?? "no state"}` };
   const host = (Self?.DNSName ?? "").replace(/\.$/, "");
   return host !== "" && (CertDomains ?? []).includes(host) ? { state: "ready", host } : { state: "no-https" };
 }
@@ -62,8 +62,8 @@ async function status(cli: string): Promise<PhoneNetworkStatus> {
   const result = await run(cli, ["status", "--json"]);
   if (result === "missing") return { state: "missing" };
   // Whatever stopped the CLI, such as Tailscale itself not running, is said in its own words.
-  if (result.code === null) return { state: "failed", reason: `Tailscale didn't answer within ${TIMEOUT_MS / 1000} seconds.` };
-  if (result.code !== 0) return failedStatus(said(result).trim() || `Tailscale's CLI ended with code ${result.code}.`);
+  if (result.code === null) return { state: "failed", reason: `Tailscale didn't answer within ${TIMEOUT_MS / 1000} seconds` };
+  if (result.code !== 0) return failedStatus(said(result).trim() || `Tailscale's CLI ended with code ${result.code}`);
   try {
     // Warnings, such as a version mismatch, go to stderr, so stdout is the JSON alone.
     return statusOf(JSON.parse(result.stdout) as TailscaleStatus);
@@ -85,10 +85,10 @@ async function stop(cli: string, port: number): Promise<void> {
 
 /** What went wrong, said plainly where the person can fix it. */
 function failure(result: Result | "missing", doing: string): Error {
-  if (result === "missing") return new Error("Mayfly could not find Tailscale. Install it from tailscale.com/download and sign in.");
+  if (result === "missing") return new Error("Install Tailscale from tailscale.com/download and sign in");
   // On Linux, only root or the operator Tailscale names may change what it serves.
-  if (/access denied/i.test(said(result))) return new Error("Tailscale refused. Let your user manage it with `sudo tailscale set --operator=$USER`, then try again.");
-  if (result.code === null) return new Error(`Tailscale did not ${doing} within ${TIMEOUT_MS / 1000} seconds. If it asked to enable a feature for the tailnet, enable it, then try again.`);
+  if (/access denied/i.test(said(result))) return new Error("Let your user manage Tailscale with `sudo tailscale set --operator=$USER` and try again");
+  if (result.code === null) return new Error(`Tailscale didn't ${doing} in time so enable any feature it asked for and try again`);
   return new Error(`Tailscale could not ${doing}: ${said(result).trim()}`);
 }
 

@@ -29,14 +29,14 @@ describe("podman's errors", () => {
     ]) {
       const error = failure(["kube", "play"], stderr);
       assert.ok(error instanceof PortTaken && [5556, 8100].includes(error.port));
-      assert.match(error.message, /^Port (5556|8100) on this computer is in use by another program\./);
+      assert.match(error.message, /^Stop the program using port (5556|8100) and try again$/);
     }
   });
 
   it("says to start Podman's machine when Podman can't reach it", () => {
     const stderr = "Cannot connect to Podman. Please verify your connection to the Linux system using `podman system connection list`, or try `podman machine init` and `podman machine start` to manage a new Linux VM\nError: unable to connect to Podman socket: failed to connect: dial tcp 127.0.0.1:59825: connectex: No connection could be made because the target machine actively refused it.";
 
-    assert.equal(failure(["ps"], stderr).message, "Podman's machine isn't running. Start it in Podman Desktop's Dashboard, then try again.");
+    assert.equal(failure(["ps"], stderr).message, "Start the Podman machine in Podman Desktop's Dashboard and try again");
   });
 
   it("passes any other error on as Podman gave it", () => {

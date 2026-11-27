@@ -24,8 +24,8 @@ describe("reading Tailscale's status", () => {
   });
 
   it("names any other state Tailscale reports, rather than guess what it means", () => {
-    assert.deepEqual(statusOf({ BackendState: "InUseOtherUser" }), { state: "failed", reason: "Tailscale reports InUseOtherUser." });
-    assert.deepEqual(statusOf({}), { state: "failed", reason: "Tailscale reports no state." });
+    assert.deepEqual(statusOf({ BackendState: "InUseOtherUser" }), { state: "failed", reason: "Tailscale reports InUseOtherUser" });
+    assert.deepEqual(statusOf({}), { state: "failed", reason: "Tailscale reports no state" });
   });
 });
 

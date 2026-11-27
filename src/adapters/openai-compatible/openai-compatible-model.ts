@@ -19,7 +19,7 @@ export interface ModelSettings {
 /** A provider turned a request down for want of a key, and none was given. */
 export class KeyNeeded extends Error {
   constructor() {
-    super("The provider needs an API key.");
+    super("The provider needs an API key");
   }
 }
 
@@ -41,8 +41,8 @@ export function openAiCompatibleModel({ baseUrl, apiKey, model }: ModelSettings)
         });
         return gather(stream, listener);
       });
-      if (finish === "length") throw new Error(`The model's reply was cut off at ${MAX_REPLY_TOKENS} tokens.`);
-      if (completion.text === "") throw new Error("The model sent an empty reply.");
+      if (finish === "length") throw new Error(`The model's reply was cut off at ${MAX_REPLY_TOKENS} tokens`);
+      if (completion.text === "") throw new Error("The model sent an empty reply");
       return completion;
     },
   };
@@ -114,11 +114,11 @@ async function plainly<T>({ baseUrl, apiKey, model }: { readonly baseUrl: string
   try {
     return await call();
   } catch (error) {
-    if (error instanceof OpenAI.AuthenticationError || error instanceof OpenAI.PermissionDeniedError) throw apiKey === undefined ? new KeyNeeded() : new Error("The provider refused the key.");
-    if (error instanceof OpenAI.APIConnectionError) throw new Error(`Mayfly cannot reach ${baseUrl}.`);
-    if (error instanceof OpenAI.NotFoundError && model !== undefined) throw new Error(`The provider has no model called ${model}.`);
-    if (error instanceof OpenAI.RateLimitError) throw new Error("The provider is limiting requests. Try again in a moment.");
-    if (error instanceof OpenAI.APIError) throw new Error(`The provider answered with an error (${error.status ?? "no status"}).`);
+    if (error instanceof OpenAI.AuthenticationError || error instanceof OpenAI.PermissionDeniedError) throw apiKey === undefined ? new KeyNeeded() : new Error("The provider refused the key");
+    if (error instanceof OpenAI.APIConnectionError) throw new Error(`Mayfly can't reach ${baseUrl}`);
+    if (error instanceof OpenAI.NotFoundError && model !== undefined) throw new Error(`The provider has no model called ${model}`);
+    if (error instanceof OpenAI.RateLimitError) throw new Error("The provider is limiting requests right now");
+    if (error instanceof OpenAI.APIError) throw new Error(`The provider answered with an error (${error.status ?? "no status"})`);
     throw error;
   }
 }

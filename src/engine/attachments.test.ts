@@ -19,7 +19,7 @@ describe("attachments", () => {
     assert.match(problemWithFiles(Array.from({ length: 5 }, (_, n) => file(`${n}.png`, "image/png"))) ?? "", /at most 4 files/);
     assert.match(problemWithFiles([file("big.png", "image/png", 5 * 1024 * 1024 + 1)]) ?? "", /big\.png is larger than 5 MB/);
     assert.match(problemWithFiles([file("big.csv", "", 100 * 1024 + 1)]) ?? "", /big\.csv is larger than 100 KB/);
-    assert.match(problemWithFiles([file("report.pdf", "application/pdf")]) ?? "", /Mayfly takes images .* and text files/);
+    assert.match(problemWithFiles([file("report.pdf", "application/pdf")]) ?? "", /Mayfly takes images and text files but not report\.pdf/);
   });
 
   it("takes only text files that are text", () => {

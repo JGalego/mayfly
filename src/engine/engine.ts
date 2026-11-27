@@ -20,26 +20,26 @@ const FIRST_PORT = 18100;
 const LOG_LINES = 1000;
 const CONTAINER = /^[a-z0-9-]+$/;
 // What Mayfly says when the model said nothing after the code.
-const MADE = "App deployed.";
-const CHANGED = "Update deployed.";
-const SAVED = "Saved. Trial passed. Deploy to run this version.";
+const MADE = "App deployed";
+const CHANGED = "Update deployed";
+const SAVED = "Saved and ready to deploy";
 // How many ports past a taken one sign-in tries before it gives up.
 const SIGN_IN_TRIES = 20;
 /** What to do before phone access can be turned on, for each way Tailscale isn't ready. */
 export function phoneNotReady(status: Exclude<PhoneNetworkStatus, { readonly state: "ready" }>): string {
   switch (status.state) {
     case "missing":
-      return "Install Tailscale from tailscale.com/download and sign in, then try again.";
+      return "Install Tailscale from tailscale.com/download and sign in";
     case "off":
-      return "Tailscale is off. Turn it on, then try again.";
+      return "Turn Tailscale on and try again";
     case "signed-out":
-      return "Sign in to Tailscale, then try again.";
+      return "Sign in to Tailscale and try again";
     case "no-https":
-      return "Your tailnet doesn't give this computer HTTPS certificates yet. In Tailscale's admin console, open DNS and choose Enable HTTPS, then try again.";
+      return "Choose Enable HTTPS under DNS in Tailscale's admin console and try again";
     case "other-user":
-      return `Tailscale is in use by another Windows user (${status.user}). Run Podman Desktop as that user, or sign Tailscale in as this one.`;
+      return `Run Podman Desktop as ${status.user} who runs Tailscale`;
     case "failed":
-      return `Mayfly couldn't tell how Tailscale is. ${status.reason}`;
+      return `Mayfly can't read Tailscale's status: ${status.reason}`;
   }
 }
 
@@ -244,7 +244,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
         // The version stays the one to run, so Start runs it, and Undo still goes back to the one before.
-        const text = [running.summary, `It passed its trial, but didn't start: ${reason} Choose Start to run it once that's fixed.`].filter(Boolean).join("\n\n");
+        const text = [running.summary, `It passed its trial but didn't start: ${reason}`].filter(Boolean).join("\n\n");
         const kept: App = { ...next, conversation: [...next.conversation.slice(0, -1), { ...reply, text, failed: true }] };
         await store.save(withApp(ready, kept));
         throw new RecordedFailure(reason, name, { cause: error });
@@ -306,7 +306,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       await runApps(moved);
       return moved;
     }
-    throw new Error(`Ports \`${taken}\` to \`${taken + SIGN_IN_TRIES}\` are all in use, so sign-in can't start. Free one of them, then try again.`);
+    throw new Error(`Free one of ports \`${taken}\` to \`${taken + SIGN_IN_TRIES}\` so sign-in can start`);
   }
 
   /** Runs sign-in and one app, and returns the state, which says where sign-in ended up. */
@@ -365,7 +365,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     const now = Date.now();
     const conversation: Turn[] = [
       { from: "person", text: `Use ${label} for this app`, at: now },
-      { from: "mayfly", text: `Model set to ${label}.`, versions: [], took: 0, at: now },
+      { from: "mayfly", text: `Model set to ${label}`, versions: [], took: 0, at: now },
     ];
     const next: App = { ...app, model, conversation: [...app.conversation, ...conversation] };
     await store.save(withApp(state, next));
@@ -433,7 +433,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     async fix(name, watch = UNWATCHED) {
       existingApp(await store.load(), name);
       const errors = errorsIn(await observer.logs(mayflyName(name), "app", LOG_LINES));
-      if (errors.length === 0) throw new Error(`\`${name}\` logged no errors to fix.`);
+      if (errors.length === 0) throw new Error(`\`${name}\` logged no errors to fix`);
       return engine.change(name, fixFor(errors), watch);
     },
 
@@ -441,13 +441,13 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       const app = existingApp(await store.load(), name);
       // Apps kept before the last request was remembered have their model's last version's.
       const request = app.lastRequest ?? app.versions.findLast((version) => version.by.kind === "model")?.request;
-      if (request === undefined) throw new Error(`\`${name}\` has no request to retry.`);
+      if (request === undefined) throw new Error(`\`${name}\` has no request to retry`);
       return engine.change(name, request, watch, await loaded(app.lastAttachments ?? []));
     },
 
     async undo(name, watch = UNWATCHED) {
       const { previous } = existingApp(await store.load(), name);
-      if (previous === undefined) throw new Error(`\`${name}\` has no previous deployment.`);
+      if (previous === undefined) throw new Error(`\`${name}\` has no previous deployment`);
       return engine.deploy(name, previous, watch);
     },
 
@@ -466,7 +466,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
         const state = withOwner(await store.load());
         const app = existingApp(state, name);
         const running = runningVersion(app);
-        if (running === undefined) throw new Error(`\`${name}\` has no deployed version to start.`);
+        if (running === undefined) throw new Error(`\`${name}\` has no deployed version to start`);
         // Built again, as when deploying, in case its image is gone; it passed its trial when it was made.
         watch({ kind: "building" });
         const image = await builder.build(name, running.routes);
@@ -508,7 +508,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
         const app = existingApp(state, name);
         const newName = usableName(state, name, to);
         // Names go in backticks, which shells show as names rather than words.
-        const note = `Renamed \`${name}\` to \`${newName}\`. The address is unchanged. Sign in again to use the app.`;
+        const note = `Renamed \`${name}\` to \`${newName}\` so sign in again to use it`;
         const conversation: Turn[] = [...app.conversation, { from: "person", text: `Rename to \`${newName}\``, at: started }, { from: "mayfly", text: note, versions: [], took: Date.now() - started, at: Date.now() }];
         const renamed: App = { ...app, name: newName, conversation };
         const next: State = {
@@ -647,11 +647,11 @@ export function createEngine({ store, deployer, observer, identity, models, buil
 
     async changeEmail(email) {
       const address = email.trim();
-      if (!EMAIL.test(address)) throw new Error("Enter a valid email address.");
+      if (!EMAIL.test(address)) throw new Error("Enter a valid email address");
       return updateOwner((owner, state) => {
         // Sign-in would hold two passwords for one email, and keep the person's.
         const person = findPerson(state, address);
-        if (person !== undefined) throw new Error(`\`${person.email}\` is someone you share apps with. Use another email.`);
+        if (person !== undefined) throw new Error(`\`${person.email}\` is someone you share apps with`);
         return { ...owner, email: address, username: address.split("@")[0] ?? address };
       });
     },
@@ -675,7 +675,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
 
     async person(email) {
       const person = findPerson(await store.load(), email);
-      if (person === undefined) throw new Error(`No one called \`${email}\` is here.`);
+      if (person === undefined) throw new Error(`No one called \`${email}\` is here`);
       return person;
     },
 
@@ -774,19 +774,19 @@ function runs({ containers }: ServiceHealth): boolean {
 
 /** A name another app does not have, and that the contract allows. */
 function usableName(state: State, name: string, to: string): string {
-  if (to === name) throw new Error(`\`${name}\` is already called that.`);
-  if (findApp(state, to) !== undefined) throw new Error(`There is already an app called \`${to}\`.`);
-  if (to === SIGN_IN) throw new Error(`\`${to}\` is the name of Mayfly's sign-in. Choose another.`);
+  if (to === name) throw new Error(`\`${name}\` is already called that`);
+  if (findApp(state, to) !== undefined) throw new Error(`There is already an app called \`${to}\``);
+  if (to === SIGN_IN) throw new Error(`\`${to}\` is the name of Mayfly's sign-in`);
   try {
     return parseAppName(to);
   } catch {
-    throw new Error(`\`${to}\` can't be an app's name: use lowercase letters, digits and inner hyphens, at most 40 characters.`);
+    throw new Error(`\`${to}\` can't be an app's name: use up to 40 lowercase letters or digits with hyphens between them`);
   }
 }
 
 function existingApp(state: State, name: string): App {
   const app = findApp(state, name);
-  if (app === undefined) throw new Error(`No app is called \`${name}\`.`);
+  if (app === undefined) throw new Error(`No app is called \`${name}\``);
   return app;
 }
 
@@ -821,9 +821,9 @@ function replyFor(app: App, versions: readonly Version[], runs: boolean): string
   const last = versions.at(-1);
   if (last?.problem === null && !runs) return SAVED;
   if (last?.problem === null) return last.summary || (app.head === null ? MADE : CHANGED);
-  const unchanged = app.head === null ? "" : " Previous deployment unchanged.";
-  const failed = versions.length === 1 ? "Trial failed." : `All ${versions.length} attempts failed.`;
-  return `${failed}${unchanged} ${versions.length === 1 ? "Error" : "Last error"}:\n\n${last?.problem ?? ""}`;
+  const unchanged = app.head === null ? "" : " so the running version stays";
+  const failed = versions.length === 1 ? "The trial failed" : `All ${versions.length} attempts failed`;
+  return `${failed}${unchanged}:\n\n${last?.problem ?? ""}`;
 }
 
 /** Enters the calls in the ledger, and counts what each spent against the total and its app. */
