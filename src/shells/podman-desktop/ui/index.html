@@ -156,12 +156,12 @@
               <h2>Setup checks</h2>
               <button id="run-doctor" class="quiet-button" type="button">Check again</button>
             </div>
-            <p class="hint">What Mayfly needs to make and run apps.</p>
+            <p class="hint">Checks whether Podman, the app runtime and sign-in are ready.</p>
             <ul id="doctor" class="checks"></ul>
           </section>
           <section>
             <h2>App credentials</h2>
-            <p class="hint">Every app's sign-in page asks for this email and password.</p>
+            <p class="hint">All apps use this email and password.</p>
             <form id="owner-form" class="sign-in-row">
               <input id="owner-email" type="email" required autocomplete="off" aria-label="Email">
               <button class="quiet-button" type="submit">Save</button>
@@ -182,15 +182,15 @@
           <section>
             <h2>Advanced</h2>
             <label class="check"><input id="developer" type="checkbox" aria-describedby="developer-hint"> Enable developer mode</label>
-            <p id="developer-hint" class="hint">Adds each app's code, history and logs, and the Logs and Usage tabs here.</p>
+            <p id="developer-hint" class="hint">Shows app code, version history and logs, plus health and model usage in Settings.</p>
             <label class="check"><input id="autostart" type="checkbox" aria-describedby="autostart-hint"> Start stopped apps automatically</label>
-            <p id="autostart-hint" class="hint">When Podman Desktop starts, Mayfly starts the apps Podman isn't running.</p>
+            <p id="autostart-hint" class="hint">Starts stopped apps when Podman Desktop opens and Podman is ready.</p>
           </section>
         </div>
         <div id="settings-models-tab" class="settings-page" role="tabpanel" aria-labelledby="settings-tab-models">
           <section>
-            <p class="hint">The default model writes new apps. Switch an app's model with <code>/model</code>.</p>
-            <p class="hint">What you ask, what you attach and your apps' code go to the model's provider.</p>
+            <p class="hint">New apps use the default model unless you choose another.</p>
+            <p class="hint">Requests and attachments go to the selected provider. When you ask about or change an app, its code goes too.</p>
             <ul id="model-list" class="model-list"></ul>
             <button id="add-model" class="quiet-button add-model" type="button">+ Add a model</button>
             <form id="model-form" hidden>
@@ -206,7 +206,7 @@
               <p id="model-name-hint" class="hint">The model's name, as the provider lists it.</p>
               <label for="api-key">API key</label>
               <input id="api-key" type="password" autocomplete="off" aria-describedby="api-key-hint">
-              <p id="api-key-hint" class="hint">Kept in Podman Desktop's secret storage, and sent only to this provider.</p>
+              <p id="api-key-hint" class="hint">Stored in Podman Desktop's secret storage and sent only to the saved API endpoint.</p>
               <div class="editor-actions">
                 <button id="cancel-model" class="quiet-button" type="button">Cancel</button>
                 <button class="primary" type="submit">Save</button>
@@ -220,14 +220,14 @@
               <h2>Health</h2>
               <button id="refresh-health" class="quiet-button" type="button">Refresh</button>
             </div>
-            <p class="hint">How each app and the sign-in service are doing, as Podman sees them.</p>
+            <p class="hint">Podman's container status for apps and the sign-in service.</p>
             <ul id="health" class="health-list"></ul>
           </section>
           <div id="settings-logs"></div>
         </div>
         <div id="settings-usage-tab" class="settings-page" role="tabpanel" aria-labelledby="settings-tab-usage">
           <section>
-            <p class="hint">Every call to a model, by app: when it was, what it cost and whether its code passed.</p>
+            <p class="hint">Token counts and trial results, grouped by app, model or provider.</p>
             <div id="ledger"></div>
           </section>
         </div>

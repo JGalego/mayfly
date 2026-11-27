@@ -761,10 +761,10 @@ function renderPhoneSetting({ phoneHost }: State): void {
   if (!phoneSwitching) box.checked = phoneHost !== null;
   box.disabled = phoneSwitching;
   element("phone-note").textContent = phoneSwitching
-    ? `Turning ${box.checked ? "on" : "off"}: each app restarts…`
+    ? `Turning ${box.checked ? "on" : "off"} phone access…`
     : phoneHost !== null
-      ? `Your phone opens apps at ${phoneHost}, with Tailscale on.`
-      : "Uses Tailscale. Makes this computer's Tailscale name public.";
+      ? `Apps are available at ${phoneHost} on your Tailscale network. Turning this off restarts deployed apps.`
+      : "Tailscale HTTPS puts this device's name in public certificate logs, but apps stay on your Tailscale network. Turning this on restarts deployed apps.";
 }
 
 /** The app's address on the phone, as a QR code to scan and as text, while phone access is on. */
