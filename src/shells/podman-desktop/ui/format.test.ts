@@ -8,7 +8,7 @@ describe("counts and tokens", () => {
   });
 
   it("say tokens in, out and thinking, leaving out thinking when there was none", () => {
-    assert.equal(tokens({ input: 900, output: 1_100, thinking: 2_900 }), "900 tokens in, 1.1K out, 2.9K thinking");
-    assert.equal(tokens({ input: 21_000, output: 3_400, thinking: 0 }), "21K tokens in, 3.4K out");
+    assert.equal(tokens({ input: 900, output: 1_100, thinking: 2_900 }), "900 tokens in · 1.1K out · 2.9K thinking");
+    assert.equal(tokens({ input: 21_000, output: 3_400, thinking: 0 }), "21K tokens in · 3.4K out");
   });
 });

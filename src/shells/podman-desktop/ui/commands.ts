@@ -15,7 +15,7 @@ export const COMMANDS: readonly Command[] = [
   { name: "retry", says: "Retry the last request", needsApp: true },
   { name: "undo", says: "Redeploy the previous version", needsApp: true },
   { name: "start", says: "Start the stopped app", needsApp: true },
-  { name: "model", says: "Switch models", takes: "provider · model", needsApp: false },
+  { name: "model", says: "Switch models", takes: "a model", needsApp: false },
   { name: "rename", says: "Rename and redeploy the app", takes: "a new name", needsApp: true },
   { name: "remove", says: "Delete the app and its history", needsApp: true },
 ];

@@ -95,7 +95,7 @@ function ledgerBody(every: readonly ModelCall[], context: Context, span: Span, f
   const calls = filtered(every, filter);
   const since = span.periods === "all" ? 0 : from.getTime();
   const inSpan = calls.filter((call) => call.at >= since);
-  if (inSpan.length === 0) return [h("p", "quiet", "No model calls match these filters.")];
+  if (inSpan.length === 0) return [h("p", "quiet", "No model calls match these filters")];
   const periods = periodsOf(calls, span.grain, from, now);
   const unfiltered = Object.values(filter).every((value) => value === "");
   // What the ledger has no record of belongs to no app, model or provider it can name.
@@ -120,7 +120,7 @@ function tokens(periods: readonly Period[], grain: Grain, calls: readonly ModelC
 function attempts(periods: readonly Period[], grain: Grain, calls: readonly ModelCall[]): Node[] {
   const { passed, failed } = tallyOf(calls);
   const known = passed + failed;
-  if (known === 0) return [h("p", "quiet", "No recorded trial results.")];
+  if (known === 0) return [h("p", "quiet", "No recorded trial results")];
   // Answers to questions wrote no code, so they have no outcome to miss.
   const unknown = calls.filter((call) => call.passed === undefined && call.question !== true).length;
   const notes = [`${Math.round((passed / known) * 100)}% passed`, ...(unknown === 0 ? [] : [`${unknown.toLocaleString()} more with no known outcome`])];

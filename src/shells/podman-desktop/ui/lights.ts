@@ -21,7 +21,7 @@ export function lightFor(app: AppView, health: readonly ServiceHealth[] | undefi
   const containers = health.find((service) => service.kind === "app" && service.name === app.name)?.containers ?? [];
   if (containers.length === 0) return { colour: "red", meaning: "Not running" };
   if (containers.some((container) => container.state !== "running")) return { colour: "red", meaning: "Stopped" };
-  if (containers.some((container) => container.health === "unhealthy")) return { colour: "unhealthy", meaning: "Running, but failing health checks" };
+  if (containers.some((container) => container.health === "unhealthy")) return { colour: "unhealthy", meaning: "Running but failing health checks" };
   if (containers.some((container) => container.health === "starting")) return { colour: "starting", meaning: "Starting: waiting for health checks" };
   const restarts = containers.reduce((sum, container) => sum + container.restarts, 0);
   if (restarts > 0) return { colour: "yellow", meaning: `Running after ${restarts} ${restarts === 1 ? "restart" : "restarts"}` };

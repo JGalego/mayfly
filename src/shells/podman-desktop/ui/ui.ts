@@ -362,7 +362,7 @@ function send(): void {
   const text = request.value.trim();
   if (text === "" || view.kind === "settings") return;
   const typed = parse(text);
-  if (typed.kind === "unknown") return showError(`Unknown command: /${typed.name}. Type / to list commands.`);
+  if (typed.kind === "unknown") return showError(`There's no /${typed.name} command`);
   if (typed.kind === "command") return runCommand(typed.command, typed.argument);
   if (state === undefined || state.working !== null) return;
   const files = attached.take();
@@ -445,7 +445,7 @@ function renderCode(app: AppView, showing: Showing): void {
   const base = startingPoint(app);
   const code = base === undefined ? undefined : showing.code(app.name, base.id);
   element<HTMLButtonElement>("edit-code").disabled = code === undefined || state?.working !== null;
-  element("code-caption").textContent = base === undefined ? "No code yet." : `routes.ts · version ${base.id}${base.id === app.head ? ", running" : ", latest attempt"} · by ${base.by.name}`;
+  element("code-caption").textContent = base === undefined ? "No code yet" : `routes.ts · version ${base.id} · ${base.id === app.head ? "running" : "latest attempt"} · by ${base.by.name}`;
   const key = `${app.name}:${base?.id ?? ""}:${code === undefined ? "" : "loaded"}`;
   if (key === codeShown) return;
   codeShown = key;
@@ -456,9 +456,9 @@ function renderCode(app: AppView, showing: Showing): void {
 function renderEditor(app: AppView, from: string): void {
   const version = app.versions.find((kept) => kept.id === from);
   const saving = state?.working?.kind === "save" && state.working.app === app.name;
-  const status = version === undefined ? "" : version.id === app.head ? "running now" : version.problem === null ? "passed, not running" : "failed";
-  element("editor-base").textContent = `routes.ts · version ${from}${status === "" ? "" : `, ${status}`}`;
-  const problem = !saving && version?.problem != null ? [h("p", "", `Version ${from} failed testing. Fix the error and save again.`), h("pre", "problem", version.problem)] : [];
+  const status = version === undefined ? "" : version.id === app.head ? "running now" : version.problem === null ? "passed but not running" : "failed";
+  element("editor-base").textContent = `routes.ts · version ${from}${status === "" ? "" : ` · ${status}`}`;
+  const problem = !saving && version?.problem != null ? [h("p", "", `Fix the error in version ${from} and save again`), h("pre", "problem", version.problem)] : [];
   element("editor-status").replaceChildren(...(saving ? [h("p", "", spinner(), " Building and trying it…")] : problem));
   element("editor-status").hidden = !saving && problem.length === 0;
   element<HTMLTextAreaElement>("code-text").readOnly = saving;
@@ -552,8 +552,7 @@ function renderDeployDialog(): void {
   deploying.shown = key;
   element("deploy-title").replaceChildren("Deploy version ", versionChip(deploying.version), " of ", nameChip(app.name), "?");
   element<HTMLButtonElement>("confirm-deploy").disabled = !ready;
-  const replaces = app.head === null ? ["No version is running."] : ["Replaces version ", versionChip(app.head), " at the same address."];
-  element("deploy-note").replaceChildren(...replaces, " It passed its trial when it was made.");
+  element("deploy-note").replaceChildren(...(app.head === null ? ["It passed its trial"] : ["It passed its trial and replaces version ", versionChip(app.head)]));
   if (!ready) return void element("deploy-changes").replaceChildren(h("p", "quiet", "Loading code…"));
   const { view, added, removed } = changes(before, after);
   element("deploy-changes").replaceChildren(h("p", "diff-file", icon("file"), "routes.ts", h("span", "diff-added", `+${added}`), h("span", "diff-removed", `−${removed}`)), view);
@@ -583,8 +582,8 @@ function openApp(): void {
 
 /** Does what a command says, or says what it is missing. What follows the command stays in the composer until it is done. */
 function runCommand(command: Command, argument: string): void {
-  if (command.needsApp && view.kind !== "app") return showError(`/${command.name} works in an app's conversation.`);
-  if (command.takes !== undefined && argument === "") return showError(`Type ${command.takes} after /${command.name}.`);
+  if (command.needsApp && view.kind !== "app") return showError(`/${command.name} works in an app's conversation`);
+  if (command.takes !== undefined && argument === "") return showError(`Type ${command.takes} after /${command.name}`);
   if (command.name === "model") return useModelNamed(argument);
   if (command.name === "remove") {
     request.value = "";
@@ -641,7 +640,7 @@ function startWork(message: Extract<FromUi, { readonly app: string }>, typed = "
 
 function useModelNamed(label: string): void {
   const model = state?.models.find((known) => known.label.toLowerCase() === label.toLowerCase());
-  if (model === undefined) return showError(`Unknown model: ${label}. Type /model to list models.`);
+  if (model === undefined) return showError(`There's no model called ${label}`);
   request.value = "";
   composerModel.value = model.id;
   pickModel();
@@ -760,8 +759,8 @@ function renderPhoneSetting({ phoneHost }: State): void {
   element("phone-note").textContent = phoneSwitching
     ? `Turning ${box.checked ? "on" : "off"} phone access…`
     : phoneHost !== null
-      ? `Apps are available at ${phoneHost} on your Tailscale network. Turning this off restarts deployed apps.`
-      : "Tailscale HTTPS puts this device's name in public certificate logs, but apps stay on your Tailscale network. Turning this on restarts deployed apps.";
+      ? `Apps open at ${phoneHost} on your tailnet and turning this off restarts them`
+      : "Tailscale lists this computer's name in public certificate logs but the apps stay on your tailnet";
 }
 
 /** The app's address on the phone, as a QR code to scan and as text, while phone access is on. */
@@ -860,7 +859,7 @@ function renderChat(state: State, app: AppView | undefined): void {
   // A nudge, not a gate: OpenAI always wants a key, while a compatible endpoint, like a local model, may need none.
   const model = activeModel(state, app);
   element("key-hint").hidden = app !== undefined || model?.provider !== "openai" || model.hasApiKey;
-  element("key-hint-text").textContent = `${model?.label ?? "This model"} needs an API key.`;
+  element("key-hint-text").textContent = `${model?.label ?? "This model"} needs an API key`;
   const showing = showingFor(state);
   const said = app?.conversation ?? [];
   // The turns are built again only when what they show changes: not on each step of the work, which only the last turns show.
@@ -888,7 +887,7 @@ function renderChat(state: State, app: AppView | undefined): void {
   if (tab === "code" && app !== undefined) renderCode(app, showing);
   if (following && tab === "chat") scrollToEnd(thread);
   for (const live of document.querySelectorAll<HTMLElement>(".live")) scrollToEnd(live);
-  request.placeholder = app === undefined ? "Describe the app you need" : "Ask for a change, or type / for commands";
+  request.placeholder = app === undefined ? "Describe the app you need" : "Ask for a change or type / for commands";
   request.disabled = removing;
   element<HTMLButtonElement>("send").disabled = state.working !== null;
   composerModel.replaceChildren(...state.models.map((model) => new Option(model.label, model.id)));
