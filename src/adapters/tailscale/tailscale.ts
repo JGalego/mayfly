@@ -30,7 +30,8 @@ export function tailscaleNetwork(cli = findTailscale()): PhoneNetwork {
 /** Whether the phone can reach the computer, from what Tailscale reports. */
 export function statusOf({ BackendState, Self, CertDomains }: TailscaleStatus): PhoneNetworkStatus {
   if (BackendState === "NeedsLogin" || BackendState === "NeedsMachineAuth") return { state: "signed-out" };
-  if (BackendState !== "Running") return { state: "off" };
+  if (BackendState === "Stopped") return { state: "off" };
+  if (BackendState !== "Running") return { state: "failed", reason: `Tailscale reports ${BackendState ?? "no state"}.` };
   const host = (Self?.DNSName ?? "").replace(/\.$/, "");
   return host !== "" && (CertDomains ?? []).includes(host) ? { state: "ready", host } : { state: "no-https" };
 }
@@ -52,8 +53,15 @@ function isExecutable(path: string): boolean {
 async function status(cli: string): Promise<PhoneNetworkStatus> {
   const result = await run(cli, ["status", "--json"]);
   if (result === "missing") return { state: "missing" };
-  // The CLI fails when Tailscale itself isn't running. Warnings, such as a version mismatch, go to stderr.
-  return result.code === 0 ? statusOf(JSON.parse(result.stdout) as TailscaleStatus) : { state: "off" };
+  // Whatever stopped the CLI, such as Tailscale itself not running, is said in its own words.
+  if (result.code === null) return { state: "failed", reason: `Tailscale didn't answer within ${TIMEOUT_MS / 1000} seconds.` };
+  if (result.code !== 0) return { state: "failed", reason: said(result).trim() || `Tailscale's CLI ended with code ${result.code}.` };
+  try {
+    // Warnings, such as a version mismatch, go to stderr, so stdout is the JSON alone.
+    return statusOf(JSON.parse(result.stdout) as TailscaleStatus);
+  } catch {
+    return { state: "failed", reason: `Tailscale's status wasn't JSON: ${result.stdout.slice(0, 200)}` };
+  }
 }
 
 async function serve(cli: string, port: number, to: number): Promise<void> {

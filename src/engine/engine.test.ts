@@ -484,6 +484,12 @@ describe("phone access", () => {
     assert.deepEqual(served, new Map());
   });
 
+  it("passes on what Tailscale said when Mayfly can't tell how it is", async () => {
+    const { engine } = setUp([], [], undefined, { state: "failed", reason: "Access denied." });
+
+    await assert.rejects(engine.turnOnPhone(), /Tailscale.*Access denied\./);
+  });
+
   it("turns on by serving sign-in and each running app's phone door, and running the apps with it", async () => {
     const { engine, served, deployed, synced } = setUp([reply("lunch"), reply("notes"), reply("notes"), reply("notes")], [{ ok: true }, crashed, crashed, crashed]);
     await engine.create("split lunch bills");

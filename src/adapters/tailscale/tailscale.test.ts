@@ -19,8 +19,12 @@ describe("reading Tailscale's status", () => {
     assert.deepEqual(statusOf({ BackendState: "NeedsMachineAuth" }), { state: "signed-out" });
   });
 
-  it("is off in any other state", () => {
+  it("is off when Tailscale is stopped", () => {
     assert.deepEqual(statusOf({ BackendState: "Stopped" }), { state: "off" });
-    assert.deepEqual(statusOf({}), { state: "off" });
+  });
+
+  it("names any other state Tailscale reports, rather than guess what it means", () => {
+    assert.deepEqual(statusOf({ BackendState: "InUseOtherUser" }), { state: "failed", reason: "Tailscale reports InUseOtherUser." });
+    assert.deepEqual(statusOf({}), { state: "failed", reason: "Tailscale reports no state." });
   });
 });

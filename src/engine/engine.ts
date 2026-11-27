@@ -24,12 +24,20 @@ const MADE = "App deployed.";
 const CHANGED = "Update deployed.";
 const SAVED = "Saved. Trial passed. Deploy to run this version.";
 /** What to do before phone access can be turned on, for each way Tailscale isn't ready. */
-export const PHONE_NOT_READY: Record<Exclude<PhoneNetworkStatus["state"], "ready">, string> = {
-  missing: "Install Tailscale from tailscale.com/download and sign in, then try again.",
-  off: "Tailscale is off. Turn it on, then try again.",
-  "signed-out": "Sign in to Tailscale, then try again.",
-  "no-https": "Your tailnet doesn't give this computer HTTPS certificates yet. In Tailscale's admin console, open DNS and choose Enable HTTPS, then try again.",
-};
+export function phoneNotReady(status: Exclude<PhoneNetworkStatus, { readonly state: "ready" }>): string {
+  switch (status.state) {
+    case "missing":
+      return "Install Tailscale from tailscale.com/download and sign in, then try again.";
+    case "off":
+      return "Tailscale is off. Turn it on, then try again.";
+    case "signed-out":
+      return "Sign in to Tailscale, then try again.";
+    case "no-https":
+      return "Your tailnet doesn't give this computer HTTPS certificates yet. In Tailscale's admin console, open DNS and choose Enable HTTPS, then try again.";
+    case "failed":
+      return `Mayfly couldn't tell how Tailscale is. ${status.reason}`;
+  }
+}
 
 /** Work that failed, and that the app's conversation already says failed and why. */
 export class RecordedFailure extends Error {}
@@ -449,7 +457,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
 
     async turnOnPhone() {
       const network = await phoneNetwork.status();
-      if (network.state !== "ready") throw new Error(PHONE_NOT_READY[network.state]);
+      if (network.state !== "ready") throw new Error(phoneNotReady(network));
       const next = { ...(await store.load()), phoneHost: network.host };
       // Saved first: if serving fails partway, it's on, and turning it off or on again puts everything right.
       await store.save(next);

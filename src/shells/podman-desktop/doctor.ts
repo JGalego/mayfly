@@ -1,4 +1,4 @@
-import { PHONE_NOT_READY } from "../../engine/engine.ts";
+import { phoneNotReady } from "../../engine/engine.ts";
 import type { PhoneNetworkStatus } from "../../engine/ports.ts";
 
 /** One thing Mayfly needs, whether it has it, and what to do when it does not. */
@@ -79,7 +79,7 @@ async function checkSignIn({ signIn }: DoctorPorts): Promise<Check> {
 async function checkPhone(host: string, { phoneNetwork }: DoctorPorts): Promise<Check> {
   const name = "Phone access";
   const network = await phoneNetwork();
-  if (network.state !== "ready") return { name, status: "fail", detail: PHONE_NOT_READY[network.state] };
+  if (network.state !== "ready") return { name, status: "fail", detail: phoneNotReady(network) };
   if (network.host !== host) return { name, status: "warn", detail: `Tailscale now calls this computer ${network.host}. Turn phone access off and on again to use that name.` };
   return { name, status: "pass", detail: `Your phone opens apps at ${host}.` };
 }

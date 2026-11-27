@@ -94,7 +94,9 @@ export type Trial = { readonly ok: true } | { readonly ok: false; readonly probl
 /** Whether the phone can reach this computer: its name on the private network, or what stands in the way. */
 export type PhoneNetworkStatus =
   | { readonly state: "ready"; readonly host: string }
-  | { readonly state: "missing" | "off" | "signed-out" | "no-https" };
+  | { readonly state: "missing" | "off" | "signed-out" | "no-https" }
+  /** Mayfly couldn't tell how it is, and the reason is what the network said. */
+  | { readonly state: "failed"; readonly reason: string };
 
 /** The private network the phone reaches apps through. It serves HTTPS on the computer's name there. */
 export interface PhoneNetwork {
