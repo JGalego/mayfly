@@ -162,6 +162,18 @@
       <div id="settings-body">
         <div id="settings-general-tab" class="settings-page" role="tabpanel" aria-labelledby="settings-tab-general">
           <section>
+            <h2>Phone</h2>
+            <label class="check"><input id="phone-access" type="checkbox" aria-describedby="phone-note"> Open apps from my phone</label>
+            <p id="phone-note" class="hint"></p>
+          </section>
+          <section>
+            <h2>Advanced</h2>
+            <label class="check"><input id="developer" type="checkbox" aria-describedby="developer-hint"> Enable developer mode</label>
+            <p id="developer-hint" class="hint">Shows app code, version history and logs, plus health and model usage in Settings.</p>
+            <label class="check"><input id="autostart" type="checkbox" aria-describedby="autostart-hint"> Start stopped apps automatically</label>
+            <p id="autostart-hint" class="hint">Starts stopped apps when Podman Desktop opens and Podman is ready.</p>
+          </section>
+          <section>
             <div class="section-head">
               <h2>Setup checks</h2>
               <button id="run-doctor" class="quiet-button" type="button">Check again</button>
@@ -169,9 +181,11 @@
             <p class="hint">Checks whether Podman, the app runtime and sign-in are ready.</p>
             <ul id="doctor" class="checks"></ul>
           </section>
+        </div>
+        <div id="settings-people-tab" class="settings-page" role="tabpanel" aria-labelledby="settings-tab-people">
           <section>
             <h2>App credentials</h2>
-            <p class="hint">All apps use this email and password.</p>
+            <p class="hint">You sign in to every app with this email and password.</p>
             <form id="owner-form" class="sign-in-row">
               <input id="owner-email" type="email" required autocomplete="off" aria-label="Email">
               <button class="quiet-button" type="submit">Save</button>
@@ -185,21 +199,8 @@
             <div class="password-shown" data-password-shown hidden></div>
           </section>
           <section>
-            <h2>Phone</h2>
-            <label class="check"><input id="phone-access" type="checkbox" aria-describedby="phone-note"> Open apps from my phone</label>
-            <p id="phone-note" class="hint"></p>
-          </section>
-          <section>
-            <h2>Advanced</h2>
-            <label class="check"><input id="developer" type="checkbox" aria-describedby="developer-hint"> Enable developer mode</label>
-            <p id="developer-hint" class="hint">Shows app code, version history and logs, plus health and model usage in Settings.</p>
-            <label class="check"><input id="autostart" type="checkbox" aria-describedby="autostart-hint"> Start stopped apps automatically</label>
-            <p id="autostart-hint" class="hint">Starts stopped apps when Podman Desktop opens and Podman is ready.</p>
-          </section>
-        </div>
-        <div id="settings-people-tab" class="settings-page" role="tabpanel" aria-labelledby="settings-tab-people">
-          <section>
-            <p class="hint">Share apps with other people. Each signs in with their own email and password.</p>
+            <h2>Other people</h2>
+            <p class="hint">Share apps with them. Each signs in with their own email and password.</p>
             <p id="people-phone-note" class="hint" hidden>They open apps through Tailscale, as your phone does. Turn on phone access in General first.</p>
             <ul id="people" class="model-list" hidden></ul>
             <form id="person-form" class="sign-in-row">
