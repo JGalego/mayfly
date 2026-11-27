@@ -4,6 +4,7 @@ import { RecordedFailure, type AppView, type Engine } from "../../engine/engine.
 import type { ModelCall } from "../../engine/state.ts";
 import type { Step, Watcher } from "../../engine/step.ts";
 import { createController } from "./controller.ts";
+import type { MailAccount, Outgoing } from "./mail-account.ts";
 import type { ToUi } from "./messages.ts";
 import type { Models, ModelSetting } from "./settings.ts";
 
@@ -47,6 +48,7 @@ describe("the Mayfly panel's controller", () => {
       developer: false,
       autostart: false,
       phoneHost: null,
+      mail: null,
     });
   });
 
@@ -552,7 +554,98 @@ describe("the Mayfly panel's controller", () => {
 
     assert.ok(calls.includes("share lunch-split ana@example.com true"));
     assert.ok(posted.some((message) => message.type === "offer-email" && message.about === "shared"));
-    assert.match(decodeURIComponent(opened.at(-1) ?? ""), /You can now open lunch-split, an app I made with Mayfly: https:\/\/mayfly\.tail1a2b\.ts\.net:38100\//);
+    assert.match(decodeURIComponent(opened.at(-1) ?? ""), /You can now open lunch-split, an app I made with Mayfly:\s+https:\/\/mayfly\.tail1a2b\.ts\.net:38100\//);
+  });
+
+  it("sets up the account Mayfly sends email from once it signs in to the server with it, and never shows the password again", async () => {
+    const { handle, posted, mail } = setUp({ apps: [lunch] });
+
+    await handle({ type: "save-mail", account: { host: " SMTP.example.com ", port: 465, username: " me@example.com ", from: "" }, password: "app password" });
+
+    const account = { host: "smtp.example.com", port: 465, username: "me@example.com", password: "app password", from: "me@example.com" };
+    assert.deepEqual(mail.verified, [account]);
+    assert.deepEqual(mail.account(), account);
+    assert.deepEqual(posted.at(-2), { type: "notice", text: "Mayfly sends email from `me@example.com` now." });
+    assert.deepEqual(stateOf(posted.at(-1))?.mail, { host: "smtp.example.com", port: 465, username: "me@example.com", from: "me@example.com" });
+    assert.ok(!JSON.stringify(posted).includes("app password"));
+  });
+
+  it("keeps an account only once the server lets Mayfly sign in, and says why it didn't", async () => {
+    const { handle, posted, mail } = setUp({ apps: [lunch], signInFails: "Invalid login: 535 5.7.8 Authentication credentials invalid" });
+
+    await handle({ type: "save-mail", account: { host: "smtp.example.com", port: 587, username: "me", from: "me@example.com" }, password: "wrong" });
+
+    assert.equal(mail.account(), undefined);
+    assert.deepEqual(posted.at(-1), { type: "error", text: "Mayfly couldn't sign in to `smtp.example.com`: Invalid login: 535 5.7.8 Authentication credentials invalid" });
+  });
+
+  it("refuses an account it can't use before trying the server", async () => {
+    const { handle, posted, mail } = setUp({ apps: [lunch] });
+    const fine = { host: "smtp.example.com", port: 465, username: "me@example.com", from: "" };
+
+    await handle({ type: "save-mail", account: { ...fine, host: "smtp://smtp.example.com" }, password: "p" });
+    await handle({ type: "save-mail", account: { ...fine, port: 0 }, password: "p" });
+    await handle({ type: "save-mail", account: { ...fine, username: " " }, password: "p" });
+    await handle({ type: "save-mail", account: { ...fine, from: "me" }, password: "p" });
+    await handle({ type: "save-mail", account: fine, password: "" });
+
+    assert.deepEqual(mail.verified, []);
+    assert.deepEqual(
+      posted.map((m) => m.type),
+      ["error", "error", "error", "error", "error"],
+    );
+  });
+
+  it("keeps the saved password for the same server and username, and never sends it to another", async () => {
+    const { handle, posted, mail } = setUp({ apps: [lunch] });
+    const account = { host: "smtp.example.com", port: 465, username: "me@example.com", from: "" };
+    await handle({ type: "save-mail", account, password: "app password" });
+
+    await handle({ type: "save-mail", account: { ...account, from: "me+apps@example.com" }, password: "" });
+    await handle({ type: "save-mail", account: { ...account, host: "smtp.elsewhere.test" }, password: "" });
+
+    assert.deepEqual(mail.account(), { ...account, password: "app password", from: "me+apps@example.com" });
+    assert.deepEqual(mail.verified.map((tried) => tried.host), ["smtp.example.com", "smtp.example.com"]);
+    assert.equal(posted.at(-1)?.type, "error");
+  });
+
+  it("sends the email itself from the owner's account, as HTML with a plain-text copy, once one is set up", async () => {
+    const { handle, posted, opened, mail } = setUp({ apps: [lunch] });
+    await handle({ type: "save-mail", account: { host: "smtp.example.com", port: 465, username: "me@example.com", from: "" }, password: "app password" });
+    await handle({ type: "add-person", email: "ana@example.com" });
+
+    await handle({ type: "email", about: "welcome", email: "ana@example.com" });
+
+    assert.deepEqual(opened, []);
+    const [message] = mail.sent;
+    assert.partialDeepStrictEqual(message, { from: "me@example.com", to: "ana@example.com", subject: "Your sign-in for my Mayfly apps" });
+    assert.match(message?.text ?? "", /Password: ana-six-word-pass/);
+    assert.match(message?.html ?? "", />ana-six-word-pass</);
+    assert.deepEqual(posted.at(-1), { type: "notice", text: "Sent to `ana@example.com`." });
+  });
+
+  it("says why an email didn't go", async () => {
+    const { handle, posted, opened } = setUp({ apps: [lunch], sendFails: "Connection timeout" });
+    await handle({ type: "save-mail", account: { host: "smtp.example.com", port: 465, username: "me@example.com", from: "" }, password: "app password" });
+    await handle({ type: "add-person", email: "ana@example.com" });
+
+    await handle({ type: "email", about: "welcome", email: "ana@example.com" });
+
+    assert.deepEqual(opened, []);
+    assert.deepEqual(posted.at(-2), { type: "error", text: "Couldn't send the email to `ana@example.com`: Connection timeout" });
+  });
+
+  it("forgets the account, and drafts emails in the mail app again", async () => {
+    const { handle, posted, opened, mail } = setUp({ apps: [lunch] });
+    await handle({ type: "save-mail", account: { host: "smtp.example.com", port: 465, username: "me@example.com", from: "" }, password: "app password" });
+    await handle({ type: "add-person", email: "ana@example.com" });
+
+    await handle({ type: "remove-mail" });
+    await handle({ type: "email", about: "welcome", email: "ana@example.com" });
+
+    assert.equal(mail.account(), undefined);
+    assert.equal(stateOf(posted.findLast((m) => m.type === "state"))?.mail, null);
+    assert.match(opened[0] ?? "", /^mailto:ana@example\.com\?/);
   });
 
   it("won't share an app while phone access is off, since no one else could reach it", async () => {
@@ -596,10 +689,17 @@ interface Options {
   stopped?: string[];
   /** Why turning phone access on fails, if it does. */
   phoneFails?: string;
+  /** Why the mail server won't let Mayfly sign in, if it won't. */
+  signInFails?: string;
+  /** Why an email doesn't go, if it doesn't. */
+  sendFails?: string;
 }
 
-function setUp({ apps, created: made = lunch, steps = [], developer: developing = false, keyFor = [OPENAI_ENDPOINT], createFails, changeFails, waitForCreate = false, stopped: stoppedApps = [], phoneFails }: Options) {
+function setUp({ apps, created: made = lunch, steps = [], developer: developing = false, keyFor = [OPENAI_ENDPOINT], createFails, changeFails, waitForCreate = false, stopped: stoppedApps = [], phoneFails, signInFails, sendFails }: Options) {
   let phoneHost: string | null = null;
+  let account: MailAccount | undefined;
+  const verified: MailAccount[] = [];
+  const sent: Outgoing[] = [];
   const people = new Map<string, string>();
   const posted: ToUi[] = [];
   const notes: { text: string; failed: boolean; seen: boolean }[] = [];
@@ -722,6 +822,20 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
       has: async (endpoint) => keys.has(endpoint),
       save: async (endpoint, key) => void (savedKeys.push([endpoint, key]), keys.add(endpoint)),
     },
+    mail: {
+      account: async () => account,
+      save: async (next) => void (account = next),
+      remove: async () => void (account = undefined),
+      verify: async (tried) => {
+        verified.push(tried);
+        if (signInFails !== undefined) throw new Error(signInFails);
+      },
+      send: async (_from, message) => {
+        if (sendFails !== undefined) throw new Error(sendFails);
+        sent.push(message);
+      },
+    },
   });
-  return { handle, posted, opened, copied, calls, savedKeys, models: () => models, finish, notes };
+  const mail = { account: () => account, verified, sent };
+  return { handle, posted, opened, copied, calls, savedKeys, models: () => models, finish, notes, mail };
 }

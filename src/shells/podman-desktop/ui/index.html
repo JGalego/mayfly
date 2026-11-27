@@ -209,6 +209,32 @@
             <p class="hint">Mayfly makes them a password, and offers to email it to them.</p>
           </section>
           <section>
+            <h2>Email</h2>
+            <p class="hint">Mayfly sends sign-ins and links from your mail account. Without one, it drafts each email in your mail app for you to send.</p>
+            <ul id="mail-account" class="model-list" hidden></ul>
+            <button id="add-mail" class="quiet-button add-model" type="button">+ Add a mail account</button>
+            <form id="mail-form" class="settings-form" hidden>
+              <h3 id="mail-form-title">Add a mail account</h3>
+              <label for="mail-host">SMTP server</label>
+              <input id="mail-host" type="text" required autocomplete="off" spellcheck="false" placeholder="smtp.gmail.com">
+              <label for="mail-port">Port</label>
+              <input id="mail-port" type="number" required min="1" max="65535" aria-describedby="mail-port-hint">
+              <p id="mail-port-hint" class="hint">Usually 465, or 587. Mayfly always encrypts the connection and checks the server's certificate.</p>
+              <label for="mail-username">Username</label>
+              <input id="mail-username" type="text" required autocomplete="off" spellcheck="false" placeholder="you@gmail.com">
+              <label for="mail-password">Password</label>
+              <input id="mail-password" type="password" autocomplete="off" aria-describedby="mail-password-hint">
+              <p id="mail-password-hint" class="hint">An app password, where your provider offers them. Stored in Podman Desktop's secret storage and sent only to this server.</p>
+              <label for="mail-from">From</label>
+              <input id="mail-from" type="email" autocomplete="off" spellcheck="false" placeholder="Same as the username" aria-describedby="mail-from-hint">
+              <p id="mail-from-hint" class="hint">The address people see the email come from.</p>
+              <div class="editor-actions">
+                <button id="cancel-mail" class="quiet-button" type="button">Cancel</button>
+                <button id="save-mail" class="primary" type="submit">Save</button>
+              </div>
+            </form>
+          </section>
+          <section>
             <h2>Tailscale</h2>
             <p class="hint">To reach your apps, each person needs this computer shared with them in Tailscale.</p>
             <button id="share-tailscale" class="quiet-button" type="button" data-icon-after="external">Share this computer in Tailscale</button>
@@ -220,7 +246,7 @@
             <p class="hint">Requests and attachments go to the selected provider. When you ask about or change an app, its code goes too.</p>
             <ul id="model-list" class="model-list"></ul>
             <button id="add-model" class="quiet-button add-model" type="button">+ Add a model</button>
-            <form id="model-form" hidden>
+            <form id="model-form" class="settings-form" hidden>
               <h3 id="model-form-title">Add a model</h3>
               <label for="provider">Provider</label>
               <select id="provider" aria-describedby="provider-hint"></select>
@@ -284,7 +310,7 @@
         <p id="email-text"></p>
         <div class="editor-actions">
           <button value="skip" class="quiet-button">Not now</button>
-          <button value="email" class="primary" data-icon="mail" autofocus>Email them</button>
+          <button id="email-go" value="email" class="primary with-icon" autofocus></button>
         </div>
       </form>
     </dialog>

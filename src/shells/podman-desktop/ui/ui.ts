@@ -27,6 +27,7 @@ import { openForm, renderModels, savedModel, setUpModels } from "./models.ts";
 import { popover } from "./popover.ts";
 import { passwordCard, PASSWORD_SHOWN_MS } from "./password-card.ts";
 import { offerEmail, renderPeople, renderShare, settleSharing, setUpPeople, showPersonPassword } from "./people.ts";
+import { renderMail, savedMail, setUpMail } from "./mail.ts";
 import { qrCode } from "./qr.ts";
 import { onPhone } from "../../../core/phone.ts";
 import { makingOf, progressView, tickClocks, whatChanged, type Showing } from "./progress.ts";
@@ -129,6 +130,7 @@ popover(element("show-sign-in"), element("sign-in-popover"));
 popover(element("show-phone"), element("phone-popover"));
 popover(element("show-share"), element("share-popover"));
 setUpPeople(post, () => render(), () => go({ kind: "settings", tab: "people" }));
+setUpMail(post, () => render());
 // In a narrow window the sidebar is a drawer: the menu button opens it, and Esc, a click elsewhere or going anywhere closes it.
 element("show-sidebar").addEventListener("click", () => showSidebar(!document.body.classList.contains("sidebar-open")));
 document.addEventListener("keydown", (event) => event.key === "Escape" && showSidebar(false));
@@ -268,6 +270,7 @@ function receive(message: ToUi): void {
   switch (message.type) {
     case "state": {
       const saved = savedModel(true);
+      savedMail(true);
       receiveState(message);
       // The model saved just now may have a new key, so the doctor tries it again.
       if (saved) askDoctor();
@@ -308,11 +311,12 @@ function receive(message: ToUi): void {
     case "notice":
       return showBanner(message.text, "notice");
     case "offer-email":
-      return offerEmail(message);
+      return offerEmail(message, state?.mail?.from ?? null);
     case "password":
       return message.email === undefined ? showPassword(message.password) : showPersonPassword(message.email, message.password);
     case "error":
       savedModel(false);
+      savedMail(false);
       return showError(message.text, message.recorded === true);
   }
 }
@@ -782,7 +786,8 @@ function renderSettings(current: State, wanted: SettingsTab): void {
     element(`settings-${name}-tab`).hidden = tab !== name;
   }
   renderModels(current, examination?.models, post, () => render());
-  renderPeople(current.people, current.phoneHost !== null);
+  renderPeople(current.people, current.phoneHost !== null, current.mail?.from ?? null);
+  renderMail(current.mail, post, () => render());
   element("doctor").replaceChildren(...doctorView(examination?.ready));
   element("health").replaceChildren(...healthView(health));
   ledger.show(calls, { spent: current.spent, apps: current.apps.map((app) => app.name) });

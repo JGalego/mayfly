@@ -39,6 +39,7 @@ def link(label: str = "", **style: str) -> Edge:
 with Diagram("", filename=str(HERE / "architecture"), outformat="png", show=False, direction="LR", graph_attr=GRAPH, node_attr=NODE, edge_attr=EDGE):
     phone = Mobile(label("Your phone", "and people you share with"))
     model = Custom(label("Model provider", "OpenAI-compatible"), logo("openai"))
+    mail = Custom(label("Your mail server", "if you add one"), logo("mail"))
 
     with Cluster("Your computer", graph_attr=BOX):
         browser = Client(label("Your browser"))
@@ -60,6 +61,7 @@ with Diagram("", filename=str(HERE / "architecture"), outformat="png", show=Fals
                 sessions = Custom(label("Sessions", "on a volume"), logo("sqlite"))
 
     mayfly >> link("what you ask,\nthe app's code") >> model
+    mayfly >> link("sign-ins and links,\nover TLS") >> mail
     mayfly >> link("routes.ts") >> podman
     browser >> link("127.0.0.1") >> doors
     phone >> link("tailnet", **TAILNET) >> serve >> link(**TAILNET) >> doors

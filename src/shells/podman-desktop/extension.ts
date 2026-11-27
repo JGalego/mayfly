@@ -7,12 +7,15 @@ import { jsonFileStore } from "../../adapters/json-file/json-file-store.ts";
 import { fileStore } from "../../adapters/files/file-store.ts";
 import { KeyNeeded, listModels, openAiCompatibleModel } from "../../adapters/openai-compatible/openai-compatible-model.ts";
 import { podmanBuilder } from "../../adapters/podman/podman-builder.ts";
+import { send, verify } from "../../adapters/smtp/smtp.ts";
 import { imageExists, podmanDeployer, podmanObserver, versions } from "../../adapters/podman/podman.ts";
 import { tailscaleNetwork } from "../../adapters/tailscale/tailscale.ts";
 import { createEngine, type Engine } from "../../engine/engine.ts";
 import type { ModelProvider, PhoneNetwork } from "../../engine/ports.ts";
 import { createController, type ControllerPorts } from "./controller.ts";
 import { examine, type ModelProbe } from "./doctor.ts";
+import type { MailAccount } from "./mail-account.ts";
+import { LOGO } from "./mail-html.ts";
 import type { ModelPorts } from "./model-settings.ts";
 import { endpointOf, FIRST_MODELS, isProvider, labelOf, modelFor, providerOf, type Models, type ModelSetting } from "./settings.ts";
 
@@ -71,6 +74,7 @@ async function openPanel(context: api.ExtensionContext, engine: Engine, keys: Ke
   panel.iconPath = api.Uri.joinPath(media, "logo.svg");
   context.subscriptions.push(panel);
   panel.webview.html = await pageFor(panel.webview, media);
+  const logo = await readFile(api.Uri.joinPath(context.extensionUri, "icon.png").fsPath);
   const handle = createController({
     engine,
     post: (message) => panel.webview.postMessage(message),
@@ -98,6 +102,7 @@ async function openPanel(context: api.ExtensionContext, engine: Engine, keys: Ke
       saveAutostart: (on) => settings().update("autostart", on),
     },
     keys,
+    mail: mailAccount(context.secrets, logo),
   });
   context.subscriptions.push(panel.webview.onDidReceiveMessage(handle));
   return { panel, handle };
@@ -142,6 +147,22 @@ function configuredModel(setting: ModelSetting, keys: KeyStore): ModelProvider {
         throw error;
       }
     },
+  };
+}
+
+const MAIL_ACCOUNT = "mayfly.mail";
+
+// The account is kept whole in secret storage, so its password stays with the server it was given for.
+function mailAccount(secrets: api.SecretStorage, logo: Uint8Array): ControllerPorts["mail"] {
+  return {
+    account: async () => {
+      const saved = await secrets.get(MAIL_ACCOUNT);
+      return saved === undefined ? undefined : (JSON.parse(saved) as MailAccount);
+    },
+    save: (account) => secrets.store(MAIL_ACCOUNT, JSON.stringify(account)),
+    remove: () => secrets.delete(MAIL_ACCOUNT),
+    verify,
+    send: (account, message) => send(account, { ...message, images: [{ ...LOGO, content: logo }] }),
   };
 }
 

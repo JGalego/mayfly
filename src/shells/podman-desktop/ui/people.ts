@@ -14,6 +14,8 @@ const TAILSCALE_MACHINES = "https://login.tailscale.com/admin/machines";
 
 let post: Post = () => {};
 let redraw = (): void => {};
+/** The address Mayfly sends email from, as the People section last showed it. */
+let sender: string | null = null;
 /** Someone's password on show, and what hides it again. */
 let shown: { readonly email: string; readonly password: string; readonly timer: number } | undefined;
 /** Someone's new password or removal, waiting for its second click. */
@@ -36,16 +38,13 @@ export function setUpPeople(send: Post, rerender: () => void, openPeople: () => 
   element("share-people-settings").addEventListener("click", openPeople);
 }
 
-/** Asks whether to email someone about what just changed for them, and drafts it in the owner's mail app if so. */
-export function offerEmail(mail: MailAbout): void {
+/** Asks whether to email someone about what just changed for them, and if so, sends it or drafts it in the owner's mail app. */
+export function offerEmail(mail: MailAbout, from: string | null): void {
   const dialog = element<HTMLDialogElement>("email-dialog");
   const titles = { welcome: "their sign-in", "new-password": "their new password", shared: "the link" };
   element("email-title").replaceChildren("Email ", nameChip(mail.email), ` ${titles[mail.about]}?`);
-  element("email-text").replaceChildren(
-    ...(mail.about === "shared"
-      ? ["Mayfly drafts an email in your mail app with the link to ", nameChip(mail.app), ", for you to send."]
-      : ["Mayfly drafts an email in your mail app with their password, for you to send."]),
-  );
+  element("email-text").replaceChildren(...emailText(mail, from));
+  element("email-go").replaceChildren(icon("mail"), from === null ? "Draft email" : "Send");
   dialog.returnValue = "";
   dialog.addEventListener("close", () => dialog.returnValue === "email" && post({ ...mail, type: "email" }), { once: true });
   dialog.showModal();
@@ -63,7 +62,8 @@ export function showPersonPassword(email: string, password: string): void {
 }
 
 /** Everyone the owner can share apps with. Who opens what lives with each app, in its Share popover. */
-export function renderPeople(people: readonly string[], phoneOn: boolean): void {
+export function renderPeople(people: readonly string[], phoneOn: boolean, from: string | null): void {
+  sender = from;
   element("people-phone-note").hidden = phoneOn;
   const input = element<HTMLInputElement>("person-email");
   // Added: the field is free for the next one.
@@ -98,6 +98,12 @@ export function renderShare(app: AppView | undefined, people: readonly string[],
   element("share-people-settings").hidden = people.length > 0 && phoneOn;
 }
 
+function emailText(mail: MailAbout, from: string | null): (Node | string)[] {
+  const what = mail.about === "shared" ? ["the link to ", nameChip(mail.app)] : ["their password"];
+  if (from !== null) return ["Mayfly emails them ", ...what, " from ", nameChip(from), "."];
+  return ["Mayfly drafts an email in your mail app with ", ...what, ", for you to send. To have Mayfly send it, add a mail account in Settings → People."];
+}
+
 function shareNote(anyone: boolean, phoneOn: boolean, busy: boolean): string {
   if (busy) return "Restarting the app with the new access…";
   if (!anyone) return "Add people in Settings to share this app.";
@@ -123,7 +129,7 @@ function personCard(email: string): HTMLElement {
     action(showing === undefined ? "eye" : "eye-off", showing === undefined ? "Show" : "Hide", `${showing === undefined ? "Show" : "Hide"} ${email}'s password`, () =>
       showing === undefined ? post({ type: "show-password", email }) : hidePassword(),
     ),
-    action("mail", "Email again", `Draft an email to ${email} with their password`, () => post({ type: "email", about: "welcome", email })),
+    action("mail", "Email again", `Email ${email} their password again`, () => offerEmail({ about: "welcome", email }, sender)),
     confirming(email, "reset", "Reset password", "Confirm reset", () => post({ type: "new-password", email })),
     confirming(email, "remove", "Remove", "Confirm removal", () => post({ type: "remove-person", email })),
   );

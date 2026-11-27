@@ -4,6 +4,7 @@ import { problemWithFiles, type FileData } from "../../engine/attachments.ts";
 import { onPhone } from "../../core/phone.ts";
 import type { Examination } from "./doctor.ts";
 import { mailto, newPasswordMail, sharedMail, welcomeMail, type Mail } from "./invitations.ts";
+import { mailAccountView, outgoing, readMailAccount, saveMailAccount, type MailAccountView, type MailPorts } from "./mail-account.ts";
 import type { Activity, FromUi, MailAbout, Progress, ToUi, Upload, Work } from "./messages.ts";
 import { makeDefault, modelViews, readModel, removeModel, saveModel } from "./model-settings.ts";
 import type { Models, ModelSetting } from "./settings.ts";
@@ -40,6 +41,7 @@ export interface ControllerPorts {
   readonly doctor: () => Promise<Examination>;
   /** API keys, each kept for the endpoint it was given for. */
   readonly keys: { has(endpoint: string): Promise<boolean>; save(endpoint: string, key: string): Promise<void> };
+  readonly mail: MailPorts["mail"];
 }
 
 // One request at a time: each one reads and writes the whole state.
@@ -105,6 +107,12 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       return removePerson(request.email, session);
     case "email":
       return email(request, session);
+    case "save-mail":
+      return saveMail(request.account, request.password, session);
+    case "remove-mail":
+      await session.mail.remove();
+      await session.post({ type: "notice", text: "Mayfly drafts emails in your mail app again." });
+      return showState(session);
     case "share":
       return share(request.app, request.email, request.shared, session);
     case "developer":
@@ -405,9 +413,24 @@ async function share(app: string, email: string, shared: boolean, session: Sessi
   if (shared) await session.post({ type: "offer-email", about: "shared", email, app });
 }
 
-/** Opens an email in the owner's mail app, for them to send. Mayfly sends nothing itself. */
+/** Sends the email from the owner's mail account, or without one, opens it in their mail app for them to send. */
 async function email(about: MailAbout, session: Session): Promise<void> {
-  await session.openExternal(mailto(await mailFor(about, session)));
+  const mail = await mailFor(about, session);
+  const account = await session.mail.account();
+  if (account === undefined) return void (await session.openExternal(mailto(mail)));
+  await session.mail.send(account, outgoing(mail, account)).catch((error: unknown) => {
+    throw new Error(`Couldn't send the email to \`${mail.to}\`: ${error instanceof Error ? error.message : String(error)}`);
+  });
+  note(session, "info", `Emailed ${mail.to}`);
+  await session.post({ type: "notice", text: `Sent to \`${mail.to}\`.` });
+}
+
+async function saveMail(account: MailAccountView, password: string, session: Session): Promise<void> {
+  const problem = await saveMailAccount(account, password, session);
+  if (problem !== undefined) return void (await session.post({ type: "error", text: problem }));
+  const saved = await mailAccountView(session);
+  await session.post({ type: "notice", text: `Mayfly sends email from \`${saved?.from}\` now.` });
+  await showState(session);
 }
 
 async function mailFor(about: MailAbout, session: Session): Promise<Mail> {
@@ -434,13 +457,14 @@ async function showState(session: Session): Promise<void> {
     developer: session.settings.developer(),
     autostart: session.settings.autostart(),
     phoneHost: await session.engine.phoneAccess(),
+    mail: await mailAccountView(session),
   });
 }
 
 // Messages come from the page, so each is checked for its shape before anything acts on it.
 function readRequest(message: unknown): FromUi | undefined {
   if (typeof message !== "object" || message === null) return undefined;
-  const { type, app, request, question, name, apiKey, on, version, what, from, routes, message: words, model, id, pod, container, starred, email, url, files, shared, about } = message as Record<string, unknown>;
+  const { type, app, request, question, name, apiKey, on, version, what, from, routes, message: words, model, id, pod, container, starred, email, url, files, shared, about, account, password } = message as Record<string, unknown>;
   switch (type) {
     case "new-password":
     case "show-password":
@@ -455,6 +479,12 @@ function readRequest(message: unknown): FromUi | undefined {
       return about === "shared" && typeof app === "string" ? { type, about, email, app } : undefined;
     case "share":
       return typeof app === "string" && typeof email === "string" && typeof shared === "boolean" ? { type, app, email, shared } : undefined;
+    case "save-mail": {
+      const view = readMailAccount(account);
+      return view !== undefined && typeof password === "string" ? { type, account: view, password } : undefined;
+    }
+    case "remove-mail":
+      return { type };
     case "ready":
     case "health":
     case "ledger":

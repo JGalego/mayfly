@@ -1545,7 +1545,7 @@ pre.problem {
 }
 
 .settings-page section,
-#model-form {
+.settings-form {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
@@ -1579,7 +1579,7 @@ pre.problem {
   accent-color: var(--accent);
 }
 
-#model-form label {
+.settings-form label {
   margin-top: 0.75rem;
   font-weight: 600;
 }
@@ -1650,14 +1650,14 @@ pre.problem {
   background: var(--accent);
 }
 
-#model-form {
+.settings-form {
   margin-top: 0.5rem;
   padding: 1rem;
   border: 1px solid var(--line);
   border-radius: 10px;
 }
 
-#model-form h3 {
+.settings-form h3 {
   margin: 0;
   font-size: 0.95rem;
 }

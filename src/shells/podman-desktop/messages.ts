@@ -3,6 +3,7 @@ import type { ModelCall } from "../../engine/state.ts";
 import type { Step } from "../../engine/step.ts";
 import type { Usage } from "../../engine/usage.ts";
 import type { Examination } from "./doctor.ts";
+import type { MailAccountView } from "./mail-account.ts";
 import type { ModelSetting } from "./settings.ts";
 
 /** A model as the page shows it: its settings, its name, and whether its key is saved. Never the key. */
@@ -41,7 +42,7 @@ export interface Activity {
   readonly text: string;
 }
 
-/** An email Mayfly can draft for the owner to send: a welcome or a new password, with the password, or a shared app's link. */
+/** An email Mayfly can send or draft for the owner: a welcome or a new password, with the password, or a shared app's link. */
 export type MailAbout = { readonly about: "welcome" | "new-password"; readonly email: string } | { readonly about: "shared"; readonly email: string; readonly app: string };
 
 /** What the page asks the extension to do. */
@@ -65,8 +66,11 @@ export type FromUi =
   | { readonly type: "new-password"; readonly email?: string }
   | { readonly type: "add-person"; readonly email: string }
   | { readonly type: "remove-person"; readonly email: string }
-  /** Drafts an email in the owner's mail app, for them to send. */
+  /** Sends an email from the owner's mail account, or without one, drafts it in their mail app for them to send. */
   | ({ readonly type: "email" } & MailAbout)
+  /** The account Mayfly sends email from. A blank password keeps the saved one, for the same server and username. */
+  | { readonly type: "save-mail"; readonly account: MailAccountView; readonly password: string }
+  | { readonly type: "remove-mail" }
   /** Lets someone open an app, or no longer. */
   | { readonly type: "share"; readonly app: string; readonly email: string; readonly shared: boolean }
   | { readonly type: "developer"; readonly on: boolean }
@@ -110,6 +114,8 @@ export type ToUi =
       readonly autostart: boolean;
       /** The computer's name the phone opens apps on, or null while phone access is off. */
       readonly phoneHost: string | null;
+      /** The account Mayfly sends email from, or null while it drafts emails in the owner's mail app. */
+      readonly mail: MailAccountView | null;
     }
   | { readonly type: "progress"; readonly working: Progress }
   | { readonly type: "created"; readonly name: string }
