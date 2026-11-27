@@ -169,8 +169,6 @@ Each app runs as one pod: oauth2-proxy in front, on 127.0.0.1, and the app behin
 
 ![Mayfly on your computer: Podman Desktop, Podman, the app pods, Dex and Tailscale Serve](docs/architecture/architecture.png)
 
-Drawn from [`architecture.py`](docs/architecture/architecture.py) with `pixi run diagram`.
-
 ## Offerings
 
 💻 **Individual** (being built). Runs on your own machine with Podman. Later you'll be able to deploy the same image and manifests to your own cloud.
