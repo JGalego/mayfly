@@ -172,7 +172,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     const nextState = charge(withApp(state, next), calls);
     if (running !== undefined) {
       watch({ kind: "deploying" });
-      await identity.sync(nextState);
+      await syncSignIn(nextState);
       await deployer.deploy(appObjects(next, running.image, identity.settingsFor(next)));
     }
     await store.save(nextState);
@@ -183,9 +183,14 @@ export function createEngine({ store, deployer, observer, identity, models, buil
   async function updateOwner(change: (owner: Owner) => Owner): Promise<Owner> {
     const state = withOwner(await store.load());
     const next = { ...state, owner: change(state.owner) };
-    if (next.apps.some((app) => app.head !== null)) await identity.sync(next);
+    if (anyRunning(next)) await identity.sync(next);
     await store.save(next);
     return next.owner;
+  }
+
+  /** Sign-in is there for the apps: it runs while any does, and goes with the last. */
+  async function syncSignIn(state: State): Promise<void> {
+    await (anyRunning(state) ? identity.sync(state) : identity.stop());
   }
 
   const engine: Engine = {
@@ -249,7 +254,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
         watch({ kind: "building" });
         const image = await builder.build(name, running.routes);
         watch({ kind: "deploying" });
-        await identity.sync(state);
+        await syncSignIn(state);
         await deployer.deploy(appObjects(app, image, identity.settingsFor(app)));
         return appView(app);
       });
@@ -299,9 +304,10 @@ export function createEngine({ store, deployer, observer, identity, models, buil
           const image = await builder.build(newName, running.routes);
           watch({ kind: "deploying" });
           await deployer.remove(appObjects(app, running.image, identity.settingsFor(app)));
-          await identity.sync(next);
+          await syncSignIn(next);
           await deployer.deploy(appObjects(renamed, image, identity.settingsFor(renamed)));
-        } else await identity.sync(next);
+        } else await syncSignIn(next);
+        await builder.forget(name);
         await store.save(next);
         return appView(renamed);
       });
@@ -362,7 +368,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
         const next: App = { ...app, ...(app.head === null || app.head === id ? {} : { previous: app.head }), head: id, conversation: [...app.conversation, ...conversation] };
         const nextState = withApp(state, next);
         watch({ kind: "deploying" });
-        await identity.sync(nextState);
+        await syncSignIn(nextState);
         await deployer.deploy(appObjects(next, image, identity.settingsFor(next)));
         await store.save(nextState);
         return appView(next);
@@ -391,8 +397,9 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       const app = existingApp(state, name);
       const running = runningVersion(app);
       if (running !== undefined) await deployer.remove(appObjects(app, running.image, identity.settingsFor(app)));
+      await builder.forget(name);
       const next = withoutApp(state, name);
-      await identity.sync(next);
+      await syncSignIn(next);
       await store.save(next);
     },
 
@@ -426,7 +433,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       const running = (await store.load()).apps.filter((app) => app.head !== null);
       const services: Omit<ServiceHealth, "containers">[] = [
         ...running.map((app) => ({ name: app.name, kind: "app" as const, pod: mayflyName(app.name) })),
-        { name: "Sign-in", kind: "sign-in", pod: identity.pod },
+        ...(running.length > 0 ? [{ name: "Sign-in", kind: "sign-in" as const, pod: identity.pod }] : []),
       ];
       const pods = await observer.health(services.map((service) => service.pod));
       return services.map((service) => ({ ...service, containers: pods.find((pod) => pod.pod === service.pod)?.containers ?? [] }));
@@ -439,6 +446,11 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     },
   };
   return engine;
+}
+
+/** Whether any app has a version deployed. */
+function anyRunning(state: State): boolean {
+  return state.apps.some((app) => app.head !== null);
 }
 
 /** A generation, and the calls to the model it took. */

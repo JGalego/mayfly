@@ -183,6 +183,7 @@ function fakes(replies: string[], trials: Trial[]) {
       return `image-${built.length}`;
     },
     trial: async () => trials.shift() ?? { ok: false, problem: "no more trials" },
+    forget: async () => {},
   };
   return { model, builder, conversations, built };
 }

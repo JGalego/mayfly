@@ -24,11 +24,15 @@ Mayfly is a preview. Expect rough edges, and please report them in [issues](http
 
 The model writes only the app's routes, in one TypeScript file. Mayfly supplies sign-in, health checks, logs and the container settings, the same for every app. Before deploying a version, Mayfly builds it and tries it with no network and no privileges, and sends any failure back to the model.
 
-Each app runs as one pod: oauth2-proxy in front, on `127.0.0.1` only, and the app behind it. Sign-in comes from a local Dex, also on `127.0.0.1`, port 5556.
+Each app runs as one pod: oauth2-proxy in front, on `127.0.0.1` only, and the app behind it. Sign-in comes from a local Dex, also on `127.0.0.1`, port 5556, which runs while any app does.
 
 ## What leaves your machine
 
 Your requests, their attachments and your apps' code go to the model provider you choose, with your key, which Podman Desktop stores. Apart from pulling its images from ghcr.io and quay.io, Mayfly contacts nothing else and collects no telemetry.
+
+## Remove it
+
+`/remove` each app, which takes its pod and images with it, and then uninstall Mayfly. Sign-in and Mayfly's Podman network go with the last app. The runtime, Dex and oauth2-proxy images stay under **Images** until you remove them.
 
 ## More
 

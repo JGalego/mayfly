@@ -201,7 +201,7 @@ describe("the engine", () => {
   });
 
   it("renames an app, running it again under the new name at the same address, with its ledger", async () => {
-    const { engine, deployed, removed } = setUp([reply("lunch")]);
+    const { engine, deployed, removed, forgotten } = setUp([reply("lunch")]);
     const before = await engine.create("split lunch bills");
 
     const after = await engine.rename("lunch", "bills");
@@ -210,6 +210,7 @@ describe("the engine", () => {
     assert.deepEqual((await engine.list()).map((app) => app.name), ["bills"]);
     assert.deepEqual(names(removed.at(-1)), names(deployed.at(-2)));
     assert.ok(names(deployed.at(-1)).every((name) => name.includes("mayfly-bills")));
+    assert.deepEqual(forgotten, ["lunch"]);
     assert.deepEqual((await engine.ledger()).map((call) => call.app), ["bills"]);
     assert.deepEqual(after.conversation.slice(-2).map((turn) => turn.text.split(".")[0]), ["Rename to `bills`", "Renamed `lunch` to `bills`"]);
     assert.match(after.conversation.at(-1)?.text ?? "", /Sign in again/);
@@ -399,19 +400,32 @@ describe("the engine", () => {
     );
   });
 
-  it("stops, unregisters and forgets an app it removes", async () => {
-    const { engine, deployed, removed, synced } = setUp([reply("lunch"), reply("notes")]);
+  it("stops, unregisters and forgets an app it removes, images and all", async () => {
+    const { engine, deployed, removed, synced, forgotten, log } = setUp([reply("lunch"), reply("notes")]);
     await engine.create("split lunch bills");
     await engine.create("keep notes");
 
     await engine.remove("lunch");
 
     assert.deepEqual(names(removed[0]), names(deployed[0]));
+    assert.deepEqual(forgotten, ["lunch"]);
     assert.deepEqual(synced.at(-1)?.apps.map((app) => app.name), ["notes"]);
+    assert.ok(!log.includes("stop"));
     assert.deepEqual(
       (await engine.list()).map((app) => app.name),
       ["notes"],
     );
+  });
+
+  it("stops the sign-in service with the last running app, and stops reporting on it", async () => {
+    const { engine, log } = setUp([reply("lunch"), reply("notes"), reply("notes"), reply("notes")], [{ ok: true }, crashed, crashed, crashed]);
+    await engine.create("split lunch bills");
+    await engine.create("keep notes");
+
+    await engine.remove("lunch");
+
+    assert.equal(log.at(-1), "stop");
+    assert.deepEqual(await engine.health(), []);
   });
 
   it("refuses to remove an app it does not know", async () => {
@@ -463,6 +477,8 @@ function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: st
   const deployed: (readonly KubeObject[])[] = [];
   const removed: (readonly KubeObject[])[] = [];
   const synced: State[] = [];
+  /** Apps whose images were removed, by name. */
+  const forgotten: string[] = [];
   let state: State = EMPTY_STATE;
   const store: StateStore = {
     load: async () => state,
@@ -475,6 +491,7 @@ function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: st
   const identity: IdentitySource = {
     pod: "mayfly-dex",
     sync: async (next) => void (log.push("sync"), synced.push(next)),
+    stop: async () => void log.push("stop"),
     settingsFor: () => ({ OAUTH2_PROXY_CLIENT_ID: "fake" }),
   };
   const models = (id: string | null): ModelProvider => ({
@@ -491,6 +508,7 @@ function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: st
   const builder: Builder = {
     build: async (name) => `localhost/mayfly-app-${name}:${++builds}`,
     trial: async () => trials.shift() ?? { ok: true },
+    forget: async (name) => void forgotten.push(name),
   };
   const observer: Observer = {
     logs: async (pod, container) => (logged.length > 0 ? logged : [`2026-11-26T15:04:05Z ${pod} ${container}`]),
@@ -507,7 +525,7 @@ function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: st
     get: async (id) => kept.get(id) ?? Promise.reject(new Error(`no file ${id}`)),
   };
   const engine = createEngine({ store, deployer, observer, identity, models, builder, files });
-  return { engine, deployed, removed, synced, log, asked, logged, kept };
+  return { engine, deployed, removed, synced, forgotten, log, asked, logged, kept };
 }
 
 function names(objects: readonly KubeObject[] | undefined): string[] {

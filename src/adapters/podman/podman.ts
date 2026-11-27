@@ -63,9 +63,11 @@ export async function play(objects: readonly KubeObject[]): Promise<void> {
   await podman(["kube", "play", "--replace", "--network", NETWORK, "-"], toKubeYaml(objects));
 }
 
-/** Stops and removes the objects' pods and secrets. */
+/** Stops and removes the objects' pods and secrets, and Mayfly's network once nothing is left on it. */
 export async function down(objects: readonly KubeObject[]): Promise<void> {
   await podman(["kube", "down", "-"], toKubeYaml(objects));
+  // Podman refuses while any pod still uses the network, which is what it should do.
+  await run(["network", "rm", NETWORK]);
 }
 
 async function ensureNetwork(): Promise<void> {

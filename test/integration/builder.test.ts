@@ -1,5 +1,6 @@
 import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { podmanBuilder } from "../../src/adapters/podman/podman-builder.ts";
 import type { Trial } from "../../src/engine/ports.ts";
 import { removeImages, RUNTIME_IMAGE } from "./support.ts";
@@ -38,7 +39,24 @@ describe("the Podman builder", () => {
 
     assert.equal(await builder.build("same", routes), first);
   });
+
+  it("forgets every image of an app, and only that app's", async () => {
+    const kept = await builder.build("forgotten-not", 'export default 1;\n');
+    built.push(kept);
+    await builder.build("forgotten", 'export default 1;\n');
+    await builder.build("forgotten", 'export default 2;\n');
+
+    await builder.forget("forgotten");
+
+    assert.deepEqual(imagesOf("forgotten"), []);
+    assert.deepEqual(imagesOf("forgotten-not"), [kept]);
+  });
 });
+
+function imagesOf(app: string): string[] {
+  const listed = execFileSync("podman", ["images", "--filter", `reference=localhost/mayfly-app-${app}`, "--format", "{{.Repository}}:{{.Tag}}"], { encoding: "utf8" });
+  return listed.split("\n").filter(Boolean);
+}
 
 async function buildAndTry(name: string, routes: string): Promise<Trial> {
   const image = await builder.build(name, routes);

@@ -27,12 +27,17 @@ const TRIAL_USER = { "x-forwarded-user": "trial", "x-forwarded-email": "trial@ma
 
 /** Builds app images on the runtime image and tries them out, on local Podman. */
 export function podmanBuilder(runtimeImage: string): Builder {
-  return { build: (name, routes) => build(runtimeImage, name, routes), trial };
+  return { build: (name, routes) => build(runtimeImage, name, routes), trial, forget };
+}
+
+/** Where an app's images go, one tag per version's code. */
+function repository(name: string): string {
+  return `localhost/mayfly-app-${name}`;
 }
 
 async function build(runtimeImage: string, name: string, routes: string): Promise<string> {
   // Tagged by its code, so the same routes always give the same image.
-  const image = `localhost/mayfly-app-${name}:${createHash("sha256").update(routes).digest("hex").slice(0, 12)}`;
+  const image = `${repository(name)}:${createHash("sha256").update(routes).digest("hex").slice(0, 12)}`;
   const context = await mkdtemp(join(tmpdir(), "mayfly-build-"));
   try {
     await writeFile(join(context, "Containerfile"), `FROM ${runtimeImage}\nCOPY routes.ts /app/routes.ts\n`);
@@ -44,6 +49,14 @@ async function build(runtimeImage: string, name: string, routes: string): Promis
   } finally {
     await rm(context, { recursive: true, force: true });
   }
+}
+
+async function forget(name: string): Promise<void> {
+  const listed = await podman(["images", "--filter", `reference=${repository(name)}`, "--format", "{{.Repository}}:{{.Tag}}"]);
+  // Another app built from the same code shares the image, and the listing gives its names too: those stay.
+  const images = listed.split("\n").filter((image) => image.startsWith(`${repository(name)}:`));
+  // An image Podman will not remove, say one a container still uses, is left: it costs little, and it stops nothing.
+  if (images.length > 0) await run(["rmi", ...images]);
 }
 
 async function trial(image: string): Promise<Trial> {

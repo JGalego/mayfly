@@ -50,6 +50,8 @@ export interface IdentitySource {
   readonly pod: string;
   /** Brings the identity provider in line with the owner and apps in the state. */
   sync(state: State): Promise<void>;
+  /** Stops and removes the identity provider. */
+  stop(): Promise<void>;
   /** The proxy settings an app uses to sign people in. */
   settingsFor(app: App): IdpSettings;
 }
@@ -92,6 +94,8 @@ export interface Builder {
   build(name: string, routes: string): Promise<string>;
   /** Runs the image briefly, cut off from the network, and visits it as a signed-in person would. */
   trial(image: string): Promise<Trial>;
+  /** Removes every image built for an app. Any version can be built again from its code. */
+  forget(name: string): Promise<void>;
 }
 
 export interface Ports {

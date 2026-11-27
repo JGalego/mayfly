@@ -1,5 +1,6 @@
 import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -47,5 +48,8 @@ describe("the engine on Podman with Dex", () => {
 
     await engine.remove("hello");
     await assert.rejects(fetch(app.url));
+    // The last app took sign-in and Mayfly's network with it.
+    await assert.rejects(fetch("http://localhost:5556/dex/healthz"));
+    assert.notEqual(spawnSync("podman", ["network", "exists", "mayfly"]).status, 0);
   });
 });
