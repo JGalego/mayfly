@@ -17,6 +17,7 @@ import { examine, type ModelProbe } from "./doctor.ts";
 import type { MailAccount } from "./mail-account.ts";
 import { LOGO } from "./mail-html.ts";
 import type { ModelPorts } from "./model-settings.ts";
+import { openPages } from "./pages.ts";
 import { endpointOf, FIRST_MODELS, isProvider, labelOf, modelFor, providerOf, type Models, type ModelSetting } from "./settings.ts";
 
 // The published, signed runtime this version builds apps on: a list of its amd64 and arm64 images, from which Podman
@@ -40,16 +41,24 @@ export async function activate(context: api.ExtensionContext): Promise<void> {
     files: fileStore(join(context.storagePath, "files")),
     phoneNetwork,
   });
+  // One controller for every page, so work goes on when the tab closes, and each page shows it as it happens.
+  const pages = openPages();
   let panel: Panel | undefined;
-  let handle: Handler = async () => {};
+  const handle = createController(await controllerPorts(context, { engine, keys, models, phoneNetwork }, pages.post, () => panel?.active === true));
   const show = async (): Promise<void> => {
     if (panel !== undefined) return panel.reveal();
-    ({ panel, handle } = await openPanel(context, engine, keys, models, phoneNetwork));
-    panel.onDidDispose(() => (panel = undefined));
+    const opened = await openPanel(context);
+    const close = pages.open((message) => opened.webview.postMessage(message));
+    context.subscriptions.push(opened.webview.onDidReceiveMessage(handle));
+    opened.onDidDispose(() => {
+      close();
+      panel = undefined;
+    });
+    panel = opened;
   };
   context.subscriptions.push(api.commands.registerCommand("mayfly.open", show));
   await show();
-  whenPodmanAnswers(context, () => void startApps(context, (message) => handle(message)));
+  whenPodmanAnswers(context, () => void startApps(context, handle));
 }
 
 /** Runs the running apps again if Mayfly updated since they last ran, then starts the stopped ones if the person wants. */
@@ -82,20 +91,33 @@ function whenPodmanAnswers(context: api.ExtensionContext, act: () => void): void
   });
 }
 
-async function openPanel(context: api.ExtensionContext, engine: Engine, keys: KeyStore, models: ModelStore, phoneNetwork: PhoneNetwork): Promise<{ panel: Panel; handle: Handler }> {
+/** Mayfly's tab in Podman Desktop. */
+async function openPanel(context: api.ExtensionContext): Promise<Panel> {
   const media = api.Uri.joinPath(context.extensionUri, "media");
   const panel = api.window.createWebviewPanel("mayfly", "Mayfly", { localResourceRoots: [media] });
   // The navigation bar shows this file by its path: the same logo as the page, sharp at any size.
   panel.iconPath = api.Uri.joinPath(media, "logo.svg");
   context.subscriptions.push(panel);
   panel.webview.html = await pageFor(panel.webview, media);
+  return panel;
+}
+
+interface Services {
+  readonly engine: Engine;
+  readonly keys: KeyStore;
+  readonly models: ModelStore;
+  readonly phoneNetwork: PhoneNetwork;
+}
+
+/** What the controller works with. Looking says whether the person has Mayfly's tab in front of them. */
+async function controllerPorts(context: api.ExtensionContext, { engine, keys, models, phoneNetwork }: Services, post: ControllerPorts["post"], looking: () => boolean): Promise<ControllerPorts> {
   const logo = await readFile(api.Uri.joinPath(context.extensionUri, "icon.png").fsPath);
-  const handle = createController({
+  return {
     engine,
-    post: (message) => panel.webview.postMessage(message),
+    post,
     // Only when the person is not looking at Mayfly, on another page or in another window: there, the conversation already says it.
     notify: ({ text, failed, seen }) => {
-      if (!panel.active || !seen) api.window.showNotification({ title: "Mayfly", body: text, type: failed ? "error" : "info" });
+      if (!looking() || !seen) api.window.showNotification({ title: "Mayfly", body: text, type: failed ? "error" : "info" });
     },
     openExternal: (url) => api.env.openExternal(api.Uri.parse(url)),
     copy: (text) => api.env.clipboard.writeText(text),
@@ -118,9 +140,7 @@ async function openPanel(context: api.ExtensionContext, engine: Engine, keys: Ke
     },
     keys,
     mail: mailAccount(context.secrets, logo),
-  });
-  context.subscriptions.push(panel.webview.onDidReceiveMessage(handle));
-  return { panel, handle };
+  };
 }
 
 /** The page from media/, with its files turned into webview URIs and its CSP allowing only them. */

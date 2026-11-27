@@ -89,7 +89,7 @@ Found along the way, and confirmed by question 7: by the same RFC, an app receiv
 Each step is its own commit on this branch, behind the setting, so `main` stays releasable.
 
 1. ~~**Engine, tests first.**~~ Done: pairing in the engine, with one-time codes kept in memory, device tokens kept as hashes in the state, and forgetting a phone. The phone's list of messages and its smaller state, in the shell.
-2. **One controller.** The controller moves up to the extension and posts to every open page.
+2. ~~**One controller.**~~ Done: the extension makes one controller, which posts to every open page. Work in progress now outlives closing Mayfly's tab.
 3. **The phone server.** `node:http` on loopback: the token check, the message list, the events stream, and Serve's mapping on 38099 through the Tailscale adapter.
 4. **The phone page.** The app list and the conversation for a phone, the manifest and icon, pairing, and photos scaled down.
 5. **Settings.** **Make apps from my phone**, the pairing QR code, paired phones with **Forget**, and a setup check.
