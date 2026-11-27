@@ -14,6 +14,7 @@ const signedIn = {
 const routes = new Hono<Env>()
   .get("/", (c) => c.json(c.get("user")))
   .post("/", async (c) => c.text(await c.req.text()))
+  .get("/tailscale", (c) => c.json({ login: c.req.header("Tailscale-User-Login") ?? null, name: c.req.header("tailscale-user-name") ?? null }))
   .get("/boom", () => {
     throw new Error("database password is hunter2");
   });
@@ -40,6 +41,14 @@ describe("the runtime around a generated app", () => {
     const response = await app.request("/");
 
     assert.equal(response.status, 401);
+  });
+
+  it("hides what a private network in front says about its own users, so an app knows people only from the auth proxy", async () => {
+    const headers = { ...signedIn, "Tailscale-User-Login": "someone@example.com", "Tailscale-User-Name": "Someone" };
+
+    const response = await app.request("/tailscale", { headers });
+
+    assert.deepEqual(await response.json(), { login: null, name: null });
   });
 
   it("tells the app's routes who is signed in", async () => {
