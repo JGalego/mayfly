@@ -154,10 +154,12 @@
               <h2>Setup checks</h2>
               <button id="run-doctor" class="quiet-button" type="button">Check again</button>
             </div>
+            <p class="hint">What Mayfly needs to make and run apps.</p>
             <ul id="doctor" class="checks"></ul>
           </section>
           <section>
             <h2>App credentials</h2>
+            <p class="hint">Every app's sign-in page asks for this email and password.</p>
             <form id="owner-form" class="sign-in-row">
               <input id="owner-email" type="email" required autocomplete="off" aria-label="Email">
               <button class="quiet-button" type="submit">Save</button>
@@ -170,32 +172,37 @@
           </section>
           <section>
             <h2>Phone</h2>
-            <label class="check"><input id="phone-access" type="checkbox"> Open apps from my phone</label>
-            <p id="phone-note" class="quiet"></p>
+            <label class="check"><input id="phone-access" type="checkbox" aria-describedby="phone-note"> Open apps from my phone</label>
+            <p id="phone-note" class="hint"></p>
           </section>
           <section>
             <h2>Advanced</h2>
-            <label class="check"><input id="developer" type="checkbox"> Enable developer mode</label>
-            <label class="check"><input id="autostart" type="checkbox"> Start stopped apps automatically</label>
-            <p class="quiet">Runs when Podman Desktop starts.</p>
+            <label class="check"><input id="developer" type="checkbox" aria-describedby="developer-hint"> Enable developer mode</label>
+            <p id="developer-hint" class="hint">Adds each app's code, history and logs, and the Logs and Usage tabs here.</p>
+            <label class="check"><input id="autostart" type="checkbox" aria-describedby="autostart-hint"> Start stopped apps automatically</label>
+            <p id="autostart-hint" class="hint">When Podman Desktop starts, Mayfly starts the apps Podman isn't running.</p>
           </section>
         </div>
         <div id="settings-models-tab" class="settings-page" role="tabpanel" aria-labelledby="settings-tab-models">
           <section>
-            <p class="quiet">Your requests, their attachments and your apps' code go to the provider of the model doing the work.</p>
+            <p class="hint">The default model writes new apps. Switch an app's model with <code>/model</code>.</p>
+            <p class="hint">What you ask, what you attach and your apps' code go to the model's provider.</p>
             <ul id="model-list" class="model-list"></ul>
             <button id="add-model" class="quiet-button add-model" type="button">+ Add a model</button>
             <form id="model-form" hidden>
               <h3 id="model-form-title">Add a model</h3>
               <label for="provider">Provider</label>
-              <select id="provider"></select>
+              <select id="provider" aria-describedby="provider-hint"></select>
+              <p id="provider-hint" class="hint">OpenAI, or any service with an OpenAI-compatible API.</p>
               <label for="endpoint" class="compatible-only">Endpoint</label>
-              <input id="endpoint" class="compatible-only" type="url" placeholder="http://localhost:11434/v1">
+              <input id="endpoint" class="compatible-only" type="url" placeholder="http://localhost:11434/v1" aria-describedby="endpoint-hint">
+              <p id="endpoint-hint" class="hint compatible-only">The API's base URL, such as a local model server's.</p>
               <label for="model-name">Model</label>
-              <input id="model-name" type="text" maxlength="200" required placeholder="gpt-6.2-sol">
+              <input id="model-name" type="text" maxlength="200" required placeholder="gpt-6.2-sol" aria-describedby="model-name-hint">
+              <p id="model-name-hint" class="hint">The model's name, as the provider lists it.</p>
               <label for="api-key">API key</label>
-              <input id="api-key" type="password" autocomplete="off">
-              <p class="quiet">Stored in Podman Desktop's secret storage. Sent only to the saved endpoint.</p>
+              <input id="api-key" type="password" autocomplete="off" aria-describedby="api-key-hint">
+              <p id="api-key-hint" class="hint">Kept in Podman Desktop's secret storage, and sent only to this provider.</p>
               <div class="editor-actions">
                 <button id="cancel-model" class="quiet-button" type="button">Cancel</button>
                 <button class="primary" type="submit">Save</button>
@@ -209,12 +216,14 @@
               <h2>Health</h2>
               <button id="refresh-health" class="quiet-button" type="button">Refresh</button>
             </div>
+            <p class="hint">How each app and the sign-in service are doing, as Podman sees them.</p>
             <ul id="health" class="health-list"></ul>
           </section>
           <div id="settings-logs"></div>
         </div>
         <div id="settings-usage-tab" class="settings-page" role="tabpanel" aria-labelledby="settings-tab-usage">
           <section>
+            <p class="hint">Every call to a model, by app: when it was, what it cost and whether its code passed.</p>
             <div id="ledger"></div>
           </section>
         </div>

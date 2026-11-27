@@ -44,6 +44,7 @@ export function logViewer(post: (message: FromUi) => void, { activity }: { activ
     "section",
     "log-viewer",
     h("div", "section-head", h("h2", "", "Logs"), h("div", "", refresh, expand)),
+    h("p", "hint", "Mayfly's own activity, and what each app and the sign-in service wrote."),
     h("div", "log-controls", source, level, since, search),
     count,
     list,
