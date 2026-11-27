@@ -34,7 +34,9 @@
             <div id="sign-in-popover" class="popover sign-in" hidden>
               <p class="popover-title">App credentials</p>
               <button id="copy-email" class="chip" type="button" title="Copy email"><span id="owner"></span><span class="chip-note"><span class="to-copy" data-icon="copy">Copy</span><span class="copied-note" data-icon="check">Copied</span></span></button>
-              <button id="copy-password" class="chip" type="button" title="Copy password"><span class="dots" aria-label="password">••••••••</span><span class="chip-note"><span class="to-copy" data-icon="copy">Copy</span><span class="copied-note" data-icon="check">Copied</span></span></button>
+              <button id="copy-password" class="chip" type="button" title="Copy password" data-password-hidden><span class="dots" aria-label="password">••••••••</span><span class="chip-note"><span class="to-copy" data-icon="copy">Copy</span><span class="copied-note" data-icon="check">Copied</span></span></button>
+              <div class="password-shown" data-password-shown hidden></div>
+              <button id="show-password" class="quiet-button" type="button" aria-pressed="false" data-icon="eye">Show password</button>
             </div>
           </div>
           <div id="phone-anchor" class="popover-anchor" hidden>
@@ -165,10 +167,12 @@
               <button class="quiet-button" type="submit">Save</button>
             </form>
             <div class="sign-in-row">
-              <span class="chip"><span class="dots" aria-label="password">••••••••</span></span>
+              <span class="chip" data-password-hidden><span class="dots" aria-label="password">••••••••</span></span>
+              <button id="settings-show-password" class="quiet-button" type="button" aria-pressed="false" aria-label="Show password" data-icon="eye">Show</button>
               <button id="settings-copy-password" class="quiet-button" type="button">Copy password</button>
               <button id="new-password" class="quiet-button" type="button">Reset password</button>
             </div>
+            <div class="password-shown" data-password-shown hidden></div>
           </section>
           <section>
             <h2>Phone</h2>

@@ -49,6 +49,8 @@ const TITLES: Record<Exclude<Progress["kind"], "remove">, string> = { create: "C
 const NOTICE_MS = 4000;
 const CONFIRM_MS = 4000;
 const COPIED_MS = 1500;
+// Long enough to type it on a phone, and no longer on screen than that.
+const PASSWORD_SHOWN_MS = 30_000;
 // Long enough to read what removing does before the button lets you.
 const REMOVE_WAIT_S = 2;
 const FIND_APPS_FROM = 6;
@@ -114,6 +116,8 @@ let calls: readonly ModelCall[] | undefined;
 let health: readonly ServiceHealth[] | undefined;
 /** The model the person picked for the next new app, if not the default. */
 let newAppModel: string | undefined;
+/** While the owner's password is shown, what hides it again. */
+let passwordShown: number | undefined;
 /** Whether phone access is being turned on or off, which runs every app again. */
 let phoneSwitching = false;
 /** The phone address the QR code shows, so it's drawn again only when that changes. */
@@ -240,7 +244,11 @@ element("settings-copy-password").addEventListener("click", (event) => {
   post({ type: "copy", what: "password" });
   flash(event.currentTarget as HTMLElement, "Copied ✓");
 });
-element("new-password").addEventListener("click", makeNewPassword);
+element("new-password").addEventListener("click", () => {
+  hidePassword();
+  makeNewPassword();
+});
+for (const id of ["show-password", "settings-show-password"]) element(id).addEventListener("click", () => (passwordShown === undefined ? post({ type: "show-password" }) : hidePassword()));
 developer.addEventListener("change", () => post({ type: "developer", on: developer.checked }));
 element<HTMLInputElement>("autostart").addEventListener("change", (event) => post({ type: "autostart", on: (event.target as HTMLInputElement).checked }));
 element<HTMLInputElement>("phone-access").addEventListener("change", (event) => {
@@ -297,6 +305,8 @@ function receive(message: ToUi): void {
       return followRename(message.from, message.to);
     case "notice":
       return showBanner(message.text, "notice");
+    case "password":
+      return showPassword(message.password);
     case "error":
       savedModel(false);
       return showError(message.text, message.recorded === true);
@@ -367,6 +377,46 @@ function exampleItem(text: string): HTMLLIElement {
   const item = document.createElement("li");
   item.append(control);
   return item;
+}
+
+/** The owner's password on a line of its own, for reading off and typing on a phone, until shown long enough. */
+function showPassword(password: string): void {
+  window.clearTimeout(passwordShown);
+  passwordShown = window.setTimeout(hidePassword, PASSWORD_SHOWN_MS);
+  showingPassword(password);
+}
+
+function hidePassword(): void {
+  window.clearTimeout(passwordShown);
+  passwordShown = undefined;
+  showingPassword(undefined);
+}
+
+function showingPassword(password: string | undefined): void {
+  // Shown, it takes the dots' place.
+  for (const dots of document.querySelectorAll<HTMLElement>("[data-password-hidden]")) dots.hidden = password !== undefined;
+  for (const card of document.querySelectorAll<HTMLElement>("[data-password-shown]")) {
+    card.hidden = password === undefined;
+    card.replaceChildren(...(password === undefined ? [] : passwordCard(password)));
+  }
+  // An open eye to show it, a closed one to hide it. In Settings the row says it's the password, so its button says only what it does.
+  const eye = icon(password === undefined ? "eye" : "eye-off");
+  element("show-password").replaceChildren(eye, password === undefined ? "Show password" : "Hide password");
+  element("settings-show-password").replaceChildren(eye.cloneNode(true), password === undefined ? "Show" : "Hide");
+  for (const id of ["show-password", "settings-show-password"]) {
+    element(id).setAttribute("aria-label", password === undefined ? "Show password" : "Hide password");
+    element(id).setAttribute("aria-pressed", String(password !== undefined));
+  }
+}
+
+/** The passphrase, its hyphens set apart so they're typed too, over a bar that drains until it hides. */
+function passwordCard(password: string): HTMLElement[] {
+  // A long passphrase wraps after a hyphen, never inside a word, so each word reads whole.
+  const words = password.split("-").flatMap((word, index) => (index === 0 ? [word] : [h("span", "password-hyphen", "-"), document.createElement("wbr"), word]));
+  const timer = h("span", "password-timer");
+  timer.setAttribute("aria-hidden", "true");
+  timer.style.animationDuration = `${PASSWORD_SHOWN_MS}ms`;
+  return [h("p", "password-words", ...words), timer];
 }
 
 // The chip says it copied, briefly, so the person knows without looking anywhere else.

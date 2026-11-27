@@ -74,6 +74,8 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       return remove(request.name, session);
     case "copy":
       return copySignIn(request.what, session);
+    case "show-password":
+      return session.post({ type: "password", password: (await session.engine.owner()).password });
     case "save-model":
       return settle(saveModel(request.model, request.apiKey.trim(), session), session, "Saved.");
     case "remove-model":
@@ -377,6 +379,7 @@ function readRequest(message: unknown): FromUi | undefined {
   switch (type) {
     case "ready":
     case "new-password":
+    case "show-password":
     case "health":
     case "ledger":
     case "doctor":

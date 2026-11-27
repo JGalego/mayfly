@@ -50,6 +50,8 @@ export type FromUi =
   | { readonly type: "open-link"; readonly url: string }
   | { readonly type: "remove"; readonly name: string }
   | { readonly type: "copy"; readonly what: "email" | "password" }
+  /** Shows the owner's password in the page, for typing it on another device. */
+  | { readonly type: "show-password" }
   | { readonly type: "save-model"; readonly model: ModelSetting; readonly apiKey: string }
   | { readonly type: "remove-model"; readonly id: string }
   | { readonly type: "default-model"; readonly id: string }
@@ -79,7 +81,7 @@ export type FromUi =
   | { readonly type: "deploy"; readonly app: string; readonly version: string }
   | { readonly type: "save"; readonly app: string; readonly from: string; readonly routes: string; readonly message: string };
 
-/** What the extension tells the page. Never a secret. */
+/** What the extension tells the page. Never a secret, but for the owner's password when the person asks to see it. */
 export type ToUi =
   | {
       readonly type: "state";
@@ -112,5 +114,6 @@ export type ToUi =
   | { readonly type: "logs"; readonly pod: string; readonly container: string; readonly lines: readonly string[] }
   | { readonly type: "code"; readonly app: string; readonly version: string; readonly routes: string; readonly thinking: string }
   | { readonly type: "notice"; readonly text: string }
+  | { readonly type: "password"; readonly password: string }
   /** Recorded when the app's conversation already says it, so the page need not. */
   | { readonly type: "error"; readonly text: string; readonly recorded?: true };

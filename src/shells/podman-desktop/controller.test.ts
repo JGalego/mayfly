@@ -431,7 +431,7 @@ describe("the Mayfly panel's controller", () => {
     assert.equal(stateOf(posted.at(-1))?.working, null);
   });
 
-  it("copies the owner's email and password to the clipboard, never sending the password to the page", async () => {
+  it("copies the owner's email and password to the clipboard, without sending the password to the page", async () => {
     const { handle, posted, copied } = setUp({ apps: [] });
 
     await handle({ type: "copy", what: "email" });
@@ -440,6 +440,17 @@ describe("the Mayfly panel's controller", () => {
 
     assert.deepEqual(copied, [owner.email, owner.password]);
     assert.ok(!JSON.stringify(posted).includes(owner.password));
+  });
+
+  it("sends the page the owner's password only when the person asks to see it", async () => {
+    const { handle, posted } = setUp({ apps: [] });
+
+    await handle({ type: "ready" });
+    const before = JSON.stringify(posted);
+    await handle({ type: "show-password" });
+
+    assert.ok(!before.includes(owner.password));
+    assert.deepEqual(posted.at(-1), { type: "password", password: owner.password });
   });
 
   it("keeps an API key in secret storage for the endpoint it was given for, and never sends it to the page", async () => {

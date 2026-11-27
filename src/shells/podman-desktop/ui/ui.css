@@ -403,6 +403,53 @@ main {
   border-color: var(--accent);
 }
 
+/* A shown password, on a card of its own, to read off and type on a phone. */
+.password-shown {
+  position: relative;
+  overflow: hidden;
+  padding: 0.6rem 0.8rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+/* One click selects it all. */
+.password-words {
+  margin: 0;
+  font: 15px/1.5 ui-monospace, "Cascadia Code", Consolas, monospace;
+  color: var(--text);
+  user-select: all;
+}
+
+.password-hyphen {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+/* Drains over the time the password stays shown. */
+.password-timer {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  background: var(--accent);
+  transform-origin: left;
+  animation: password-drain linear forwards;
+}
+
+@keyframes password-drain {
+  to {
+    transform: scaleX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .password-timer {
+    animation: none;
+  }
+}
+
 .chip .dots {
   letter-spacing: 0.1em;
 }
@@ -1600,6 +1647,10 @@ pre.problem {
 
 .sign-in-row .chip {
   padding: 0.25rem 0.8rem;
+}
+
+.sign-in-row .quiet-button {
+  white-space: nowrap;
 }
 
 .section-head {
