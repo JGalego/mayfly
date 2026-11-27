@@ -189,6 +189,8 @@ npm run test:integration
 
 `MAYFLY_LIVE=1 npm run test:integration` also calls the model configured in `.env` and may incur charges.
 
+To release, set the version in `extension/package.json` and push it to main. Once CI passes, tag that commit `vX.Y.Z` and push the tag: the release workflow publishes the tested extension image under the version.
+
 ## License
 
 Copyright © 2026 João Galego.

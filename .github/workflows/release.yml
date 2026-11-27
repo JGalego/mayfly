@@ -1,0 +1,41 @@
+name: Release
+
+# A release is a version tag, vX.Y.Z, on a commit main's CI has already tested and published. It ships that same
+# extension image under the version, so the digest Sigstore signed and the attestations still match.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Tag the extension image with the version and publish the release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      packages: write
+    env:
+      IMAGE: ghcr.io/jgalego/mayfly-extension
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check the tag matches the extension's version
+        run: |
+          version="$(jq -r .version extension/package.json)"
+          [[ "$GITHUB_REF_NAME" == "v$version" ]] || { echo "the tag is $GITHUB_REF_NAME, but extension/package.json says $version"; exit 1; }
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+      - name: Tag the image main's CI published for this commit
+        env:
+          TOKEN: ${{ github.token }}
+        run: |
+          echo "$TOKEN" | skopeo login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          skopeo inspect --raw "docker://$IMAGE:$GITHUB_SHA" >/dev/null \
+            || { echo "$IMAGE:$GITHUB_SHA is not published: tag a commit on main once its CI has passed"; exit 1; }
+          skopeo copy --all --preserve-digests "docker://$IMAGE:$GITHUB_SHA" "docker://$IMAGE:$VERSION"
+      - name: Publish the release on GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "Mayfly $VERSION" --generate-notes \
+            --notes "In Podman Desktop, open **Extensions**, choose **Install custom…**, and enter \`$IMAGE:$VERSION\`."
