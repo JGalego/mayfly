@@ -8,6 +8,10 @@ A sense of taste is non-negotiable in everything we do: code, docs, design, name
 
 Avoid AI slop, fluff and filler. Saying more with less is an art and a mark of taste.
 
+## Interface
+
+- Data shown in a dialog, a banner or the conversation is set apart as a chip: app names, version ids, emails, addresses, ports. Backticks in text, `nameChip` in the page.
+
 ## Safety
 
 Secure by default. Convenience meets safety, not the other way around: start from the safe design and do the work to make it easy, instead of weakening it or adding an insecure shortcut.
