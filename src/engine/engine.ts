@@ -8,7 +8,7 @@ import type { Attachment, FileData } from "./attachments.ts";
 import { errorsIn } from "./log-errors.ts";
 import { mayflyName } from "../core/names.ts";
 import { parseAppName } from "../core/manifest.ts";
-import type { ContainerHealth, ModelProvider, PhoneNetworkStatus, Ports } from "./ports.ts";
+import { PortTaken, type ContainerHealth, type ModelProvider, type PhoneNetworkStatus, type Ports } from "./ports.ts";
 import { newPassword, newSecret } from "./secrets.ts";
 import { findApp, findVersion, runningVersion, withApp, withoutApp, type App, type Author, type ModelCall, type Owner, type State, type Turn, type Version } from "./state.ts";
 import { UNWATCHED, type Watcher } from "./step.ts";
@@ -23,6 +23,8 @@ const EMAIL = /^[^\s@]+@[^\s@]+$/;
 const MADE = "App deployed.";
 const CHANGED = "Update deployed.";
 const SAVED = "Saved. Trial passed. Deploy to run this version.";
+// How many ports past a taken one sign-in tries before it gives up.
+const SIGN_IN_TRIES = 20;
 /** What to do before phone access can be turned on, for each way Tailscale isn't ready. */
 export function phoneNotReady(status: Exclude<PhoneNetworkStatus, { readonly state: "ready" }>): string {
   switch (status.state) {
@@ -207,15 +209,16 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     await store.save(nextState);
     if (running !== undefined) {
       watch({ kind: "deploying" });
+      let ready = nextState;
       try {
-        await syncSignIn(nextState);
-        await runApp(nextState, next, running.image);
+        ready = await signInAndRun(nextState, next, running.image);
+        if (ready !== nextState) await store.save(ready);
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
         // The version stays the one to run, so Start runs it, and Undo still goes back to the one before.
         const text = [running.summary, `It passed its trial, but didn't start: ${reason} Choose Start to run it once that's fixed.`].filter(Boolean).join("\n\n");
         const kept: App = { ...next, conversation: [...next.conversation.slice(0, -1), { ...reply, text, failed: true }] };
-        await store.save(withApp(nextState, kept));
+        await store.save(withApp(ready, kept));
         throw new RecordedFailure(reason, name, { cause: error });
       }
     }
@@ -226,37 +229,85 @@ export function createEngine({ store, deployer, observer, identity, models, buil
   async function updateOwner(change: (owner: Owner) => Owner): Promise<Owner> {
     const state = withOwner(await store.load());
     const next = { ...state, owner: change(state.owner) };
-    if (anyRunning(next)) await identity.sync(next);
-    await store.save(next);
+    await store.save(anyRunning(next) ? await syncSignIn(next) : next);
     return next.owner;
   }
 
-  /** Sign-in is there for the apps: it runs while any does, and goes with the last, for the phone too. */
-  async function syncSignIn(state: State): Promise<void> {
-    const port = identity.signInPort;
+  function signInPortOf(state: State): number {
+    return state.signInPort ?? identity.preferredPort;
+  }
+
+  /**
+   * Sign-in is there for the apps: it runs while any does, and goes with the last, for the phone too.
+   * Returns the state, which says where it ended up if it had to move.
+   */
+  async function syncSignIn(state: State): Promise<State> {
+    const port = signInPortOf(state);
     if (!anyRunning(state)) {
       await identity.stop();
       if (state.phoneHost !== null) await phoneNetwork.stop(phoneSidePort(port));
-      return;
+      return state;
     }
-    await identity.sync(state);
+    try {
+      await identity.sync(state, port);
+    } catch (error) {
+      if (error instanceof PortTaken && error.port === port) return moveSignIn(state, port);
+      throw error;
+    }
     if (state.phoneHost !== null) await phoneNetwork.serve(phoneSidePort(port), port);
+    return state;
+  }
+
+  /** Another program holds sign-in's port: sign-in moves to the next one free, and the running apps follow, since they send people there. */
+  async function moveSignIn(state: State, taken: number): Promise<State> {
+    for (let port = taken + 1; port <= taken + SIGN_IN_TRIES; port++) {
+      const moved = { ...state, signInPort: port };
+      try {
+        // Tried, not probed: under WSL's mirrored networking, a port free to Windows can still be taken for Podman.
+        await identity.sync(moved, port);
+      } catch (error) {
+        if (error instanceof PortTaken && error.port === port) continue;
+        throw error;
+      }
+      if (moved.phoneHost !== null) {
+        await phoneNetwork.stop(phoneSidePort(taken));
+        await phoneNetwork.serve(phoneSidePort(port), port);
+      }
+      await runApps(moved);
+      return moved;
+    }
+    throw new Error(`Ports ${taken} to ${taken + SIGN_IN_TRIES} are all in use, so sign-in can't start. Free one of them, then try again.`);
+  }
+
+  /** Runs sign-in and one app, and returns the state, which says where sign-in ended up. */
+  async function signInAndRun(state: State, app: App, image: string): Promise<State> {
+    const ready = await syncSignIn(state);
+    // Moving sign-in ran every app again with it, this one included.
+    if (ready === state) await runApp(ready, app, image);
+    return ready;
   }
 
   /** Runs an app's image, and while phone access is on, through its phone door too. */
   async function runApp(state: State, app: App, image: string): Promise<void> {
-    await deployer.deploy(appObjects(app, image, identity.settingsFor(app), state.phoneHost));
+    await deployer.deploy(appObjects(app, image, identity.settingsFor(app, signInPortOf(state)), state.phoneHost));
     if (state.phoneHost !== null) await phoneNetwork.serve(phoneSidePort(app.hostPort), phoneDoorPort(app.hostPort));
   }
 
-  /** Runs every app that has a version to run again, with or without its phone door as the state says, and sign-in with them. */
-  async function runAll(state: State): Promise<void> {
-    await syncSignIn(state);
+  /** Runs every app that has a version to run again, with or without its phone door as the state says. */
+  async function runApps(state: State): Promise<void> {
     for (const app of state.apps) {
       const running = runningVersion(app);
       // Built again, as when starting it, in case its image is gone.
       if (running !== undefined) await runApp(state, app, await builder.build(app.name, running.routes));
     }
+  }
+
+  /** Runs sign-in and every app with a version to run again, and returns the state, which says where sign-in ended up. */
+  async function runAll(state: State): Promise<State> {
+    const ready = await syncSignIn(state);
+    // Moving sign-in ran the apps again already.
+    if (ready === state) await runApps(ready);
+    return ready;
   }
 
   const engine: Engine = {
@@ -320,8 +371,8 @@ export function createEngine({ store, deployer, observer, identity, models, buil
         watch({ kind: "building" });
         const image = await builder.build(name, running.routes);
         watch({ kind: "deploying" });
-        await syncSignIn(state);
-        await runApp(state, app, image);
+        const ready = await signInAndRun(state, app, image);
+        if (ready !== state) await store.save(ready);
         return appView(app);
       });
     },
@@ -365,16 +416,16 @@ export function createEngine({ store, deployer, observer, identity, models, buil
         };
         const running = runningVersion(app);
         // The pod, the sign-in client and its cookie all carry the name, so the app stops under the old one and starts under the new.
+        let ready = next;
         if (running !== undefined) {
           watch({ kind: "building" });
           const image = await builder.build(newName, running.routes);
           watch({ kind: "deploying" });
-          await deployer.remove(appObjects(app, running.image, identity.settingsFor(app)));
-          await syncSignIn(next);
-          await runApp(next, renamed, image);
-        } else await syncSignIn(next);
+          await deployer.remove(appObjects(app, running.image, identity.settingsFor(app, signInPortOf(state))));
+          ready = await signInAndRun(next, renamed, image);
+        } else ready = await syncSignIn(next);
         await builder.forget(name);
-        await store.save(next);
+        await store.save(ready);
         return appView(renamed);
       });
     },
@@ -434,9 +485,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
         const next: App = { ...app, ...(app.head === null || app.head === id ? {} : { previous: app.head }), head: id, conversation: [...app.conversation, ...conversation] };
         const nextState = withApp(state, next);
         watch({ kind: "deploying" });
-        await syncSignIn(nextState);
-        await runApp(nextState, next, image);
-        await store.save(nextState);
+        await store.save(await signInAndRun(nextState, next, image));
         return appView(next);
       });
     },
@@ -463,13 +512,11 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       const app = existingApp(state, name);
       const running = runningVersion(app);
       if (running !== undefined) {
-        await deployer.remove(appObjects(app, running.image, identity.settingsFor(app)));
+        await deployer.remove(appObjects(app, running.image, identity.settingsFor(app, signInPortOf(state))));
         if (state.phoneHost !== null) await phoneNetwork.stop(phoneSidePort(app.hostPort));
       }
       await builder.forget(name);
-      const next = withoutApp(state, name);
-      await syncSignIn(next);
-      await store.save(next);
+      await store.save(await syncSignIn(withoutApp(state, name)));
     },
 
     async phoneAccess() {
@@ -482,7 +529,8 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       const next = { ...(await store.load()), phoneHost: network.host };
       // Saved first: if serving fails partway, it's on, and turning it off or on again puts everything right.
       await store.save(next);
-      await runAll(next);
+      const ready = await runAll(next);
+      if (ready !== next) await store.save(ready);
       return network.host;
     },
 
@@ -491,10 +539,11 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       if (state.phoneHost === null) return;
       // Stopped first: if that fails partway, it's still on, for another try.
       for (const app of state.apps) if (app.head !== null) await phoneNetwork.stop(phoneSidePort(app.hostPort));
-      await phoneNetwork.stop(phoneSidePort(identity.signInPort));
+      await phoneNetwork.stop(phoneSidePort(signInPortOf(state)));
       const next = { ...state, phoneHost: null };
       await store.save(next);
-      await runAll(next);
+      const ready = await runAll(next);
+      if (ready !== next) await store.save(ready);
     },
 
     async owner() {

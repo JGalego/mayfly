@@ -4,24 +4,24 @@ import { onPhone } from "../../core/phone.ts";
 import type { IdentitySource } from "../../engine/ports.ts";
 import { OWNER_ROLE, type App, type State } from "../../engine/state.ts";
 import { down, play } from "../podman/podman.ts";
-import { buildDex, DEX_POD, dexSettings, SIGN_IN_PORT, type DexClient, type DexUser } from "./dex.ts";
+import { buildDex, DEX_POD, dexSettings, PREFERRED_SIGN_IN_PORT, type DexClient, type DexUser } from "./dex.ts";
 
 /** Dex on Podman, with the owner as its one user and one client per app, and the logo on its sign-in page. */
 export function dexIdentity(logo?: string): IdentitySource {
   return {
     pod: DEX_POD,
-    signInPort: SIGN_IN_PORT,
+    preferredPort: PREFERRED_SIGN_IN_PORT,
 
-    async sync(state) {
-      await play(await buildDex({ users: usersOf(state), clients: state.apps.map((app) => clientFor(app, state.phoneHost)), ...(logo === undefined ? {} : { logo }) }));
+    async sync(state, port) {
+      await play(await buildDex({ users: usersOf(state), clients: state.apps.map((app) => clientFor(app, state.phoneHost)), port, ...(logo === undefined ? {} : { logo }) }));
     },
 
     async stop() {
       await down(await buildDex({ users: [], clients: [] }));
     },
 
-    settingsFor(app) {
-      return dexSettings(clientId(app));
+    settingsFor(app, port) {
+      return dexSettings(clientId(app), port);
     },
   };
 }

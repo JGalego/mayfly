@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ConfigMap, KubeObject, Pod } from "../core/kube.ts";
 import { createEngine, RecordedFailure } from "./engine.ts";
-import type { Builder, Deployer, FileStore, IdentitySource, Message, ModelProvider, Observer, PhoneNetwork, PhoneNetworkStatus, StateStore, Trial } from "./ports.ts";
+import { PortTaken, type Builder, type Deployer, type FileStore, type IdentitySource, type Message, type ModelProvider, type Observer, type PhoneNetwork, type PhoneNetworkStatus, type StateStore, type Trial } from "./ports.ts";
 import { EMPTY_STATE, type State } from "./state.ts";
 
 const COST = { input: 100, output: 20, thinking: 0 };
@@ -503,6 +503,45 @@ describe("work that passed but couldn't run", () => {
   });
 });
 
+describe("sign-in on a port another program holds", () => {
+  it("moves to the next port free, runs the app with it, and stays there", async () => {
+    const { engine, deployed, synced, takenPorts } = setUp([reply("lunch"), reply("lunch")]);
+    takenPorts.add(5556);
+
+    await engine.create("split lunch bills");
+    takenPorts.clear();
+    await engine.change("lunch", "add totals");
+
+    assert.equal(synced.at(-1)?.signInPort, 5557);
+    assert.deepEqual(deployed.map(loginUrlOf).at(-1), "http://localhost:5557/dex/auth");
+  });
+
+  it("takes the running apps along, since they send people to it", async () => {
+    const { engine, deployed, takenPorts } = setUp([reply("lunch"), reply("notes")]);
+    await engine.create("split lunch bills");
+    takenPorts.add(5556);
+
+    await engine.create("keep notes");
+
+    const lunch = deployed.filter((objects) => containersOf(objects).length > 0 && names(objects).includes("Pod/mayfly-lunch"));
+    assert.deepEqual(lunch.map(loginUrlOf), ["http://localhost:5556/dex/auth", "http://localhost:5557/dex/auth"]);
+  });
+
+  it("moves the phone's way to sign in along with it", async () => {
+    const { engine, served, takenPorts } = setUp([reply("lunch")]);
+    await engine.turnOnPhone();
+    takenPorts.add(5556);
+
+    await engine.create("split lunch bills");
+
+    assert.deepEqual(served, new Map([[25557, 5557], [38100, 28100]]));
+  });
+});
+
+function loginUrlOf(objects: readonly KubeObject[]): string | undefined {
+  return objects.find((o): o is ConfigMap => o.kind === "ConfigMap")?.data.OAUTH2_PROXY_LOGIN_URL;
+}
+
 describe("phone access", () => {
   it("is off until turned on", async () => {
     const { engine } = setUp([]);
@@ -608,12 +647,18 @@ function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: st
     },
     remove: async (objects) => void (log.push("remove"), removed.push(objects)),
   };
+  /** Ports another program holds, where Dex can't listen. */
+  const takenPorts = new Set<number>();
   const identity: IdentitySource = {
     pod: "mayfly-dex",
-    signInPort: 5556,
-    sync: async (next) => void (log.push("sync"), synced.push(next)),
+    preferredPort: 5556,
+    sync: async (next, port) => {
+      if (takenPorts.has(port)) throw new PortTaken(port);
+      log.push("sync");
+      synced.push(next);
+    },
     stop: async () => void log.push("stop"),
-    settingsFor: () => ({ OAUTH2_PROXY_CLIENT_ID: "fake", OAUTH2_PROXY_LOGIN_URL: "http://localhost:5556/dex/auth" }),
+    settingsFor: (_app, port) => ({ OAUTH2_PROXY_CLIENT_ID: "fake", OAUTH2_PROXY_LOGIN_URL: `http://localhost:${port}/dex/auth` }),
   };
   const models = (id: string | null): ModelProvider => ({
     name: named(id),
@@ -653,7 +698,7 @@ function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: st
     stop: async (port) => void served.delete(port),
   };
   const engine = createEngine({ store, deployer, observer, identity, models, builder, files, phoneNetwork });
-  return { engine, deployed, removed, synced, forgotten, served, log, asked, logged, kept, deployFailures };
+  return { engine, deployed, removed, synced, forgotten, served, log, asked, logged, kept, deployFailures, takenPorts };
 }
 
 function names(objects: readonly KubeObject[] | undefined): string[] {

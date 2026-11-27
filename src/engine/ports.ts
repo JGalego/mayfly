@@ -45,17 +45,27 @@ export interface Observer {
   logs(pod: string, container: string, lines: number): Promise<string[]>;
 }
 
+/** A port on this computer that another program holds, so nothing of Mayfly's can listen on it. */
+export class PortTaken extends Error {
+  readonly port: number;
+
+  constructor(port: number) {
+    super(`Port ${port} on this computer is in use by another program. Stop that program, then try again.`);
+    this.port = port;
+  }
+}
+
 export interface IdentitySource {
   /** The pod that signs people in, to watch it like the apps. */
   readonly pod: string;
-  /** The loopback port people sign in on, which the phone reaches through the private network too. */
-  readonly signInPort: number;
-  /** Brings the identity provider in line with the owner and apps in the state. */
-  sync(state: State): Promise<void>;
+  /** The loopback port people sign in on, unless another program holds it. */
+  readonly preferredPort: number;
+  /** Brings the identity provider in line with the owner and apps in the state, signing people in on this port. Throws PortTaken when another program holds it. */
+  sync(state: State, port: number): Promise<void>;
   /** Stops and removes the identity provider. */
   stop(): Promise<void>;
-  /** The proxy settings an app uses to sign people in. */
-  settingsFor(app: App): IdpSettings;
+  /** The proxy settings an app uses to sign people in on this port. */
+  settingsFor(app: App, port: number): IdpSettings;
 }
 
 /** A piece of what the person says to the model: text, or an image, in base64. */

@@ -28,7 +28,7 @@ Mayfly is a preview. Expect rough edges, and please report them in [issues](http
 
 The model writes only the app's routes, in one TypeScript file. Mayfly supplies sign-in, health checks, logs and the container settings, the same for every app. Before deploying a version, Mayfly builds it and tries it with no network and no privileges, and sends any failure back to the model.
 
-Each app runs as one pod: oauth2-proxy in front, on `127.0.0.1` only, and the app behind it. Sign-in comes from a local Dex, also on `127.0.0.1`, port 5556, which runs while any app does.
+Each app runs as one pod: oauth2-proxy in front, on `127.0.0.1` only, and the app behind it. Sign-in comes from a local Dex, also on `127.0.0.1`, which runs while any app does. It uses port 5556, or the next free one if another program holds that.
 
 ## What leaves your machine
 

@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { posix, win32 } from "node:path";
+import { PortTaken } from "../../engine/ports.ts";
 
 // Where Podman's installers put it. A process started before Podman was installed, such as Podman Desktop
 // on first run, has none of these on its PATH. Podman Desktop looks in the same places.
@@ -41,7 +42,7 @@ export async function podman(args: readonly string[], input = ""): Promise<strin
 export function failure(args: readonly string[], stderr: string): Error {
   // Rootless Podman and the Podman machine's port forwarder both say "listen tcp <address>:<port>: bind: …".
   const port = /listen tcp\S* \S*:(\d+): bind:/.exec(stderr)?.[1];
-  if (port !== undefined) return new Error(`Port ${port} on this computer is in use by another program. Stop that program, then try again.`);
+  if (port !== undefined) return new PortTaken(Number(port));
   // On Windows and macOS, Podman runs containers in a machine it reaches over a socket.
   if (/Cannot connect to Podman|unable to connect to Podman socket/.test(stderr)) return new Error("Podman's machine isn't running. Start it in Podman Desktop's Dashboard, then try again.");
   return new Error(`podman ${args.join(" ")} failed: ${stderr.trim()}`);

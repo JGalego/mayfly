@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { PortTaken } from "../../engine/ports.ts";
 import { failure, withInstallDirs } from "./cli.ts";
 
 describe("finding podman", () => {
@@ -26,7 +27,9 @@ describe("podman's errors", () => {
       "Error: starting container 2569: rootlessport listen tcp 127.0.0.1:5556: bind: address already in use",
       "Error: failed to expose ports via proxy: listen tcp 127.0.0.1:8100: bind: Only one usage of each socket address (protocol/network address/port) is normally permitted.",
     ]) {
-      assert.match(failure(["kube", "play"], stderr).message, /^Port (5556|8100) on this computer is in use by another program\./);
+      const error = failure(["kube", "play"], stderr);
+      assert.ok(error instanceof PortTaken && [5556, 8100].includes(error.port));
+      assert.match(error.message, /^Port (5556|8100) on this computer is in use by another program\./);
     }
   });
 

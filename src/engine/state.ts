@@ -104,9 +104,11 @@ export interface State {
   readonly calls: readonly ModelCall[];
   /** The computer's name the phone opens apps on, while phone access is on. */
   readonly phoneHost: string | null;
+  /** The loopback port people sign in on, once another program took the identity provider's own; null until then. */
+  readonly signInPort: number | null;
 }
 
-export const EMPTY_STATE: State = { owner: null, apps: [], spent: NO_USAGE, calls: [], phoneHost: null };
+export const EMPTY_STATE: State = { owner: null, apps: [], spent: NO_USAGE, calls: [], phoneHost: null, signInPort: null };
 
 /** The role the owner holds, and the only one a new app lets in. */
 export const OWNER_ROLE = "owner";

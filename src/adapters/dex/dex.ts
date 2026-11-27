@@ -13,10 +13,9 @@ const BRAND = `${NAME}-brand`;
 // Dex serves its pages from here, and anything in static/ as is.
 const WEB = "/srv/dex/web";
 const LOGO = "static/mayfly/logo.svg";
+// Where Dex listens in its pod, and on loopback unless another program holds that port.
 const PORT = 5556;
-/** Where people sign in, on loopback. */
-export const SIGN_IN_PORT = PORT;
-const ISSUER = `http://localhost:${PORT}/dex`;
+export const PREFERRED_SIGN_IN_PORT = PORT;
 // Inside a pod, localhost is the pod itself, so auth proxies reach Dex by name on the Mayfly network.
 const ON_NETWORK = `http://${NAME}:${PORT}/dex`;
 
@@ -38,13 +37,15 @@ export interface DexInput {
   readonly clients: readonly DexClient[];
   /** An SVG logo for the sign-in page, which otherwise shows Dex's own. */
   readonly logo?: string;
+  /** The loopback port people sign in on. */
+  readonly port?: number;
 }
 
 /** The local identity provider: a pod published on loopback, configured from a Secret, its sign-in page named for Mayfly. */
-export async function buildDex({ users, clients, logo }: DexInput): Promise<KubeObject[]> {
+export async function buildDex({ users, clients, logo, port = PREFERRED_SIGN_IN_PORT }: DexInput): Promise<KubeObject[]> {
   const frontend = logo === undefined ? { issuer: "Mayfly" } : { issuer: "Mayfly", dir: WEB, logoURL: LOGO };
   const config = {
-    issuer: ISSUER,
+    issuer: issuerOn(port),
     frontend,
     storage: { type: "memory" },
     web: { http: `0.0.0.0:${PORT}` },
@@ -54,17 +55,18 @@ export async function buildDex({ users, clients, logo }: DexInput): Promise<Kube
     staticClients: clients.map(staticClient),
   };
   const brand: ConfigMap[] = logo === undefined ? [] : [{ apiVersion: "v1", kind: "ConfigMap", metadata: { name: BRAND }, data: { "logo.svg": logo } }];
-  return [configSecret(config), ...brand, dexPod(brand.length > 0)];
+  return [configSecret(config), ...brand, dexPod(brand.length > 0, port)];
 }
 
 /** How an app's auth proxy signs people in with Dex: the browser uses the issuer, the proxy uses the network. */
-export function dexSettings(clientId: string): IdpSettings {
+export function dexSettings(clientId: string, port = PREFERRED_SIGN_IN_PORT): IdpSettings {
+  const issuer = issuerOn(port);
   return {
-    OAUTH2_PROXY_OIDC_ISSUER_URL: ISSUER,
+    OAUTH2_PROXY_OIDC_ISSUER_URL: issuer,
     OAUTH2_PROXY_CLIENT_ID: clientId,
     OAUTH2_PROXY_SCOPE: "openid email profile groups",
     OAUTH2_PROXY_SKIP_OIDC_DISCOVERY: "true",
-    OAUTH2_PROXY_LOGIN_URL: `${ISSUER}/auth`,
+    OAUTH2_PROXY_LOGIN_URL: `${issuer}/auth`,
     OAUTH2_PROXY_REDEEM_URL: `${ON_NETWORK}/token`,
     OAUTH2_PROXY_OIDC_JWKS_URL: `${ON_NETWORK}/keys`,
   };
@@ -83,7 +85,12 @@ function configSecret(config: object): Secret {
   return { apiVersion: "v1", kind: "Secret", metadata: { name: CONFIG }, stringData: { "config.yaml": JSON.stringify(config) } };
 }
 
-function dexPod(branded: boolean): Pod {
+/** Where browsers sign in, on the loopback port Dex is published on. */
+function issuerOn(port: number): string {
+  return `http://localhost:${port}/dex`;
+}
+
+function dexPod(branded: boolean, port: number): Pod {
   const volumes: Volume[] = [{ name: "config", secret: { secretName: CONFIG } }];
   const mounts: VolumeMount[] = [{ name: "config", mountPath: "/etc/dex", readOnly: true }];
   if (branded) {
@@ -100,7 +107,7 @@ function dexPod(branded: boolean): Pod {
           name: "dex",
           image: IMAGE,
           args: ["dex", "serve", "/etc/dex/config.yaml"],
-          ports: [{ containerPort: PORT, hostPort: PORT, hostIP: LOOPBACK }],
+          ports: [{ containerPort: PORT, hostPort: port, hostIP: LOOPBACK }],
           volumeMounts: mounts,
           livenessProbe: execProbe(["wget", "-q", "--spider", `http://127.0.0.1:${PORT}/dex/healthz`]),
           securityContext: HARDENED,
