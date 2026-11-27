@@ -1,7 +1,7 @@
 import type { ModelCall } from "../../../engine/state.ts";
 import { addUsage, NO_USAGE, type Usage } from "../../../engine/usage.ts";
 
-export type Grain = "day" | "week" | "month";
+export type Grain = "minute" | "hour" | "day" | "week" | "month";
 export type GroupBy = "model" | "provider" | "app";
 
 /** The app, model and provider whose calls to look at, each "" for all of them. */
@@ -22,7 +22,7 @@ export interface Tally {
   readonly took: number | null;
 }
 
-/** A day, week or month, and its calls' tally. */
+/** A minute, hour, day, week or month, and its calls' tally. */
 export interface Period extends Tally {
   readonly start: Date;
 }
@@ -106,16 +106,25 @@ export function ticksFor(largest: number, least = 0): number[] {
   return Array.from({ length: Math.ceil(largest / size) + 1 }, (_, at) => at * size);
 }
 
-/** The start of the day, week (from Monday) or month holding a moment, in local time. */
+const MINUTE = 60 * 1000;
+const HOUR = 60 * MINUTE;
+
+/** The start of the minute, hour, day, week (from Monday) or month holding a moment, in local time. */
 export function startOf(grain: Grain, moment: Date): Date {
+  // Taken off the moment itself, not rebuilt from the clock, so an hour the clock repeats stays an hour of its own.
+  const intoMinute = moment.getSeconds() * 1000 + moment.getMilliseconds();
+  if (grain === "minute") return new Date(moment.getTime() - intoMinute);
+  if (grain === "hour") return new Date(moment.getTime() - moment.getMinutes() * MINUTE - intoMinute);
   const [year, month, day] = [moment.getFullYear(), moment.getMonth(), moment.getDate()];
   if (grain === "month") return new Date(year, month, 1);
   if (grain === "week") return new Date(year, month, day - ((moment.getDay() + 6) % 7));
   return new Date(year, month, day);
 }
 
-/** The start of the period some steps from this one. Dates, not milliseconds, so a clock change never shifts a day. */
+/** The start of the period some steps from this one. Minutes and hours pass in milliseconds; days and longer go by the
+ * calendar, so a clock change never shifts a day. */
 function step(grain: Grain, start: Date, steps: number): Date {
+  if (grain === "minute" || grain === "hour") return new Date(start.getTime() + steps * (grain === "minute" ? MINUTE : HOUR));
   const [year, month, day] = [start.getFullYear(), start.getMonth(), start.getDate()];
   if (grain === "month") return new Date(year, month + steps, 1);
   return new Date(year, month, day + steps * (grain === "week" ? 7 : 1));

@@ -59,6 +59,26 @@ describe("the token ledger", () => {
     );
   });
 
+  it("adds up each hour's calls over the last day, and each minute's over the last hour", () => {
+    const hours = periodsOf(calls, "hour", spanStart({ grain: "hour", periods: 24 }, calls, now), now);
+    const recent = [call(new Date(2026, 10, 26, 17, 58, 40), "lunch", "OpenAI · gpt-6.2-sol", 300), call(new Date(2026, 10, 26, 17, 58, 5), "lunch", "OpenAI · gpt-6.2-sol", 200)];
+    const minutes = periodsOf(recent, "minute", spanStart({ grain: "minute", periods: 60 }, recent, now), now);
+
+    assert.equal(hours.length, 24);
+    assert.deepEqual(hours.filter((hour) => hour.calls > 0).map((hour) => [hour.start.getHours(), hour.spent.input]), [[9, 2000], [11, 500]]);
+    assert.equal(minutes.length, 60);
+    assert.deepEqual(minutes.filter((minute) => minute.calls > 0).map((minute) => [minute.start.getMinutes(), minute.calls, minute.spent.input]), [[58, 2, 500]]);
+  });
+
+  // When clocks go back, local time repeats an hour, and each of the two is a period of its own.
+  it("keeps an hour that repeats apart from the one before it", () => {
+    const first = new Date(Date.UTC(2026, 9, 25, 0, 30));
+    const second = new Date(first.getTime() + 60 * 60 * 1000);
+
+    assert.notEqual(startOf("hour", first).getTime(), startOf("hour", second).getTime());
+    assert.equal(startOf("hour", second).getTime() - startOf("hour", first).getTime(), 60 * 60 * 1000);
+  });
+
   it("starts weeks on Monday", () => {
     assert.deepEqual(startOf("week", now), new Date(2026, 10, 23));
     assert.deepEqual(startOf("week", new Date(2026, 10, 22, 23)), new Date(2026, 10, 16));
