@@ -36,6 +36,14 @@ export function statusOf({ BackendState, Self, CertDomains }: TailscaleStatus): 
   return host !== "" && (CertDomains ?? []).includes(host) ? { state: "ready", host } : { state: "no-https" };
 }
 
+/** What a failed `tailscale status` means, from what the CLI said. */
+export function failedStatus(output: string): PhoneNetworkStatus {
+  // Tailscale on Windows answers one Windows user at a time, and names the one it's in use by.
+  const held = /Tailscale (?:already in use by ([^,\n]+)|(?:already in use|running in server mode) \("([^"]+)"\))/.exec(output);
+  const user = held?.[1] ?? held?.[2];
+  return user === undefined ? { state: "failed", reason: output.trim() } : { state: "other-user", user: user.trim() };
+}
+
 /** Where Tailscale's CLI is: where its installer puts it, or else on the PATH. */
 export function findTailscale(): string {
   return (INSTALLED[process.platform] ?? []).find(isExecutable) ?? "tailscale";
@@ -55,7 +63,7 @@ async function status(cli: string): Promise<PhoneNetworkStatus> {
   if (result === "missing") return { state: "missing" };
   // Whatever stopped the CLI, such as Tailscale itself not running, is said in its own words.
   if (result.code === null) return { state: "failed", reason: `Tailscale didn't answer within ${TIMEOUT_MS / 1000} seconds.` };
-  if (result.code !== 0) return { state: "failed", reason: said(result).trim() || `Tailscale's CLI ended with code ${result.code}.` };
+  if (result.code !== 0) return failedStatus(said(result).trim() || `Tailscale's CLI ended with code ${result.code}.`);
   try {
     // Warnings, such as a version mismatch, go to stderr, so stdout is the JSON alone.
     return statusOf(JSON.parse(result.stdout) as TailscaleStatus);

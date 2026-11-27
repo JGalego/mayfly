@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { statusOf } from "./tailscale.ts";
+import { failedStatus, statusOf } from "./tailscale.ts";
 
 const running = { BackendState: "Running", Self: { DNSName: "mayfly.tail1a2b.ts.net." }, CertDomains: ["mayfly.tail1a2b.ts.net"] };
 
@@ -26,5 +26,19 @@ describe("reading Tailscale's status", () => {
   it("names any other state Tailscale reports, rather than guess what it means", () => {
     assert.deepEqual(statusOf({ BackendState: "InUseOtherUser" }), { state: "failed", reason: "Tailscale reports InUseOtherUser." });
     assert.deepEqual(statusOf({}), { state: "failed", reason: "Tailscale reports no state." });
+  });
+});
+
+describe("reading why Tailscale refused", () => {
+  it("names the Windows user who holds Tailscale, in either way Tailscale says it", () => {
+    const inUse = "failed to connect to local tailscaled (which appears to be running as tailscaled.exe, pid 29596). Got error: 401 Unauthorized: Tailscale already in use by CRITICAL\\jpgalego, pid 36432";
+    const serverMode = 'Tailscale running in server mode ("CRITICAL\\jpgalego"); connection from "PT\\user-admin" not allowed';
+
+    assert.deepEqual(failedStatus(inUse), { state: "other-user", user: "CRITICAL\\jpgalego" });
+    assert.deepEqual(failedStatus(serverMode), { state: "other-user", user: "CRITICAL\\jpgalego" });
+  });
+
+  it("passes anything else on in Tailscale's own words", () => {
+    assert.deepEqual(failedStatus("something broke\n"), { state: "failed", reason: "something broke" });
   });
 });

@@ -34,6 +34,8 @@ export function phoneNotReady(status: Exclude<PhoneNetworkStatus, { readonly sta
       return "Sign in to Tailscale, then try again.";
     case "no-https":
       return "Your tailnet doesn't give this computer HTTPS certificates yet. In Tailscale's admin console, open DNS and choose Enable HTTPS, then try again.";
+    case "other-user":
+      return `Tailscale is in use by another Windows user (${status.user}). Run Podman Desktop as that user, or sign Tailscale in as this one.`;
     case "failed":
       return `Mayfly couldn't tell how Tailscale is. ${status.reason}`;
   }

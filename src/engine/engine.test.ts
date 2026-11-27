@@ -484,6 +484,12 @@ describe("phone access", () => {
     assert.deepEqual(served, new Map());
   });
 
+  it("says which Windows user holds Tailscale, and what to do about it", async () => {
+    const { engine } = setUp([], [], undefined, { state: "other-user", user: "CRITICAL\\jpgalego" });
+
+    await assert.rejects(engine.turnOnPhone(), /in use by another Windows user \(CRITICAL\\jpgalego\)\. Run Podman Desktop as that user/);
+  });
+
   it("passes on what Tailscale said when Mayfly can't tell how it is", async () => {
     const { engine } = setUp([], [], undefined, { state: "failed", reason: "Access denied." });
 

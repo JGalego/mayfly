@@ -95,6 +95,8 @@ export type Trial = { readonly ok: true } | { readonly ok: false; readonly probl
 export type PhoneNetworkStatus =
   | { readonly state: "ready"; readonly host: string }
   | { readonly state: "missing" | "off" | "signed-out" | "no-https" }
+  /** Another user on this computer holds the network, as Tailscale on Windows allows one at a time. */
+  | { readonly state: "other-user"; readonly user: string }
   /** Mayfly couldn't tell how it is, and the reason is what the network said. */
   | { readonly state: "failed"; readonly reason: string };
 
