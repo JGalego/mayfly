@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import { failure, withInstallDirs } from "./cli.ts";
 
 describe("finding podman", () => {
-  it("adds Podman's Windows install folder to the PATH Windows spells as Path", () => {
-    const env = withInstallDirs({ Path: "C:\\Windows" }, "win32");
+  it("adds Podman's Windows install folders, for everyone and for this user, to the PATH Windows spells as Path", () => {
+    const env = withInstallDirs({ Path: "C:\\Windows", LOCALAPPDATA: "C:\\Users\\ana\\AppData\\Local" }, "win32");
 
-    assert.deepEqual(env, { Path: "C:\\Windows;C:\\Program Files\\RedHat\\Podman" });
+    assert.equal(env.Path, "C:\\Windows;C:\\Program Files\\RedHat\\Podman;C:\\Users\\ana\\AppData\\Local\\Programs\\Podman");
   });
 
   it("adds the macOS install folders after the person's own PATH", () => {
