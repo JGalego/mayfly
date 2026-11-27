@@ -1,8 +1,10 @@
 import { RecordedFailure, type AppView, type Engine } from "../../engine/engine.ts";
 import type { Step, Watcher } from "../../engine/step.ts";
 import { problemWithFiles, type FileData } from "../../engine/attachments.ts";
+import { onPhone } from "../../core/phone.ts";
 import type { Examination } from "./doctor.ts";
-import type { Activity, FromUi, Progress, ToUi, Upload, Work } from "./messages.ts";
+import { mailto, newPasswordMail, sharedMail, welcomeMail, type Mail } from "./invitations.ts";
+import type { Activity, FromUi, MailAbout, Progress, ToUi, Upload, Work } from "./messages.ts";
 import { makeDefault, modelViews, readModel, removeModel, saveModel } from "./model-settings.ts";
 import type { Models, ModelSetting } from "./settings.ts";
 
@@ -74,6 +76,9 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       return remove(request.name, session);
     case "copy":
       return copySignIn(request.what, session);
+    case "show-password":
+      if (request.email !== undefined) return session.post({ type: "password", email: request.email, password: (await session.engine.person(request.email)).password });
+      return session.post({ type: "password", password: (await session.engine.owner()).password });
     case "save-model":
       return settle(saveModel(request.model, request.apiKey.trim(), session), session, "Saved.");
     case "remove-model":
@@ -90,14 +95,25 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       await session.post({ type: "notice", text: "Sign-in email updated." });
       return showState(session);
     case "new-password":
+      if (request.email !== undefined) return newPersonPassword(request.email, session);
       // Straight to the clipboard: like the old one, the new password never goes to the page.
       await session.copy((await session.engine.newPassword()).password);
       return session.post({ type: "notice", text: "Password reset. The new password is on your clipboard." });
+    case "add-person":
+      return addPerson(request.email, session);
+    case "remove-person":
+      return removePerson(request.email, session);
+    case "email":
+      return email(request, session);
+    case "share":
+      return share(request.app, request.email, request.shared, session);
     case "developer":
       return saveDeveloper(request.on, session);
     case "autostart":
       await session.settings.saveAutostart(request.on);
       return showState(session);
+    case "phone":
+      return setPhone(request.on, session);
     case "start-stopped":
       return startStopped(session);
     case "focus":
@@ -145,7 +161,14 @@ async function send(work: Work, session: Session): Promise<void> {
   const model = work.model ?? session.settings.models().default;
   const job = (watch: Watcher): Promise<AppView> => (work.app === null ? engine.create(work.request, { model, watch, files }) : engine.change(work.app, work.request, watch, files));
   // Without the files, which the progress would otherwise carry to the page on every step.
-  const app = await run({ app: work.app, request: work.request, kind }, session, job);
+  const app = await run({ app: work.app, request: work.request, kind }, session, job).catch(async (error: unknown) => {
+    // A new app whose work was kept though it didn't start: the page goes to it, where the conversation says why.
+    if (work.app === null && error instanceof RecordedFailure) {
+      await showState(session);
+      await session.post({ type: "created", name: error.app });
+    }
+    throw error;
+  });
   if (work.app !== null) return;
   await session.post({ type: "created", name: app.name });
   if (app.head !== null) await session.openExternal(app.url);
@@ -331,27 +354,108 @@ async function saveDeveloper(on: boolean, session: Session): Promise<void> {
   await showState(session);
 }
 
+// Turning it on or off runs every app again, so like other work it waits its turn.
+async function setPhone(on: boolean, session: Session): Promise<void> {
+  if (session.working !== null) return void (await session.post({ type: "error", text: BUSY }));
+  if (on) {
+    const host = await session.engine.turnOnPhone();
+    note(session, "info", `Phone access on at ${host}`);
+    await session.post({ type: "notice", text: `Phone access is on. With Tailscale, your phone opens apps at \`${host}\`.` });
+  } else {
+    await session.engine.turnOffPhone();
+    note(session, "info", "Phone access off");
+    await session.post({ type: "notice", text: "Phone access is off." });
+  }
+  await showState(session);
+}
+
+// Adding, removing and sharing run apps again, so like other work they wait their turn.
+async function addPerson(email: string, session: Session): Promise<void> {
+  if (session.working !== null) return void (await session.post({ type: "error", text: BUSY }));
+  const person = await session.engine.addPerson(email);
+  note(session, "info", `Added ${person.email}`);
+  await showState(session);
+  await session.post({ type: "offer-email", about: "welcome", email: person.email });
+}
+
+async function removePerson(email: string, session: Session): Promise<void> {
+  if (session.working !== null) return void (await session.post({ type: "error", text: BUSY }));
+  await session.engine.removePerson(email);
+  note(session, "info", `Removed ${email}`);
+  await session.post({ type: "notice", text: `Removed \`${email}\`. No app lets them in now.` });
+  await showState(session);
+}
+
+async function newPersonPassword(email: string, session: Session): Promise<void> {
+  if (session.working !== null) return void (await session.post({ type: "error", text: BUSY }));
+  const person = await session.engine.newPersonPassword(email);
+  note(session, "info", `New password for ${person.email}`);
+  await showState(session);
+  await session.post({ type: "offer-email", about: "new-password", email: person.email });
+}
+
+// Other people reach apps only through the private network, so sharing needs phone access on.
+async function share(app: string, email: string, shared: boolean, session: Session): Promise<void> {
+  if (session.working !== null) return void (await session.post({ type: "error", text: BUSY }));
+  const host = await session.engine.phoneAccess();
+  if (shared && host === null) throw new Error("Turn on phone access in Settings first: other people open your apps through Tailscale.");
+  await session.engine.share(app, email, shared);
+  note(session, "info", shared ? `Shared ${app} with ${email}` : `Stopped sharing ${app} with ${email}`);
+  await showState(session);
+  if (shared) await session.post({ type: "offer-email", about: "shared", email, app });
+}
+
+/** Opens an email in the owner's mail app, for them to send. Mayfly sends nothing itself. */
+async function email(about: MailAbout, session: Session): Promise<void> {
+  await session.openExternal(mailto(await mailFor(about, session)));
+}
+
+async function mailFor(about: MailAbout, session: Session): Promise<Mail> {
+  if (about.about !== "shared") {
+    const person = await session.engine.person(about.email);
+    return about.about === "welcome" ? welcomeMail(person) : newPasswordMail(person);
+  }
+  const host = await session.engine.phoneAccess();
+  const app = (await session.engine.list()).find((candidate) => candidate.name === about.app);
+  if (host === null || app === undefined) throw new Error(`\`${about.app}\` can't be reached from another device now. Turn on phone access in Settings first.`);
+  return sharedMail(about.email, app.name, onPhone(app.url, host));
+}
+
 async function showState(session: Session): Promise<void> {
   await session.post({
     type: "state",
     apps: await session.engine.list(),
     owner: (await session.engine.owner()).email,
+    people: await session.engine.people(),
     models: await modelViews(session),
     defaultModel: session.settings.models().default,
     spent: await session.engine.spent(),
     working: session.working,
     developer: session.settings.developer(),
     autostart: session.settings.autostart(),
+    phoneHost: await session.engine.phoneAccess(),
   });
 }
 
 // Messages come from the page, so each is checked for its shape before anything acts on it.
 function readRequest(message: unknown): FromUi | undefined {
   if (typeof message !== "object" || message === null) return undefined;
-  const { type, app, request, question, name, apiKey, on, version, what, from, routes, message: words, model, id, pod, container, starred, email, url, files } = message as Record<string, unknown>;
+  const { type, app, request, question, name, apiKey, on, version, what, from, routes, message: words, model, id, pod, container, starred, email, url, files, shared, about } = message as Record<string, unknown>;
   switch (type) {
-    case "ready":
     case "new-password":
+    case "show-password":
+      if (email === undefined) return { type };
+      return typeof email === "string" ? { type, email } : undefined;
+    case "add-person":
+    case "remove-person":
+      return typeof email === "string" ? { type, email } : undefined;
+    case "email":
+      if (typeof email !== "string") return undefined;
+      if (about === "welcome" || about === "new-password") return { type, about, email };
+      return about === "shared" && typeof app === "string" ? { type, about, email, app } : undefined;
+    case "share":
+      return typeof app === "string" && typeof email === "string" && typeof shared === "boolean" ? { type, app, email, shared } : undefined;
+    case "ready":
     case "health":
     case "ledger":
     case "doctor":
@@ -383,6 +487,7 @@ function readRequest(message: unknown): FromUi | undefined {
     case "developer":
     case "autostart":
     case "focus":
+    case "phone":
       return typeof on === "boolean" ? { type, on } : undefined;
     case "start-stopped":
       return { type };

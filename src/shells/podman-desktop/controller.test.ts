@@ -16,6 +16,7 @@ const lunch: AppView = {
   head: "v1",
   versions: [],
   spent: { input: 100, output: 20, thinking: 0 },
+  people: [],
 };
 const owner = { email: "owner@mayfly.local", username: "owner", password: "s3cret-pass" };
 const openai: ModelSetting = { id: "openai", provider: "openai", baseUrl: "", model: "gpt-6.2-sol" };
@@ -38,12 +39,14 @@ describe("the Mayfly panel's controller", () => {
       type: "state",
       apps: [lunch],
       owner: owner.email,
+      people: [],
       models: [{ ...openai, label: "OpenAI · gpt-6.2-sol", hasApiKey: true }],
       defaultModel: "openai",
       spent: { input: 500, output: 80, thinking: 0 },
       working: null,
       developer: false,
       autostart: false,
+      phoneHost: null,
     });
   });
 
@@ -260,6 +263,28 @@ describe("the Mayfly panel's controller", () => {
     assert.deepEqual([stateOf(posted.at(-2))?.autostart, stateOf(posted.at(-1))?.autostart], [false, true]);
   });
 
+  it("turns phone access on, saying where the phone opens the apps, and off again", async () => {
+    const { handle, posted, calls } = setUp({ apps: [lunch] });
+
+    await handle({ type: "phone", on: true });
+    const on = stateOf(posted.at(-1))?.phoneHost;
+    await handle({ type: "phone", on: false });
+
+    assert.deepEqual(calls, ["turn on phone", "turn off phone"]);
+    assert.equal(on, "mayfly.tail1a2b.ts.net");
+    assert.ok(posted.some((message) => message.type === "notice" && message.text.includes("mayfly.tail1a2b.ts.net")));
+    assert.equal(stateOf(posted.at(-1))?.phoneHost, null);
+  });
+
+  it("says why phone access can't be turned on yet", async () => {
+    const { handle, posted } = setUp({ apps: [lunch], phoneFails: "Sign in to Tailscale, then try again." });
+
+    await handle({ type: "phone", on: true });
+
+    assert.ok(posted.some((message) => message.type === "error" && message.text === "Sign in to Tailscale, then try again."));
+    assert.equal(stateOf(posted.at(-1))?.phoneHost, null);
+  });
+
   it("starts each stopped app in turn, as work it shows", async () => {
     const { handle, posted, calls } = setUp({ apps: [lunch], stopped: ["lunch-split", "notes"] });
 
@@ -309,8 +334,17 @@ describe("the Mayfly panel's controller", () => {
     assert.equal(stateOf(posted.at(-1))?.working, null);
   });
 
+  it("takes the page to a new app whose work was kept though it didn't start, where its conversation says why", async () => {
+    const { handle, posted } = setUp({ apps: [], createFails: new RecordedFailure("Port 5556 on this computer is in use by another program.", "lunch-split") });
+
+    await handle({ type: "send", app: null, request: "split lunch bills" });
+
+    assert.ok(posted.some((m) => m.type === "created" && m.name === "lunch-split"));
+    assert.ok(posted.some((m) => m.type === "error" && m.recorded === true));
+  });
+
   it("tells the page when a failure is already in the app's conversation, so it is not said twice", async () => {
-    const kept = setUp({ apps: [lunch], changeFails: new RecordedFailure("The model's service is down.") });
+    const kept = setUp({ apps: [lunch], changeFails: new RecordedFailure("The model's service is down.", "lunch-split") });
     const lost = setUp({ apps: [lunch], changeFails: new Error("Podman is not running.") });
 
     await kept.handle({ type: "send", app: "lunch-split", request: "add totals" });
@@ -399,7 +433,7 @@ describe("the Mayfly panel's controller", () => {
     assert.equal(stateOf(posted.at(-1))?.working, null);
   });
 
-  it("copies the owner's email and password to the clipboard, never sending the password to the page", async () => {
+  it("copies the owner's email and password to the clipboard, without sending the password to the page", async () => {
     const { handle, posted, copied } = setUp({ apps: [] });
 
     await handle({ type: "copy", what: "email" });
@@ -408,6 +442,17 @@ describe("the Mayfly panel's controller", () => {
 
     assert.deepEqual(copied, [owner.email, owner.password]);
     assert.ok(!JSON.stringify(posted).includes(owner.password));
+  });
+
+  it("sends the page the owner's password only when the person asks to see it", async () => {
+    const { handle, posted } = setUp({ apps: [] });
+
+    await handle({ type: "ready" });
+    const before = JSON.stringify(posted);
+    await handle({ type: "show-password" });
+
+    assert.ok(!before.includes(owner.password));
+    assert.deepEqual(posted.at(-1), { type: "password", password: owner.password });
   });
 
   it("keeps an API key in secret storage for the endpoint it was given for, and never sends it to the page", async () => {
@@ -467,6 +512,60 @@ describe("the Mayfly panel's controller", () => {
     );
   });
 
+  it("adds someone and offers to email them, without sending their password to the page", async () => {
+    const { handle, posted, opened } = setUp({ apps: [lunch] });
+
+    await handle({ type: "add-person", email: "ana@example.com" });
+
+    assert.deepEqual(stateOf(posted.at(-2))?.people, ["ana@example.com"]);
+    assert.deepEqual(posted.at(-1), { type: "offer-email", about: "welcome", email: "ana@example.com" });
+    assert.deepEqual(opened, []);
+    assert.ok(!JSON.stringify(posted).includes("ana-six-word-pass"));
+  });
+
+  it("drafts the welcome email in the mail app when the owner says so, with the password", async () => {
+    const { handle, opened } = setUp({ apps: [lunch] });
+    await handle({ type: "add-person", email: "ana@example.com" });
+
+    await handle({ type: "email", about: "welcome", email: "ana@example.com" });
+
+    assert.match(opened[0] ?? "", /^mailto:ana@example\.com\?/);
+    assert.match(decodeURIComponent(opened[0] ?? ""), /Password: ana-six-word-pass/);
+  });
+
+  it("shows someone's password only when asked", async () => {
+    const { handle, posted } = setUp({ apps: [lunch] });
+    await handle({ type: "add-person", email: "ana@example.com" });
+
+    await handle({ type: "show-password", email: "ana@example.com" });
+
+    assert.deepEqual(posted.at(-1), { type: "password", email: "ana@example.com", password: "ana-six-word-pass" });
+  });
+
+  it("shares an app, offers to email them, and drafts its address on the private network when the owner says so", async () => {
+    const { handle, posted, opened, calls } = setUp({ apps: [lunch] });
+    await handle({ type: "phone", on: true });
+    await handle({ type: "add-person", email: "ana@example.com" });
+
+    await handle({ type: "share", app: "lunch-split", email: "ana@example.com", shared: true });
+    await handle({ type: "email", about: "shared", email: "ana@example.com", app: "lunch-split" });
+
+    assert.ok(calls.includes("share lunch-split ana@example.com true"));
+    assert.ok(posted.some((message) => message.type === "offer-email" && message.about === "shared"));
+    assert.match(decodeURIComponent(opened.at(-1) ?? ""), /You can now open lunch-split: https:\/\/mayfly\.tail1a2b\.ts\.net:38100\//);
+  });
+
+  it("won't share an app while phone access is off, since no one else could reach it", async () => {
+    const { handle, posted, calls } = setUp({ apps: [lunch] });
+    await handle({ type: "add-person", email: "ana@example.com" });
+
+    await handle({ type: "share", app: "lunch-split", email: "ana@example.com", shared: true });
+
+    assert.ok(!calls.some((call) => call.startsWith("share")));
+    const error = posted.find((message) => message.type === "error");
+    assert.match(error?.type === "error" ? error.text : "", /Turn on phone access/);
+  });
+
   it("ignores messages it does not understand", async () => {
     const { handle, posted } = setUp({ apps: [] });
 
@@ -489,15 +588,19 @@ interface Options {
   steps?: Step[];
   developer?: boolean;
   keyFor?: string[];
-  createFails?: string;
+  createFails?: string | Error;
   /** What a change fails with, if it does. */
   changeFails?: Error;
   waitForCreate?: boolean;
   /** The apps Podman is not running. */
   stopped?: string[];
+  /** Why turning phone access on fails, if it does. */
+  phoneFails?: string;
 }
 
-function setUp({ apps, created: made = lunch, steps = [], developer: developing = false, keyFor = [OPENAI_ENDPOINT], createFails, changeFails, waitForCreate = false, stopped: stoppedApps = [] }: Options) {
+function setUp({ apps, created: made = lunch, steps = [], developer: developing = false, keyFor = [OPENAI_ENDPOINT], createFails, changeFails, waitForCreate = false, stopped: stoppedApps = [], phoneFails }: Options) {
+  let phoneHost: string | null = null;
+  const people = new Map<string, string>();
   const posted: ToUi[] = [];
   const notes: { text: string; failed: boolean; seen: boolean }[] = [];
   const opened: string[] = [];
@@ -515,7 +618,7 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
       calls.push(`create ${description} with ${model}`);
       steps.forEach((step) => watch(step));
       if (waitForCreate) await created;
-      if (createFails) throw new Error(createFails);
+      if (createFails !== undefined) throw typeof createFails === "string" ? new Error(createFails) : createFails;
       apps.push(made);
       return made;
     },
@@ -577,6 +680,28 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
     logs: async (pod, container) => [`2026-11-26T15:04:05Z ${pod} ${container}`],
     health: async () => [{ name: "lunch-split", kind: "app", pod: "mayfly-lunch-split", containers: [] }],
     stopped: async () => stoppedApps,
+    phoneAccess: async () => phoneHost,
+    turnOnPhone: async () => {
+      calls.push("turn on phone");
+      if (phoneFails !== undefined) throw new Error(phoneFails);
+      return (phoneHost = "mayfly.tail1a2b.ts.net");
+    },
+    turnOffPhone: async () => {
+      calls.push("turn off phone");
+      phoneHost = null;
+    },
+    people: async () => [...people.keys()],
+    person: async (email) => ({ email, password: people.get(email) ?? "", group: "person-1" }),
+    addPerson: async (email) => {
+      people.set(email, `${email.split("@")[0]}-six-word-pass`);
+      return { email, password: people.get(email) ?? "", group: "person-1" };
+    },
+    newPersonPassword: async (email) => ({ email, password: "brand-new-six-words", group: "person-2" }),
+    removePerson: async (email) => void people.delete(email),
+    share: async (name, email, shared) => {
+      calls.push(`share ${name} ${email} ${shared}`);
+      return { ...lunch, people: shared ? [email] : [] };
+    },
   };
   const handle = createController({
     engine,

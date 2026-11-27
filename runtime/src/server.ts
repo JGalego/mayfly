@@ -3,6 +3,7 @@ import type { Hono } from "hono";
 import { buildApp } from "./app.ts";
 import type { Env } from "./env.ts";
 import { log, useJsonConsole } from "./log.ts";
+import type { SignOutTargets } from "./sign-out.ts";
 
 // The generated app's routes sit next to the runtime: /app/routes.ts.
 const ROUTES = new URL("../routes.ts", import.meta.url).href;
@@ -16,8 +17,10 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 }
 
 const { default: routes } = (await import(ROUTES)) as { default: Hono<Env> };
+// Mayfly names them; a trial run has none, and no one to sign out.
+const signOutTargets = JSON.parse(process.env.MAYFLY_SIGN_OUT ?? "{}") as SignOutTargets;
 // Loopback only: the auth proxy in the same pod is the one way in.
-const server = serve({ fetch: buildApp(routes).fetch, port, hostname: "127.0.0.1" }, () => log("info", "listening", { port }));
+const server = serve({ fetch: buildApp(routes, signOutTargets).fetch, port, hostname: "127.0.0.1" }, () => log("info", "listening", { port }));
 
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
   process.once(signal, () => {

@@ -1,4 +1,4 @@
-import type { IdpSettings } from "../core/auth-config-map.ts";
+import type { SignInSettings } from "../core/sign-out.ts";
 import type { KubeObject } from "../core/kube.ts";
 import type { App, State } from "./state.ts";
 import type { Usage } from "./usage.ts";
@@ -45,15 +45,27 @@ export interface Observer {
   logs(pod: string, container: string, lines: number): Promise<string[]>;
 }
 
+/** A port on this computer that another program holds, so nothing of Mayfly's can listen on it. */
+export class PortTaken extends Error {
+  readonly port: number;
+
+  constructor(port: number) {
+    super(`Port ${port} on this computer is in use by another program. Stop that program, then try again.`);
+    this.port = port;
+  }
+}
+
 export interface IdentitySource {
   /** The pod that signs people in, to watch it like the apps. */
   readonly pod: string;
-  /** Brings the identity provider in line with the owner and apps in the state. */
-  sync(state: State): Promise<void>;
+  /** The loopback port people sign in on, unless another program holds it. */
+  readonly preferredPort: number;
+  /** Brings the identity provider in line with the owner and apps in the state, signing people in on this port. Throws PortTaken when another program holds it. */
+  sync(state: State, port: number): Promise<void>;
   /** Stops and removes the identity provider. */
   stop(): Promise<void>;
-  /** The proxy settings an app uses to sign people in. */
-  settingsFor(app: App): IdpSettings;
+  /** How an app signs people in on this port, and out again. */
+  settingsFor(app: App, port: number): SignInSettings;
 }
 
 /** A piece of what the person says to the model: text, or an image, in base64. */
@@ -89,6 +101,24 @@ export interface ModelProvider {
 
 export type Trial = { readonly ok: true } | { readonly ok: false; readonly problem: string };
 
+/** Whether the phone can reach this computer: its name on the private network, or what stands in the way. */
+export type PhoneNetworkStatus =
+  | { readonly state: "ready"; readonly host: string }
+  | { readonly state: "missing" | "off" | "signed-out" | "no-https" }
+  /** Another user on this computer holds the network, as Tailscale on Windows allows one at a time. */
+  | { readonly state: "other-user"; readonly user: string }
+  /** Mayfly couldn't tell how it is, and the reason is what the network said. */
+  | { readonly state: "failed"; readonly reason: string };
+
+/** The private network the phone reaches apps through. It serves HTTPS on the computer's name there. */
+export interface PhoneNetwork {
+  status(): Promise<PhoneNetworkStatus>;
+  /** Serves HTTPS on this port of the computer's name, forwarding to a loopback port, across restarts until stopped. */
+  serve(port: number, to: number): Promise<void>;
+  /** Stops serving this port. A port that isn't served is already stopped. */
+  stop(port: number): Promise<void>;
+}
+
 export interface Builder {
   /** Builds an app's image from its routes and returns the image's reference. */
   build(name: string, routes: string): Promise<string>;
@@ -107,4 +137,5 @@ export interface Ports {
   readonly models: (id: string | null) => ModelProvider;
   readonly builder: Builder;
   readonly files: FileStore;
+  readonly phoneNetwork: PhoneNetwork;
 }

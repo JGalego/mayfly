@@ -8,6 +8,14 @@ export interface Owner {
   readonly password: string;
 }
 
+/** Someone the owner shares some of their apps with. They sign in with their own email and password. */
+export interface Person {
+  readonly email: string;
+  readonly password: string;
+  /** Their own sign-in group, which each app shared with them lets in. A new one ends every session they had. */
+  readonly group: string;
+}
+
 /** One attempt at an app's code, kept whether or not it passed: a commit in the app's history. */
 export type Version = VersionDetails &
   (
@@ -75,6 +83,8 @@ export interface App {
   readonly lastAttachments?: readonly Attachment[];
   readonly conversation: readonly Turn[];
   readonly spent: Usage;
+  /** The people it's shared with, by email. The owner can always open it. */
+  readonly people?: readonly string[];
 }
 
 /** One call to a model: when it ended, for which app, to which model, what it spent and how it went. Kept when the app is removed. */
@@ -97,16 +107,22 @@ export interface ModelCall {
 
 export interface State {
   readonly owner: Owner | null;
+  /** Everyone the owner can share apps with. */
+  readonly people: readonly Person[];
   readonly apps: readonly App[];
   /** Everything the model has spent, including on removed apps and on attempts that failed. */
   readonly spent: Usage;
   /** Every call to a model, oldest first: the ledger the spending is broken down from. */
   readonly calls: readonly ModelCall[];
+  /** The computer's name the phone opens apps on, while phone access is on. */
+  readonly phoneHost: string | null;
+  /** The loopback port people sign in on, once another program took the identity provider's own; null until then. */
+  readonly signInPort: number | null;
 }
 
-export const EMPTY_STATE: State = { owner: null, apps: [], spent: NO_USAGE, calls: [] };
+export const EMPTY_STATE: State = { owner: null, people: [], apps: [], spent: NO_USAGE, calls: [], phoneHost: null, signInPort: null };
 
-/** The role the owner holds, and the only one a new app lets in. */
+/** The owner's sign-in group, which every app lets in. */
 export const OWNER_ROLE = "owner";
 
 export function findApp(state: State, name: string): App | undefined {

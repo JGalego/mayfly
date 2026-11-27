@@ -41,6 +41,9 @@ export interface Activity {
   readonly text: string;
 }
 
+/** An email Mayfly can draft for the owner to send: a welcome or a new password, with the password, or a shared app's link. */
+export type MailAbout = { readonly about: "welcome" | "new-password"; readonly email: string } | { readonly about: "shared"; readonly email: string; readonly app: string };
+
 /** What the page asks the extension to do. */
 export type FromUi =
   | { readonly type: "ready" }
@@ -50,13 +53,22 @@ export type FromUi =
   | { readonly type: "open-link"; readonly url: string }
   | { readonly type: "remove"; readonly name: string }
   | { readonly type: "copy"; readonly what: "email" | "password" }
+  /** Shows a password in the page, for typing it on another device: the owner's, or that of the person named. */
+  | { readonly type: "show-password"; readonly email?: string }
   | { readonly type: "save-model"; readonly model: ModelSetting; readonly apiKey: string }
   | { readonly type: "remove-model"; readonly id: string }
   | { readonly type: "default-model"; readonly id: string }
   | { readonly type: "use-model"; readonly app: string; readonly model: string }
   | { readonly type: "star"; readonly app: string; readonly starred: boolean }
   | { readonly type: "owner-email"; readonly email: string }
-  | { readonly type: "new-password" }
+  /** A new password for the owner, or for the person named. */
+  | { readonly type: "new-password"; readonly email?: string }
+  | { readonly type: "add-person"; readonly email: string }
+  | { readonly type: "remove-person"; readonly email: string }
+  /** Drafts an email in the owner's mail app, for them to send. */
+  | ({ readonly type: "email" } & MailAbout)
+  /** Lets someone open an app, or no longer. */
+  | { readonly type: "share"; readonly app: string; readonly email: string; readonly shared: boolean }
   | { readonly type: "developer"; readonly on: boolean }
   | { readonly type: "health" }
   | { readonly type: "ledger" }
@@ -69,6 +81,8 @@ export type FromUi =
   | { readonly type: "attachment"; readonly app: string; readonly id: string }
   | { readonly type: "fix" | "retry" | "undo" | "start"; readonly app: string }
   | { readonly type: "autostart"; readonly on: boolean }
+  /** Lets the phone open the apps through Tailscale, or no longer. */
+  | { readonly type: "phone"; readonly on: boolean }
   /** Whether the page has the focus, which it loses when Podman Desktop's window goes to the background. */
   | { readonly type: "focus"; readonly on: boolean }
   /** Sent by the extension, not the page, when Podman Desktop starts and the person wants stopped apps started. */
@@ -77,12 +91,14 @@ export type FromUi =
   | { readonly type: "deploy"; readonly app: string; readonly version: string }
   | { readonly type: "save"; readonly app: string; readonly from: string; readonly routes: string; readonly message: string };
 
-/** What the extension tells the page. Never a secret. */
+/** What the extension tells the page. Never a secret, but for a password the person asks to see. */
 export type ToUi =
   | {
       readonly type: "state";
       readonly apps: readonly AppView[];
       readonly owner: string;
+      /** Everyone the owner can share apps with, by email. */
+      readonly people: readonly string[];
       readonly models: readonly ModelView[];
       /** The model new apps use. */
       readonly defaultModel: string;
@@ -92,6 +108,8 @@ export type ToUi =
       readonly developer: boolean;
       /** Whether to start the apps Podman is not running when Podman Desktop starts. */
       readonly autostart: boolean;
+      /** The computer's name the phone opens apps on, or null while phone access is off. */
+      readonly phoneHost: string | null;
     }
   | { readonly type: "progress"; readonly working: Progress }
   | { readonly type: "created"; readonly name: string }
@@ -108,5 +126,9 @@ export type ToUi =
   | { readonly type: "logs"; readonly pod: string; readonly container: string; readonly lines: readonly string[] }
   | { readonly type: "code"; readonly app: string; readonly version: string; readonly routes: string; readonly thinking: string }
   | { readonly type: "notice"; readonly text: string }
+  /** Asks the owner whether to email someone about what just changed for them. */
+  | ({ readonly type: "offer-email" } & MailAbout)
+  /** A password the person asked to see: the owner's, or that of the person named. */
+  | { readonly type: "password"; readonly password: string; readonly email?: string }
   /** Recorded when the app's conversation already says it, so the page need not. */
   | { readonly type: "error"; readonly text: string; readonly recorded?: true };

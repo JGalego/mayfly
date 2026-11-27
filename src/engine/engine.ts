@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { appUrl } from "../core/app-url.ts";
+import { phoneDoorPort, phoneSidePort } from "../core/phone.ts";
 import { appObjects } from "./app-objects.ts";
 import { generateApp, listenFor, type Ask, type Attempt, type Generation } from "./generate.ts";
 import { ASK_PROMPT, fixFor, questionFor, withFiles } from "./prompt.ts";
@@ -7,9 +8,10 @@ import type { Attachment, FileData } from "./attachments.ts";
 import { errorsIn } from "./log-errors.ts";
 import { mayflyName } from "../core/names.ts";
 import { parseAppName } from "../core/manifest.ts";
-import type { ContainerHealth, ModelProvider, Ports } from "./ports.ts";
+import { PortTaken, type ContainerHealth, type ModelProvider, type PhoneNetworkStatus, type Ports } from "./ports.ts";
 import { newPassword, newSecret } from "./secrets.ts";
-import { findApp, findVersion, runningVersion, withApp, withoutApp, type App, type Author, type ModelCall, type Owner, type State, type Turn, type Version } from "./state.ts";
+import { allowedGroups, EMAIL, findPerson, peopleOf, sharing, withNewPassword, withoutPerson, withPerson } from "./people.ts";
+import { findApp, findVersion, runningVersion, withApp, withoutApp, type App, type Author, type ModelCall, type Owner, type Person, type State, type Turn, type Version } from "./state.ts";
 import { UNWATCHED, type Watcher } from "./step.ts";
 import { addUsage, metered, NO_USAGE, type Usage } from "./usage.ts";
 
@@ -17,14 +19,40 @@ const FIRST_PORT = 18100;
 // Enough to look back a while, which the page's filters then narrow.
 const LOG_LINES = 1000;
 const CONTAINER = /^[a-z0-9-]+$/;
-const EMAIL = /^[^\s@]+@[^\s@]+$/;
 // What Mayfly says when the model said nothing after the code.
 const MADE = "App deployed.";
 const CHANGED = "Update deployed.";
 const SAVED = "Saved. Trial passed. Deploy to run this version.";
+// How many ports past a taken one sign-in tries before it gives up.
+const SIGN_IN_TRIES = 20;
+/** What to do before phone access can be turned on, for each way Tailscale isn't ready. */
+export function phoneNotReady(status: Exclude<PhoneNetworkStatus, { readonly state: "ready" }>): string {
+  switch (status.state) {
+    case "missing":
+      return "Install Tailscale from tailscale.com/download and sign in, then try again.";
+    case "off":
+      return "Tailscale is off. Turn it on, then try again.";
+    case "signed-out":
+      return "Sign in to Tailscale, then try again.";
+    case "no-https":
+      return "Your tailnet doesn't give this computer HTTPS certificates yet. In Tailscale's admin console, open DNS and choose Enable HTTPS, then try again.";
+    case "other-user":
+      return `Tailscale is in use by another Windows user (${status.user}). Run Podman Desktop as that user, or sign Tailscale in as this one.`;
+    case "failed":
+      return `Mayfly couldn't tell how Tailscale is. ${status.reason}`;
+  }
+}
 
 /** Work that failed, and that the app's conversation already says failed and why. */
-export class RecordedFailure extends Error {}
+export class RecordedFailure extends Error {
+  /** The app whose conversation says it, which a new app's failed work leaves behind. */
+  readonly app: string;
+
+  constructor(message: string, app: string, options?: ErrorOptions) {
+    super(message, options);
+    this.app = app;
+  }
+}
 
 /** A version as a shell shows it: how long its code and the model's thinking are, but not them, which the shell asks for when it needs them. */
 export type VersionView = Omit<Version, "routes" | "image" | "thinking"> & { readonly lines: number; readonly thinkingWords: number };
@@ -55,6 +83,8 @@ export interface AppView {
   readonly versions: readonly VersionView[];
   readonly conversation: readonly Turn[];
   readonly spent: Usage;
+  /** The people it's shared with, by email. */
+  readonly people: readonly string[];
 }
 
 export interface Engine {
@@ -96,6 +126,18 @@ export interface Engine {
   changeEmail(email: string): Promise<Owner>;
   /** Gives the owner a new random password, and returns them with it. */
   newPassword(): Promise<Owner>;
+  /** Everyone the owner can share apps with, by email. */
+  people(): Promise<readonly string[]>;
+  /** Someone the owner can share apps with, and their password, for showing it or sending it to them. */
+  person(email: string): Promise<Person>;
+  /** Adds someone to share apps with, and returns them with their new password. */
+  addPerson(email: string): Promise<Person>;
+  /** Gives someone a new password, which ends every session the old one opened. */
+  newPersonPassword(email: string): Promise<Person>;
+  /** Removes someone. No app lets them in from then on. */
+  removePerson(email: string): Promise<void>;
+  /** Lets someone open an app, or no longer, from the moment it runs again. */
+  share(name: string, email: string, shared: boolean): Promise<AppView>;
   /** What the model has spent on every app, including removed ones and attempts that failed. */
   spent(): Promise<Usage>;
   /** Every call to a model, oldest first, removed apps' included. */
@@ -104,9 +146,15 @@ export interface Engine {
   health(): Promise<ServiceHealth[]>;
   /** The last lines one container of an app's pod, or the sign-in service's, wrote. No other pod's. */
   logs(pod: string, container: string): Promise<string[]>;
+  /** The computer's name the phone opens apps on, or null while phone access is off. */
+  phoneAccess(): Promise<string | null>;
+  /** Lets the phone open the apps over the private network, through a second door each. Refuses, saying what to do, until the network is ready. */
+  turnOnPhone(): Promise<string>;
+  /** Closes the phone's doors. The apps carry on at their localhost addresses. */
+  turnOffPhone(): Promise<void>;
 }
 
-export function createEngine({ store, deployer, observer, identity, models, builder, files }: Ports): Engine {
+export function createEngine({ store, deployer, observer, identity, models, builder, files, phoneNetwork }: Ports): Engine {
   async function generate(ask: Ask, model: ModelProvider, watch: Watcher): Promise<Generated> {
     const meter = metered(model);
     // Each attempt is one call, so a call's outcome is its attempt's. Work cut short leaves its calls' outcomes unknown.
@@ -140,6 +188,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     try {
       return await work();
     } catch (error) {
+      if (error instanceof RecordedFailure) throw error;
       const reason = error instanceof Error ? error.message : String(error);
       const state = await store.load();
       const app = findApp(state, name);
@@ -149,7 +198,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
         { from: "mayfly", text: reason, versions: [], took: Date.now() - started, at: Date.now(), failed: true },
       ];
       await store.save(withApp(state, { ...app, conversation: [...app.conversation, ...turns] }));
-      throw new RecordedFailure(reason, { cause: error });
+      throw new RecordedFailure(reason, name, { cause: error });
     }
   }
 
@@ -161,7 +210,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     const last = versions.at(-1);
     const passed = last?.problem === null ? last : undefined;
     const running = made.runs ? passed : undefined;
-    const reply: Turn = { from: "mayfly", text: replyFor(app, versions, made.runs), versions: versions.map((version) => version.id), took: Date.now() - made.started, at: Date.now() };
+    const reply: Extract<Turn, { from: "mayfly" }> = { from: "mayfly", text: replyFor(app, versions, made.runs), versions: versions.map((version) => version.id), took: Date.now() - made.started, at: Date.now() };
     const next: App = {
       ...app,
       ...(running === undefined || app.head === null ? {} : { previous: app.head }),
@@ -170,12 +219,23 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       conversation: [...app.conversation, { from: "person", text: request, at: made.started, ...withAttachments(made.attachments ?? []) }, reply],
     };
     const nextState = charge(withApp(state, next), calls);
+    // Kept before it runs: whatever happens then, the model's work and what it cost stay.
+    await store.save(nextState);
     if (running !== undefined) {
       watch({ kind: "deploying" });
-      await syncSignIn(nextState);
-      await deployer.deploy(appObjects(next, running.image, identity.settingsFor(next)));
+      let ready = nextState;
+      try {
+        ready = await signInAndRun(nextState, next, running.image);
+        if (ready !== nextState) await store.save(ready);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        // The version stays the one to run, so Start runs it, and Undo still goes back to the one before.
+        const text = [running.summary, `It passed its trial, but didn't start: ${reason} Choose Start to run it once that's fixed.`].filter(Boolean).join("\n\n");
+        const kept: App = { ...next, conversation: [...next.conversation.slice(0, -1), { ...reply, text, failed: true }] };
+        await store.save(withApp(ready, kept));
+        throw new RecordedFailure(reason, name, { cause: error });
+      }
     }
-    await store.save(nextState);
     return appView(existingApp(nextState, name));
   }
 
@@ -183,14 +243,101 @@ export function createEngine({ store, deployer, observer, identity, models, buil
   async function updateOwner(change: (owner: Owner) => Owner): Promise<Owner> {
     const state = withOwner(await store.load());
     const next = { ...state, owner: change(state.owner) };
-    if (anyRunning(next)) await identity.sync(next);
-    await store.save(next);
+    await store.save(anyRunning(next) ? await syncSignIn(next) : next);
     return next.owner;
   }
 
-  /** Sign-in is there for the apps: it runs while any does, and goes with the last. */
-  async function syncSignIn(state: State): Promise<void> {
-    await (anyRunning(state) ? identity.sync(state) : identity.stop());
+  function signInPortOf(state: State): number {
+    return state.signInPort ?? identity.preferredPort;
+  }
+
+  /**
+   * Sign-in is there for the apps: it runs while any does, and goes with the last, for the phone too.
+   * Returns the state, which says where it ended up if it had to move.
+   */
+  async function syncSignIn(state: State): Promise<State> {
+    const port = signInPortOf(state);
+    if (!anyRunning(state)) {
+      await identity.stop();
+      if (state.phoneHost !== null) await phoneNetwork.stop(phoneSidePort(port));
+      return state;
+    }
+    try {
+      await identity.sync(state, port);
+    } catch (error) {
+      if (error instanceof PortTaken && error.port === port) return moveSignIn(state, port);
+      throw error;
+    }
+    if (state.phoneHost !== null) await phoneNetwork.serve(phoneSidePort(port), port);
+    return state;
+  }
+
+  /** Another program holds sign-in's port: sign-in moves to the next one free, and the running apps follow, since they send people there. */
+  async function moveSignIn(state: State, taken: number): Promise<State> {
+    for (let port = taken + 1; port <= taken + SIGN_IN_TRIES; port++) {
+      const moved = { ...state, signInPort: port };
+      try {
+        // Tried, not probed: under WSL's mirrored networking, a port free to Windows can still be taken for Podman.
+        await identity.sync(moved, port);
+      } catch (error) {
+        if (error instanceof PortTaken && error.port === port) continue;
+        throw error;
+      }
+      if (moved.phoneHost !== null) {
+        await phoneNetwork.stop(phoneSidePort(taken));
+        await phoneNetwork.serve(phoneSidePort(port), port);
+      }
+      await runApps(moved);
+      return moved;
+    }
+    throw new Error(`Ports \`${taken}\` to \`${taken + SIGN_IN_TRIES}\` are all in use, so sign-in can't start. Free one of them, then try again.`);
+  }
+
+  /** Runs sign-in and one app, and returns the state, which says where sign-in ended up. */
+  async function signInAndRun(state: State, app: App, image: string): Promise<State> {
+    const ready = await syncSignIn(state);
+    // Moving sign-in ran every app again with it, this one included.
+    if (ready === state) await runApp(ready, app, image);
+    return ready;
+  }
+
+  /** Runs an app's image, letting in the people it's shared with, and while phone access is on, through its phone door too. */
+  async function runApp(state: State, app: App, image: string): Promise<void> {
+    await deployer.deploy(appObjects(app, image, identity.settingsFor(app, signInPortOf(state)), state.phoneHost, allowedGroups(state, app)));
+    if (state.phoneHost !== null) await phoneNetwork.serve(phoneSidePort(app.hostPort), phoneDoorPort(app.hostPort));
+  }
+
+  /**
+   * Keeps a change to who may sign in or open what. Sign-in learns of it when people changed, and the named apps run again,
+   * since each app's auth proxy decides whom it lets in.
+   */
+  async function applyAccess(state: State, apps: readonly string[], peopleChanged: boolean): Promise<void> {
+    await store.save(state);
+    if (!anyRunning(state)) return;
+    const ready = peopleChanged ? await syncSignIn(state) : state;
+    // Moving sign-in ran every app again already.
+    if (ready !== state) return void (await store.save(ready));
+    for (const app of state.apps) {
+      const running = runningVersion(app);
+      if (apps.includes(app.name) && running !== undefined) await runApp(ready, app, await builder.build(app.name, running.routes));
+    }
+  }
+
+  /** Runs every app that has a version to run again, with or without its phone door as the state says. */
+  async function runApps(state: State): Promise<void> {
+    for (const app of state.apps) {
+      const running = runningVersion(app);
+      // Built again, as when starting it, in case its image is gone.
+      if (running !== undefined) await runApp(state, app, await builder.build(app.name, running.routes));
+    }
+  }
+
+  /** Runs sign-in and every app with a version to run again, and returns the state, which says where sign-in ended up. */
+  async function runAll(state: State): Promise<State> {
+    const ready = await syncSignIn(state);
+    // Moving sign-in ran the apps again already.
+    if (ready === state) await runApps(ready);
+    return ready;
   }
 
   const engine: Engine = {
@@ -221,7 +368,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     async fix(name, watch = UNWATCHED) {
       existingApp(await store.load(), name);
       const errors = errorsIn(await observer.logs(mayflyName(name), "app", LOG_LINES));
-      if (errors.length === 0) throw new Error(`${name} logged no errors to fix.`);
+      if (errors.length === 0) throw new Error(`\`${name}\` logged no errors to fix.`);
       return engine.change(name, fixFor(errors), watch);
     },
 
@@ -229,13 +376,13 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       const app = existingApp(await store.load(), name);
       // Apps kept before the last request was remembered have their model's last version's.
       const request = app.lastRequest ?? app.versions.findLast((version) => version.by.kind === "model")?.request;
-      if (request === undefined) throw new Error(`${name} has no request to retry.`);
+      if (request === undefined) throw new Error(`\`${name}\` has no request to retry.`);
       return engine.change(name, request, watch, await loaded(app.lastAttachments ?? []));
     },
 
     async undo(name, watch = UNWATCHED) {
       const { previous } = existingApp(await store.load(), name);
-      if (previous === undefined) throw new Error(`${name} has no previous deployment.`);
+      if (previous === undefined) throw new Error(`\`${name}\` has no previous deployment.`);
       return engine.deploy(name, previous, watch);
     },
 
@@ -249,13 +396,13 @@ export function createEngine({ store, deployer, observer, identity, models, buil
         const state = withOwner(await store.load());
         const app = existingApp(state, name);
         const running = runningVersion(app);
-        if (running === undefined) throw new Error(`${name} has no deployed version to start.`);
+        if (running === undefined) throw new Error(`\`${name}\` has no deployed version to start.`);
         // Built again, as when deploying, in case its image is gone; it passed its trial when it was made.
         watch({ kind: "building" });
         const image = await builder.build(name, running.routes);
         watch({ kind: "deploying" });
-        await syncSignIn(state);
-        await deployer.deploy(appObjects(app, image, identity.settingsFor(app)));
+        const ready = await signInAndRun(state, app, image);
+        if (ready !== state) await store.save(ready);
         return appView(app);
       });
     },
@@ -299,16 +446,16 @@ export function createEngine({ store, deployer, observer, identity, models, buil
         };
         const running = runningVersion(app);
         // The pod, the sign-in client and its cookie all carry the name, so the app stops under the old one and starts under the new.
+        let ready = next;
         if (running !== undefined) {
           watch({ kind: "building" });
           const image = await builder.build(newName, running.routes);
           watch({ kind: "deploying" });
-          await deployer.remove(appObjects(app, running.image, identity.settingsFor(app)));
-          await syncSignIn(next);
-          await deployer.deploy(appObjects(renamed, image, identity.settingsFor(renamed)));
-        } else await syncSignIn(next);
+          await deployer.remove(appObjects(app, running.image, identity.settingsFor(app, signInPortOf(state))));
+          ready = await signInAndRun(next, renamed, image);
+        } else ready = await syncSignIn(next);
         await builder.forget(name);
-        await store.save(next);
+        await store.save(ready);
         return appView(renamed);
       });
     },
@@ -336,7 +483,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       return recording(name, message || "Manual edit", [], async () => {
         const started = Date.now();
         const state = withOwner(await store.load());
-        if (findVersion(existingApp(state, name), from) === undefined) throw new Error(`${name} has no version ${from}`);
+        if (findVersion(existingApp(state, name), from) === undefined) throw new Error(`\`${name}\` has no version \`${from}\``);
         watch({ kind: "building" });
         const image = await builder.build(name, routes);
         watch({ kind: "trying" });
@@ -355,7 +502,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
         const state = withOwner(await store.load());
         const app = existingApp(state, name);
         const version = findVersion(app, id);
-        if (version?.problem !== null) throw new Error(`${name} has no version ${id} that passed`);
+        if (version?.problem !== null) throw new Error(`\`${name}\` has no version \`${id}\` that passed`);
         // It passed its trial when it was made, on the same runtime, so it is built again but not tried again.
         watch({ kind: "building" });
         const image = await builder.build(name, version.routes);
@@ -368,9 +515,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
         const next: App = { ...app, ...(app.head === null || app.head === id ? {} : { previous: app.head }), head: id, conversation: [...app.conversation, ...conversation] };
         const nextState = withApp(state, next);
         watch({ kind: "deploying" });
-        await syncSignIn(nextState);
-        await deployer.deploy(appObjects(next, image, identity.settingsFor(next)));
-        await store.save(nextState);
+        await store.save(await signInAndRun(nextState, next, image));
         return appView(next);
       });
     },
@@ -378,13 +523,13 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     async attachment(name, id) {
       const app = existingApp(await store.load(), name);
       const found = app.conversation.flatMap((turn) => (turn.from === "person" ? (turn.attachments ?? []) : [])).find((file) => file.id === id);
-      if (found === undefined) throw new Error(`${name} has no file ${id}`);
+      if (found === undefined) throw new Error(`\`${name}\` has no file \`${id}\``);
       return { name: found.name, type: found.type, data: await files.get(id) };
     },
 
     async written(name, id) {
       const version = findVersion(existingApp(await store.load(), name), id);
-      if (version === undefined) throw new Error(`${name} has no version ${id}`);
+      if (version === undefined) throw new Error(`\`${name}\` has no version \`${id}\``);
       return { routes: version.routes, thinking: version.thinking ?? "" };
     },
 
@@ -396,11 +541,39 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       const state = await store.load();
       const app = existingApp(state, name);
       const running = runningVersion(app);
-      if (running !== undefined) await deployer.remove(appObjects(app, running.image, identity.settingsFor(app)));
+      if (running !== undefined) {
+        await deployer.remove(appObjects(app, running.image, identity.settingsFor(app, signInPortOf(state))));
+        if (state.phoneHost !== null) await phoneNetwork.stop(phoneSidePort(app.hostPort));
+      }
       await builder.forget(name);
-      const next = withoutApp(state, name);
-      await syncSignIn(next);
+      await store.save(await syncSignIn(withoutApp(state, name)));
+    },
+
+    async phoneAccess() {
+      return (await store.load()).phoneHost;
+    },
+
+    async turnOnPhone() {
+      const network = await phoneNetwork.status();
+      if (network.state !== "ready") throw new Error(phoneNotReady(network));
+      const next = { ...(await store.load()), phoneHost: network.host };
+      // Saved first: if serving fails partway, it's on, and turning it off or on again puts everything right.
       await store.save(next);
+      const ready = await runAll(next);
+      if (ready !== next) await store.save(ready);
+      return network.host;
+    },
+
+    async turnOffPhone() {
+      const state = await store.load();
+      if (state.phoneHost === null) return;
+      // Stopped first: if that fails partway, it's still on, for another try.
+      for (const app of state.apps) if (app.head !== null) await phoneNetwork.stop(phoneSidePort(app.hostPort));
+      await phoneNetwork.stop(phoneSidePort(signInPortOf(state)));
+      const next = { ...state, phoneHost: null };
+      await store.save(next);
+      const ready = await runAll(next);
+      if (ready !== next) await store.save(ready);
     },
 
     async owner() {
@@ -429,6 +602,41 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       return updateOwner((owner) => ({ ...owner, password: newPassword() }));
     },
 
+    async people() {
+      return (await store.load()).people.map((person) => person.email);
+    },
+
+    async person(email) {
+      const person = findPerson(await store.load(), email);
+      if (person === undefined) throw new Error(`No one called \`${email}\` is here.`);
+      return person;
+    },
+
+    async addPerson(email) {
+      const { state, person } = withPerson(withOwner(await store.load()), email);
+      await applyAccess(state, [], true);
+      return person;
+    },
+
+    async newPersonPassword(email) {
+      const { state, person } = withNewPassword(await store.load(), email);
+      await applyAccess(state, sharedWith(state, person.email), true);
+      return person;
+    },
+
+    async removePerson(email) {
+      const before = await store.load();
+      const shared = sharedWith(before, email);
+      await applyAccess(withoutPerson(before, email), shared, true);
+    },
+
+    async share(name, email, shared) {
+      const before = await store.load();
+      const state = sharing(before, existingApp(before, name).name, email, shared);
+      await applyAccess(state, [name], false);
+      return appView(existingApp(state, name));
+    },
+
     async health() {
       const running = (await store.load()).apps.filter((app) => app.head !== null);
       const services: Omit<ServiceHealth, "containers">[] = [
@@ -446,6 +654,12 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     },
   };
   return engine;
+}
+
+/** The apps shared with someone. */
+function sharedWith(state: State, email: string): string[] {
+  const person = findPerson(state, email);
+  return person === undefined ? [] : state.apps.filter((app) => peopleOf(app).includes(person.email)).map((app) => app.name);
 }
 
 /** Whether any app has a version deployed. */
@@ -485,18 +699,18 @@ function runs({ containers }: ServiceHealth): boolean {
 
 /** A name another app does not have, and that the contract allows. */
 function usableName(state: State, name: string, to: string): string {
-  if (to === name) throw new Error(`${name} is already called that.`);
-  if (findApp(state, to) !== undefined) throw new Error(`There is already an app called ${to}.`);
+  if (to === name) throw new Error(`\`${name}\` is already called that.`);
+  if (findApp(state, to) !== undefined) throw new Error(`There is already an app called \`${to}\`.`);
   try {
     return parseAppName(to);
   } catch {
-    throw new Error(`${to} can't be an app's name: use lowercase letters, digits and inner hyphens, at most 40 characters.`);
+    throw new Error(`\`${to}\` can't be an app's name: use lowercase letters, digits and inner hyphens, at most 40 characters.`);
   }
 }
 
 function existingApp(state: State, name: string): App {
   const app = findApp(state, name);
-  if (app === undefined) throw new Error(`no app named ${name}`);
+  if (app === undefined) throw new Error(`No app is called \`${name}\`.`);
   return app;
 }
 
@@ -551,5 +765,5 @@ function appView(app: App): AppView {
     lines: routes.split("\n").length - 1,
     thinkingWords: thinking.split(/\s+/).filter(Boolean).length,
   }));
-  return { name: app.name, url: appUrl(app.hostPort), model: app.model, starred: app.starred, head: app.head, versions, conversation: app.conversation, spent: app.spent };
+  return { name: app.name, url: appUrl(app.hostPort), model: app.model, starred: app.starred, head: app.head, versions, conversation: app.conversation, spent: app.spent, people: peopleOf(app) };
 }

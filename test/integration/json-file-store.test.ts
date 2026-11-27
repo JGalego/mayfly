@@ -7,7 +7,7 @@ import { jsonFileStore } from "../../src/adapters/json-file/json-file-store.ts";
 import { EMPTY_STATE, type State } from "../../src/engine/state.ts";
 
 const owner = { email: "o@mayfly.local", username: "o", password: "p" };
-const state: State = { owner, apps: [], spent: { input: 1, output: 2, thinking: 0 }, calls: [] };
+const state: State = { owner, people: [], apps: [], spent: { input: 1, output: 2, thinking: 0 }, calls: [], phoneHost: null, signInPort: null };
 
 describe("the JSON file store", () => {
   it("starts empty when there is no file yet", async () => {

@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import type { ConfigMap, KubeObject } from "../core/kube.ts";
+import type { ConfigMap, KubeObject, Pod } from "../core/kube.ts";
 import { createEngine, RecordedFailure } from "./engine.ts";
-import type { Builder, Deployer, FileStore, IdentitySource, Message, ModelProvider, Observer, StateStore, Trial } from "./ports.ts";
+import { PortTaken, type Builder, type Deployer, type FileStore, type IdentitySource, type Message, type ModelProvider, type Observer, type PhoneNetwork, type PhoneNetworkStatus, type StateStore, type Trial } from "./ports.ts";
 import { EMPTY_STATE, type State } from "./state.ts";
 
 const COST = { input: 100, output: 20, thinking: 0 };
@@ -168,7 +168,7 @@ describe("the engine", () => {
     const { engine, asked, logged } = setUp([reply("lunch"), reply("lunch")]);
     await engine.create("split lunch bills");
 
-    await assert.rejects(engine.fix("lunch"), /lunch logged no errors to fix/);
+    await assert.rejects(engine.fix("lunch"), /`lunch` logged no errors to fix/);
     logged.push('2026-11-26T15:04:05Z {"time":"x","level":"info","msg":"GET / 200"}', '2026-11-26T15:04:06Z {"time":"x","level":"error","msg":"bills is not defined"}');
     const fixed = await engine.fix("lunch");
 
@@ -221,9 +221,9 @@ describe("the engine", () => {
     await engine.create("split lunch bills");
     await engine.create("keep notes");
 
-    await assert.rejects(engine.rename("lunch", "Lunch Bills"), /Lunch Bills can't be an app's name: use lowercase letters/);
-    await assert.rejects(engine.rename("lunch", "notes"), /There is already an app called notes/);
-    await assert.rejects(engine.rename("lunch", "lunch"), /lunch is already called that/);
+    await assert.rejects(engine.rename("lunch", "Lunch Bills"), /`Lunch Bills` can't be an app's name: use lowercase letters/);
+    await assert.rejects(engine.rename("lunch", "notes"), /There is already an app called `notes`/);
+    await assert.rejects(engine.rename("lunch", "lunch"), /`lunch` is already called that/);
   });
 
   it("starts the running version again, with the sign-in service, changing nothing about the app", async () => {
@@ -250,7 +250,7 @@ describe("the engine", () => {
     const { engine } = setUp([reply("lunch"), reply("lunch"), reply("lunch")], [crashed, crashed, crashed]);
     await engine.create("split lunch bills");
 
-    await assert.rejects(engine.start("lunch"), /lunch has no deployed version to start/);
+    await assert.rejects(engine.start("lunch"), /`lunch` has no deployed version to start/);
   });
 
   it("sends attached files with a request, keeps them apart from the state and in the conversation by name, and sends them again on retry", async () => {
@@ -267,7 +267,7 @@ describe("the engine", () => {
     assert.deepEqual(attached.map((file) => [file.name, file.type, file.bytes]), [["bills.csv", "text/csv", 10], ["mockup.png", "image/png", 3]]);
     assert.equal(kept.size, 2);
     assert.deepEqual([...(await engine.attachment("lunch", attached[1]?.id ?? "")).data], [1, 2, 3]);
-    await assert.rejects(engine.attachment("lunch", "0".repeat(64)), /lunch has no file 0+/);
+    await assert.rejects(engine.attachment("lunch", "0".repeat(64)), /`lunch` has no file `0+`/);
     await engine.retry("lunch");
     assert.match(asked.at(-1) ?? "", /who,amount/);
   });
@@ -294,7 +294,7 @@ describe("the engine", () => {
     const { engine } = setUp([reply("lunch"), reply("lunch")], [crashed, { ok: true }]);
     const app = await engine.create("split lunch bills");
 
-    await assert.rejects(engine.save("lunch", "nope", "export default 2;\n", ""), /lunch has no version nope/);
+    await assert.rejects(engine.save("lunch", "nope", "export default 2;\n", ""), /`lunch` has no version `nope`/);
     await assert.rejects(engine.deploy("lunch", app.versions[0]?.id ?? ""), /no version .* that passed/);
   });
 
@@ -348,7 +348,7 @@ describe("the engine", () => {
   it("refuses to change an app it does not know", async () => {
     const { engine } = setUp([]);
 
-    await assert.rejects(engine.change("ghost", "make it blue"), /no app named ghost/);
+    await assert.rejects(engine.change("ghost", "make it blue"), /No app is called `ghost`/);
   });
 
   it("counts the tokens each app spent, and all of them, including failed attempts and removed apps", async () => {
@@ -431,7 +431,7 @@ describe("the engine", () => {
   it("refuses to remove an app it does not know", async () => {
     const { engine } = setUp([]);
 
-    await assert.rejects(engine.remove("ghost"), /no app named ghost/);
+    await assert.rejects(engine.remove("ghost"), /No app is called `ghost`/);
   });
 
   it("changes the owner's email and password, and tells the sign-in service once an app runs", async () => {
@@ -469,7 +469,212 @@ function textOf(content: Message["content"]): string {
 }
 
 // A reply, or an error the model's service fails with instead.
-function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: string | null) => string = () => "the test model") {
+describe("work that passed but couldn't run", () => {
+  const TAKEN = "Port 18100 on this computer is in use by another program. Stop that program, then try again.";
+
+  it("keeps a new app whole, says why it didn't start, and runs it on Start once that's fixed", async () => {
+    const { engine, deployed, deployFailures } = setUp([reply("lunch")]);
+    deployFailures.push(TAKEN);
+
+    await assert.rejects(engine.create("split lunch bills"), (error: unknown) => error instanceof RecordedFailure && error.app === "lunch");
+    const [kept] = await engine.list();
+    assert.equal(kept?.versions.length, 1);
+    assert.equal(kept?.head, kept?.versions[0]?.id);
+    assert.deepEqual(kept?.conversation.map((turn) => turn.from), ["person", "mayfly"]);
+    assert.match(kept?.conversation.at(-1)?.text ?? "", /didn't start: Port 18100 .*Choose Start/s);
+    const said = kept?.conversation.at(-1);
+    assert.ok(said?.from === "mayfly" && said.failed === true);
+    assert.deepEqual((await engine.ledger()).map((call) => call.app), ["lunch"]);
+
+    await engine.start("lunch");
+    assert.equal(deployed.length, 1);
+  });
+
+  it("keeps a change that passed but couldn't run, with the version before it to go back to", async () => {
+    const { engine, deployFailures } = setUp([reply("lunch", "", "v1"), reply("lunch", "", "v2")]);
+    const before = await engine.create("split lunch bills");
+    deployFailures.push(TAKEN);
+
+    await assert.rejects(engine.change("lunch", "add totals"), RecordedFailure);
+    const [kept] = await engine.list();
+    assert.equal(kept?.versions.length, 2);
+    assert.notEqual(kept?.head, before.head);
+    assert.match(kept?.conversation.at(-1)?.text ?? "", /didn't start/);
+  });
+});
+
+describe("sign-in on a port another program holds", () => {
+  it("moves to the next port free, runs the app with it, and stays there", async () => {
+    const { engine, deployed, synced, takenPorts } = setUp([reply("lunch"), reply("lunch")]);
+    takenPorts.add(5556);
+
+    await engine.create("split lunch bills");
+    takenPorts.clear();
+    await engine.change("lunch", "add totals");
+
+    assert.equal(synced.at(-1)?.signInPort, 5557);
+    assert.deepEqual(deployed.map(loginUrlOf).at(-1), "http://localhost:5557/dex/auth");
+  });
+
+  it("takes the running apps along, since they send people to it", async () => {
+    const { engine, deployed, takenPorts } = setUp([reply("lunch"), reply("notes")]);
+    await engine.create("split lunch bills");
+    takenPorts.add(5556);
+
+    await engine.create("keep notes");
+
+    const lunch = deployed.filter((objects) => containersOf(objects).length > 0 && names(objects).includes("Pod/mayfly-lunch"));
+    assert.deepEqual(lunch.map(loginUrlOf), ["http://localhost:5556/dex/auth", "http://localhost:5557/dex/auth"]);
+  });
+
+  it("moves the phone's way to sign in along with it", async () => {
+    const { engine, served, takenPorts } = setUp([reply("lunch")]);
+    await engine.turnOnPhone();
+    takenPorts.add(5556);
+
+    await engine.create("split lunch bills");
+
+    assert.deepEqual(served, new Map([[25557, 5557], [38100, 28100]]));
+  });
+});
+
+function loginUrlOf(objects: readonly KubeObject[]): string | undefined {
+  return objects.find((o): o is ConfigMap => o.kind === "ConfigMap")?.data.OAUTH2_PROXY_LOGIN_URL;
+}
+
+describe("sharing apps with people", () => {
+  it("tells sign-in about someone new, and runs no app again", async () => {
+    const { engine, deployed, synced } = setUp([reply("lunch")]);
+    await engine.create("split lunch bills");
+
+    const ana = await engine.addPerson("ana@example.com");
+
+    assert.deepEqual(synced.at(-1)?.people, [ana]);
+    assert.equal(deployed.length, 1);
+  });
+
+  it("runs a shared app again letting in the person's group too, and tells sign-in nothing", async () => {
+    const { engine, deployed, synced } = setUp([reply("lunch")]);
+    await engine.create("split lunch bills");
+    const ana = await engine.addPerson("ana@example.com");
+    const syncs = synced.length;
+
+    const view = await engine.share("lunch", ana.email, true);
+
+    assert.deepEqual(view.people, [ana.email]);
+    assert.equal(allowedGroupsIn(deployed.at(-1)), `owner,${ana.group}`);
+    assert.equal(synced.length, syncs);
+  });
+
+  it("runs the apps someone could open again without them when they're removed", async () => {
+    const { engine, deployed, synced } = setUp([reply("lunch")]);
+    await engine.create("split lunch bills");
+    const ana = await engine.addPerson("ana@example.com");
+    await engine.share("lunch", ana.email, true);
+
+    await engine.removePerson(ana.email);
+
+    assert.equal(allowedGroupsIn(deployed.at(-1)), "owner");
+    assert.deepEqual(synced.at(-1)?.people, []);
+    assert.deepEqual(await engine.people(), []);
+  });
+
+  it("lets in only the new group after a new password, so the old sessions end", async () => {
+    const { engine, deployed } = setUp([reply("lunch")]);
+    await engine.create("split lunch bills");
+    const ana = await engine.addPerson("ana@example.com");
+    await engine.share("lunch", ana.email, true);
+
+    const renewed = await engine.newPersonPassword(ana.email);
+
+    assert.equal(allowedGroupsIn(deployed.at(-1)), `owner,${renewed.group}`);
+  });
+});
+
+function allowedGroupsIn(objects: readonly KubeObject[] | undefined): string | undefined {
+  return objects?.find((o): o is ConfigMap => o.kind === "ConfigMap")?.data.OAUTH2_PROXY_ALLOWED_GROUPS;
+}
+
+describe("phone access", () => {
+  it("is off until turned on", async () => {
+    const { engine } = setUp([]);
+
+    assert.equal(await engine.phoneAccess(), null);
+  });
+
+  it("refuses to turn on until the private network is ready, saying what to do, and changes nothing", async () => {
+    const { engine, served } = setUp([], [], undefined, { state: "no-https" });
+
+    await assert.rejects(engine.turnOnPhone(), /Enable HTTPS/);
+    assert.equal(await engine.phoneAccess(), null);
+    assert.deepEqual(served, new Map());
+  });
+
+  it("says which Windows user holds Tailscale, and what to do about it", async () => {
+    const { engine } = setUp([], [], undefined, { state: "other-user", user: "CRITICAL\\jpgalego" });
+
+    await assert.rejects(engine.turnOnPhone(), /in use by another Windows user \(CRITICAL\\jpgalego\)\. Run Podman Desktop as that user/);
+  });
+
+  it("passes on what Tailscale said when Mayfly can't tell how it is", async () => {
+    const { engine } = setUp([], [], undefined, { state: "failed", reason: "Access denied." });
+
+    await assert.rejects(engine.turnOnPhone(), /Tailscale.*Access denied\./);
+  });
+
+  it("turns on by serving sign-in and each running app's phone door, and running the apps with it", async () => {
+    const { engine, served, deployed, synced } = setUp([reply("lunch"), reply("notes"), reply("notes"), reply("notes")], [{ ok: true }, crashed, crashed, crashed]);
+    await engine.create("split lunch bills");
+    await engine.create("keep notes");
+
+    const host = await engine.turnOnPhone();
+
+    assert.equal(host, "mayfly.tail1a2b.ts.net");
+    assert.equal(await engine.phoneAccess(), host);
+    assert.deepEqual(served, new Map([[25556, 5556], [38100, 28100]]));
+    assert.deepEqual(containersOf(deployed.at(-1)), ["auth-proxy", "phone-door", "app"]);
+    assert.equal(synced.at(-1)?.phoneHost, host);
+  });
+
+  it("gives an app made while it's on a phone door from the start", async () => {
+    const { engine, served, deployed } = setUp([reply("lunch")]);
+    await engine.turnOnPhone();
+
+    await engine.create("split lunch bills");
+
+    assert.deepEqual(served, new Map([[25556, 5556], [38100, 28100]]));
+    assert.deepEqual(containersOf(deployed.at(-1)), ["auth-proxy", "phone-door", "app"]);
+  });
+
+  it("stops serving a removed app's port, and sign-in's with the last app", async () => {
+    const { engine, served } = setUp([reply("lunch")]);
+    await engine.turnOnPhone();
+    await engine.create("split lunch bills");
+
+    await engine.remove("lunch");
+
+    assert.deepEqual(served, new Map());
+  });
+
+  it("turns off by serving nothing and running the apps through their localhost door only", async () => {
+    const { engine, served, deployed } = setUp([reply("lunch")]);
+    await engine.turnOnPhone();
+    await engine.create("split lunch bills");
+
+    await engine.turnOffPhone();
+
+    assert.equal(await engine.phoneAccess(), null);
+    assert.deepEqual(served, new Map());
+    assert.deepEqual(containersOf(deployed.at(-1)), ["auth-proxy", "app"]);
+  });
+});
+
+function containersOf(objects: readonly KubeObject[] | undefined): string[] {
+  const pod = objects?.find((o): o is Pod => o.kind === "Pod");
+  return pod?.spec.containers.map((c) => c.name) ?? [];
+}
+
+function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: string | null) => string = () => "the test model", network: PhoneNetworkStatus = { state: "ready", host: "mayfly.tail1a2b.ts.net" }) {
   const log: string[] = [];
   const asked: string[] = [];
   /** What the app's logs say, when a test needs them to say something. */
@@ -484,15 +689,32 @@ function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: st
     load: async () => state,
     save: async (next) => void (state = next),
   };
+  /** Why the next deploys fail, one reason each, as when something else holds a port. */
+  const deployFailures: string[] = [];
   const deployer: Deployer = {
-    deploy: async (objects) => void (log.push("deploy"), deployed.push(objects)),
+    deploy: async (objects) => {
+      const failure = deployFailures.shift();
+      if (failure !== undefined) throw new Error(failure);
+      log.push("deploy");
+      deployed.push(objects);
+    },
     remove: async (objects) => void (log.push("remove"), removed.push(objects)),
   };
+  /** Ports another program holds, where Dex can't listen. */
+  const takenPorts = new Set<number>();
   const identity: IdentitySource = {
     pod: "mayfly-dex",
-    sync: async (next) => void (log.push("sync"), synced.push(next)),
+    preferredPort: 5556,
+    sync: async (next, port) => {
+      if (takenPorts.has(port)) throw new PortTaken(port);
+      log.push("sync");
+      synced.push(next);
+    },
     stop: async () => void log.push("stop"),
-    settingsFor: () => ({ OAUTH2_PROXY_CLIENT_ID: "fake" }),
+    settingsFor: (_app, port) => ({
+      proxy: { OAUTH2_PROXY_CLIENT_ID: "fake", OAUTH2_PROXY_LOGIN_URL: `http://localhost:${port}/dex/auth` },
+      endSessionUrl: `http://localhost:${port}/dex/logout`,
+    }),
   };
   const models = (id: string | null): ModelProvider => ({
     name: named(id),
@@ -524,8 +746,15 @@ function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: st
     },
     get: async (id) => kept.get(id) ?? Promise.reject(new Error(`no file ${id}`)),
   };
-  const engine = createEngine({ store, deployer, observer, identity, models, builder, files });
-  return { engine, deployed, removed, synced, forgotten, log, asked, logged, kept };
+  // What the private network serves for the phone: each port, and the loopback port it forwards to.
+  const served = new Map<number, number>();
+  const phoneNetwork: PhoneNetwork = {
+    status: async () => network,
+    serve: async (port, to) => void served.set(port, to),
+    stop: async (port) => void served.delete(port),
+  };
+  const engine = createEngine({ store, deployer, observer, identity, models, builder, files, phoneNetwork });
+  return { engine, deployed, removed, synced, forgotten, served, log, asked, logged, kept, deployFailures, takenPorts };
 }
 
 function names(objects: readonly KubeObject[] | undefined): string[] {

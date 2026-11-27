@@ -2,6 +2,9 @@ import { SIGN_OUT_PATH } from "../core/contract.ts";
 import { kindOf, textOf, type FileData } from "./attachments.ts";
 import type { Part } from "./ports.ts";
 
+// An exit door with an arrow, drawn like the extension's icons: 2-point lines with round ends, in the link's colour.
+const SIGN_OUT_LINK = `<a href="${SIGN_OUT_PATH}" style="display:inline-flex;align-items:center;gap:6px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M15 8l4 4-4 4M19 12H9"/></svg>Sign out</a>`;
+
 // What the model is told. The runtime enforces the important parts anyway: sign-in, the CSP,
 // JSON logs, the body limit. The prompt is there so the model's code works with them, not against them.
 export const SYSTEM_PROMPT = [
@@ -16,7 +19,7 @@ export const SYSTEM_PROMPT = [
   "",
   "People:",
   '- Everyone who reaches the app is already signed in. `c.get("user")` gives `{ id, email, name, groups }`. Never add login, logout, passwords or sessions.',
-  `- People sign out at ${SIGN_OUT_PATH}, which the runtime handles. The home page must link to it: put a small \`<a href="${SIGN_OUT_PATH}">Sign out</a>\` somewhere unobtrusive, such as a corner of the page. A home page without it is sent back.`,
+  `- People sign out at ${SIGN_OUT_PATH}, which the runtime handles. The home page must link to it with this exact link, exit-door icon and all, somewhere unobtrusive such as a corner of the page: \`${SIGN_OUT_LINK}\`. A home page without it is sent back.`,
   "- To show different things to different people, check `user.groups`.",
   "",
   "Pages:",

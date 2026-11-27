@@ -25,6 +25,10 @@ import { addIcons, icon } from "./icons.ts";
 import { renderStatusbar, setUpStatusbar } from "./statusbar.ts";
 import { openForm, renderModels, savedModel, setUpModels } from "./models.ts";
 import { popover } from "./popover.ts";
+import { passwordCard, PASSWORD_SHOWN_MS } from "./password-card.ts";
+import { offerEmail, renderPeople, renderShare, settleSharing, setUpPeople, showPersonPassword } from "./people.ts";
+import { qrCode } from "./qr.ts";
+import { onPhone } from "../../../core/phone.ts";
 import { makingOf, progressView, tickClocks, whatChanged, type Showing } from "./progress.ts";
 
 // Podman Desktop puts this function on every webview page, to send messages to the extension.
@@ -36,9 +40,9 @@ type View = { readonly kind: "new" } | { readonly kind: "app"; readonly name: st
 /** An app's conversation, or its history. */
 type Tab = "chat" | "history" | "code" | "logs";
 /** What Mayfly needs, the models, how everything is running, or how the models did. */
-type SettingsTab = "general" | "models" | "logs" | "usage";
+type SettingsTab = "general" | "people" | "models" | "logs" | "usage";
 
-const SETTINGS_TABS: readonly SettingsTab[] = ["general", "models", "logs", "usage"];
+const SETTINGS_TABS: readonly SettingsTab[] = ["general", "people", "models", "logs", "usage"];
 // Logs and usage are for developers.
 const DEVELOPER_TABS: readonly SettingsTab[] = ["logs", "usage"];
 
@@ -112,10 +116,19 @@ let calls: readonly ModelCall[] | undefined;
 let health: readonly ServiceHealth[] | undefined;
 /** The model the person picked for the next new app, if not the default. */
 let newAppModel: string | undefined;
+/** While the owner's password is shown, what hides it again. */
+let passwordShown: number | undefined;
+/** Whether phone access is being turned on or off, which runs every app again. */
+let phoneSwitching = false;
+/** The phone address the QR code shows, so it's drawn again only when that changes. */
+let phoneUrlShown: string | undefined;
 
 setUpModels(post, () => render());
 setUpStatusbar((tab) => go({ kind: "settings", tab }));
 popover(element("show-sign-in"), element("sign-in-popover"));
+popover(element("show-phone"), element("phone-popover"));
+popover(element("show-share"), element("share-popover"));
+setUpPeople(post, () => render(), () => go({ kind: "settings", tab: "people" }));
 // In a narrow window the sidebar is a drawer: the menu button opens it, and Esc, a click elsewhere or going anywhere closes it.
 element("show-sidebar").addEventListener("click", () => showSidebar(!document.body.classList.contains("sidebar-open")));
 document.addEventListener("keydown", (event) => event.key === "Escape" && showSidebar(false));
@@ -233,9 +246,18 @@ element("settings-copy-password").addEventListener("click", (event) => {
   post({ type: "copy", what: "password" });
   flash(event.currentTarget as HTMLElement, "Copied ✓");
 });
-element("new-password").addEventListener("click", makeNewPassword);
+element("new-password").addEventListener("click", () => {
+  hidePassword();
+  makeNewPassword();
+});
+for (const id of ["show-password", "settings-show-password"]) element(id).addEventListener("click", () => (passwordShown === undefined ? post({ type: "show-password" }) : hidePassword()));
 developer.addEventListener("change", () => post({ type: "developer", on: developer.checked }));
 element<HTMLInputElement>("autostart").addEventListener("change", (event) => post({ type: "autostart", on: (event.target as HTMLInputElement).checked }));
+element<HTMLInputElement>("phone-access").addEventListener("change", (event) => {
+  phoneSwitching = true;
+  post({ type: "phone", on: (event.target as HTMLInputElement).checked });
+  render();
+});
 
 window.setInterval(tickClocks, 1000);
 // The lights beside the apps follow what Podman says, asked again every little while the page is in view.
@@ -285,6 +307,10 @@ function receive(message: ToUi): void {
       return followRename(message.from, message.to);
     case "notice":
       return showBanner(message.text, "notice");
+    case "offer-email":
+      return offerEmail(message);
+    case "password":
+      return message.email === undefined ? showPassword(message.password) : showPersonPassword(message.email, message.password);
     case "error":
       savedModel(false);
       return showError(message.text, message.recorded === true);
@@ -297,6 +323,9 @@ function receiveState(next: State): void {
   // Asked again when work ends too, or a new or renamed app shows as stopped until the next check.
   if (previous === undefined || ended) post({ type: "health" });
   state = next;
+  // Whichever way it went, the state that follows says where phone access and sharing stand.
+  phoneSwitching = false;
+  settleSharing();
   // Whatever the outcome, an error for it came before this.
   if (ended) lastSent = undefined;
   if (view.kind === "app" && shownApp() === undefined) view = { kind: "new" };
@@ -353,6 +382,36 @@ function exampleItem(text: string): HTMLLIElement {
   const item = document.createElement("li");
   item.append(control);
   return item;
+}
+
+/** The owner's password on a line of its own, for reading off and typing on a phone, until shown long enough. */
+function showPassword(password: string): void {
+  window.clearTimeout(passwordShown);
+  passwordShown = window.setTimeout(hidePassword, PASSWORD_SHOWN_MS);
+  showingPassword(password);
+}
+
+function hidePassword(): void {
+  window.clearTimeout(passwordShown);
+  passwordShown = undefined;
+  showingPassword(undefined);
+}
+
+function showingPassword(password: string | undefined): void {
+  // Shown, it takes the dots' place.
+  for (const dots of document.querySelectorAll<HTMLElement>("[data-password-hidden]")) dots.hidden = password !== undefined;
+  for (const card of document.querySelectorAll<HTMLElement>("[data-password-shown]")) {
+    card.hidden = password === undefined;
+    card.replaceChildren(...(password === undefined ? [] : passwordCard(password)));
+  }
+  // An open eye to show it, a closed one to hide it. In Settings the row says it's the password, so its button says only what it does.
+  const eye = icon(password === undefined ? "eye" : "eye-off");
+  element("show-password").replaceChildren(eye, password === undefined ? "Show password" : "Hide password");
+  element("settings-show-password").replaceChildren(eye.cloneNode(true), password === undefined ? "Show" : "Hide");
+  for (const id of ["show-password", "settings-show-password"]) {
+    element(id).setAttribute("aria-label", password === undefined ? "Show password" : "Hide password");
+    element(id).setAttribute("aria-pressed", String(password !== undefined));
+  }
 }
 
 // The chip says it copied, briefly, so the person knows without looking anywhere else.
@@ -685,10 +744,34 @@ function render(): void {
   element("settings").hidden = view.kind !== "settings";
   developer.checked = state.developer;
   element<HTMLInputElement>("autostart").checked = state.autostart;
+  renderPhoneSetting(state);
   if (view.kind === "settings") renderSettings(state, view.tab);
   else renderChat(state, app);
   renderStatusbar(state, app, health);
   renderDeployDialog();
+}
+
+function renderPhoneSetting({ phoneHost }: State): void {
+  const box = element<HTMLInputElement>("phone-access");
+  if (!phoneSwitching) box.checked = phoneHost !== null;
+  box.disabled = phoneSwitching;
+  element("phone-note").textContent = phoneSwitching
+    ? `Turning ${box.checked ? "on" : "off"} phone access…`
+    : phoneHost !== null
+      ? `Apps are available at ${phoneHost} on your Tailscale network. Turning this off restarts deployed apps.`
+      : "Tailscale HTTPS puts this device's name in public certificate logs, but apps stay on your Tailscale network. Turning this on restarts deployed apps.";
+}
+
+/** The app's address on the phone, as a QR code to scan and as text, while phone access is on. */
+function renderPhoneDoor(app: AppView | undefined, phoneHost: string | null, unavailable: boolean): void {
+  element("phone-anchor").hidden = app === undefined || phoneHost === null;
+  element<HTMLButtonElement>("show-phone").disabled = unavailable;
+  if (app === undefined || phoneHost === null) return;
+  const url = onPhone(app.url, phoneHost);
+  if (url === phoneUrlShown) return;
+  phoneUrlShown = url;
+  element("phone-qr").replaceChildren(qrCode(url, `QR code for ${url}`));
+  element("phone-url").textContent = url;
 }
 
 function renderSettings(current: State, wanted: SettingsTab): void {
@@ -699,6 +782,7 @@ function renderSettings(current: State, wanted: SettingsTab): void {
     element(`settings-${name}-tab`).hidden = tab !== name;
   }
   renderModels(current, examination?.models, post, () => render());
+  renderPeople(current.people, current.phoneHost !== null);
   element("doctor").replaceChildren(...doctorView(examination?.ready));
   element("health").replaceChildren(...healthView(health));
   ledger.show(calls, { spent: current.spent, apps: current.apps.map((app) => app.name) });
@@ -763,6 +847,8 @@ function renderChat(state: State, app: AppView | undefined): void {
     openApp.title = "Starting: it opens once its health check passes";
   }
   element("start-app").hidden = !stopped;
+  renderPhoneDoor(app, state.phoneHost, app?.head === null || removing);
+  renderShare(app, state.people, state.phoneHost !== null, removing);
   openApp.classList.toggle("primary", !stopped);
   openApp.classList.toggle("secondary", stopped);
   for (const tab of element("app-tabs").querySelectorAll("button")) tab.disabled = removing;
@@ -977,7 +1063,7 @@ function showError(text: string, recorded = false): void {
 
 function showBanner(text: string, kind: "notice" | "error"): void {
   const banner = element("banner");
-  banner.textContent = text;
+  banner.replaceChildren(...withChips(text));
   banner.className = kind;
   banner.setAttribute("role", kind === "error" ? "alert" : "status");
   banner.hidden = false;

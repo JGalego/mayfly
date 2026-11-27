@@ -8,8 +8,9 @@ import { fileStore } from "../../adapters/files/file-store.ts";
 import { KeyNeeded, listModels, openAiCompatibleModel } from "../../adapters/openai-compatible/openai-compatible-model.ts";
 import { podmanBuilder } from "../../adapters/podman/podman-builder.ts";
 import { imageExists, podmanDeployer, podmanObserver, versions } from "../../adapters/podman/podman.ts";
+import { tailscaleNetwork } from "../../adapters/tailscale/tailscale.ts";
 import { createEngine, type Engine } from "../../engine/engine.ts";
-import type { ModelProvider } from "../../engine/ports.ts";
+import type { ModelProvider, PhoneNetwork } from "../../engine/ports.ts";
 import { createController, type ControllerPorts } from "./controller.ts";
 import { examine, type ModelProbe } from "./doctor.ts";
 import type { ModelPorts } from "./model-settings.ts";
@@ -25,6 +26,7 @@ export async function activate(context: api.ExtensionContext): Promise<void> {
   const keys = keyStore(context.secrets);
   const models = await modelStore(join(context.storagePath, "models.json"));
   const logo = await readFile(api.Uri.joinPath(context.extensionUri, "media", "logo.svg").fsPath, "utf8");
+  const phoneNetwork = tailscaleNetwork();
   const engine = createEngine({
     store: jsonFileStore(join(context.storagePath, "state.json")),
     deployer: podmanDeployer,
@@ -33,12 +35,13 @@ export async function activate(context: api.ExtensionContext): Promise<void> {
     models: (id) => configuredModel(modelFor(models.models(), id), keys),
     builder: podmanBuilder(RUNTIME_IMAGE),
     files: fileStore(join(context.storagePath, "files")),
+    phoneNetwork,
   });
   let panel: Panel | undefined;
   let handle: Handler = async () => {};
   const show = async (): Promise<void> => {
     if (panel !== undefined) return panel.reveal();
-    ({ panel, handle } = await openPanel(context, engine, keys, models));
+    ({ panel, handle } = await openPanel(context, engine, keys, models, phoneNetwork));
     panel.onDidDispose(() => (panel = undefined));
   };
   context.subscriptions.push(api.commands.registerCommand("mayfly.open", show));
@@ -61,7 +64,7 @@ function whenPodmanAnswers(context: api.ExtensionContext, act: () => void): void
   });
 }
 
-async function openPanel(context: api.ExtensionContext, engine: Engine, keys: KeyStore, models: ModelStore): Promise<{ panel: Panel; handle: Handler }> {
+async function openPanel(context: api.ExtensionContext, engine: Engine, keys: KeyStore, models: ModelStore, phoneNetwork: PhoneNetwork): Promise<{ panel: Panel; handle: Handler }> {
   const media = api.Uri.joinPath(context.extensionUri, "media");
   const panel = api.window.createWebviewPanel("mayfly", "Mayfly", { localResourceRoots: [media] });
   // The navigation bar shows this file by its path: the same logo as the page, sharp at any size.
@@ -83,6 +86,8 @@ async function openPanel(context: api.ExtensionContext, engine: Engine, keys: Ke
         runtimeReady: () => imageExists(RUNTIME_IMAGE),
         signIn: async () => (await engine.health()).find((service) => service.kind === "sign-in")?.containers.map((container) => container.state) ?? [],
         models: () => Promise.all(models.models().models.map((setting) => probe(setting, keys))),
+        phoneHost: () => engine.phoneAccess(),
+        phoneNetwork: () => phoneNetwork.status(),
       }),
     settings: {
       ...models,
@@ -133,7 +138,7 @@ function configuredModel(setting: ModelSetting, keys: KeyStore): ModelProvider {
       try {
         return await openAiCompatibleModel({ baseUrl, ...(apiKey ? { apiKey } : {}), model: setting.model }).complete(system, messages, listener);
       } catch (error) {
-        if (error instanceof KeyNeeded) throw new Error(`${name} needs an API key. Add it in Settings → Models.`);
+        if (error instanceof KeyNeeded) throw new Error(`\`${name}\` needs an API key. Add it in Settings → Models.`);
         throw error;
       }
     },

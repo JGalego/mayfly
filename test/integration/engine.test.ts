@@ -11,7 +11,7 @@ import { fileStore } from "../../src/adapters/files/file-store.ts";
 import { podmanBuilder } from "../../src/adapters/podman/podman-builder.ts";
 import { down, podmanDeployer, podmanObserver } from "../../src/adapters/podman/podman.ts";
 import { createEngine } from "../../src/engine/engine.ts";
-import type { ModelProvider } from "../../src/engine/ports.ts";
+import type { ModelProvider, PhoneNetwork } from "../../src/engine/ports.ts";
 import { Browser } from "./browser.ts";
 import { removeImages, replyWith, RUNTIME_IMAGE, waitUntilUp } from "./support.ts";
 
@@ -19,7 +19,9 @@ import { removeImages, replyWith, RUNTIME_IMAGE, waitUntilUp } from "./support.t
 const model: ModelProvider = { name: "a scripted model", provider: "a script", complete: async () => ({ text: replyWith("hello", "hello-app"), thinking: "", usage: { input: 0, output: 0, thinking: 0 } }) };
 const folder = await mkdtemp(join(tmpdir(), "mayfly-"));
 const store = jsonFileStore(join(folder, "state.json"));
-const engine = createEngine({ store, deployer: podmanDeployer, observer: podmanObserver, identity: dexIdentity(), models: () => model, builder: podmanBuilder(RUNTIME_IMAGE), files: fileStore(join(folder, "files")) });
+// Phone access stays off here: Tailscale's own test covers serving.
+const phoneNetwork: PhoneNetwork = { status: async () => ({ state: "missing" }), serve: async () => {}, stop: async () => {} };
+const engine = createEngine({ store, deployer: podmanDeployer, observer: podmanObserver, identity: dexIdentity(), models: () => model, builder: podmanBuilder(RUNTIME_IMAGE), files: fileStore(join(folder, "files")), phoneNetwork });
 const images: string[] = [];
 
 after(async () => {
@@ -51,5 +53,6 @@ describe("the engine on Podman with Dex", () => {
     // The last app took sign-in and Mayfly's network with it.
     await assert.rejects(fetch("http://localhost:5556/dex/healthz"));
     assert.notEqual(spawnSync("podman", ["network", "exists", "mayfly"]).status, 0);
+    assert.notEqual(spawnSync("podman", ["volume", "exists", "mayfly-dex-data"]).status, 0);
   });
 });

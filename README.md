@@ -44,6 +44,26 @@ Describe a small web app. Mayfly builds it and runs it locally in Podman behind 
 
 The status bar shows app status and token usage. **Settings → General → Enable developer mode** adds the code, available model reasoning, version history, logs and usage reports. You can save an edit from any version without deploying it, or deploy a version that passed its trial.
 
+### Open apps from your phone
+
+Your phone can open the apps too, over HTTPS through [Tailscale](https://tailscale.com), without exposing them to your network or the internet. The apps keep their localhost address on the computer.
+
+1. Install Tailscale on the computer and on your phone, signed in to the same account. On Windows, install it on Windows itself, not inside WSL.
+2. In Tailscale's admin console, open **DNS**, make sure MagicDNS is on, and choose **Enable HTTPS**. This puts the computer's Tailscale name, such as `mayfly.tail1a2b.ts.net`, in public certificate logs. If that name says something about you, rename the computer first under **Machines → Edit machine name**.
+3. In Mayfly, turn on **Settings → General → Open apps from my phone**.
+4. In an app, choose **On your phone** and scan the QR code with your phone's camera. Sign in with the same email and password.
+
+### Share apps with other people
+
+Other people open your apps the way your phone does, with their own email and password.
+
+1. Turn on phone access, as above.
+2. In **Settings → People**, choose **Add user** for each person. Mayfly makes them a password and offers to draft an email in your mail app with it, for you to send.
+3. In Tailscale's admin console, share this computer with them.
+4. In an app, choose **Share** and tick who can open it. Mayfly offers to draft an email with the app's link.
+
+Each person has a sign-in group of their own. Each app lets in only yours and those of the people it's shared with, which you choose in the app. Taking someone off an app, removing them, or resetting their password restarts the apps involved and ends their sessions there. You stay signed in. Apps see who is signed in, so an app can treat you and others differently.
+
 To remove Mayfly, `/remove` each app, which takes its pod and images with it, and then uninstall the extension. Sign-in and Mayfly's Podman network go with the last app. The runtime, Dex and oauth2-proxy images stay under **Images** until you remove them.
 
 ## Why not Dyad?
@@ -145,16 +165,11 @@ Asking for a change turns any light orange, until a new version is deployed or t
 | ⭕ Unhealthy | Running, but its health check fails. After three failures in a row Podman restarts it, and it starts again. | Read its logs, or `/fix` |
 | 🔴 Stopped | Not running, for example after the Podman machine stopped. | **Start**, or `/start`. To have Mayfly start them when Podman Desktop starts, turn on **Settings → General → Start stopped apps automatically**. |
 
-Each app runs as one pod: oauth2-proxy in front, on 127.0.0.1, and the app behind it with no port on the host, so it only sees people who are signed in and allowed.
+Each app runs as one pod: oauth2-proxy in front, on 127.0.0.1, and the app behind it with no port on the host, so it only sees people who are signed in and allowed. With phone access on, a second proxy in the pod, the phone door, takes the requests Tailscale Serve forwards from the computer's Tailscale name over HTTPS. Both doors sign people in with the same Dex, which keeps them signed in across apps, and signing out of an app signs them out of Dex too.
 
-```mermaid
-flowchart LR
-  browser(["Browser"]) -->|"127.0.0.1 only"| proxy
-  subgraph pod["Pod: mayfly-app"]
-    proxy["oauth2-proxy<br/>sign-in · policy roles"] -->|"identity headers"| app["Generated app<br/>business logic only"]
-  end
-  proxy <-->|"OIDC"| idp["Dex, locally"]
-```
+![Mayfly on your computer: Podman Desktop, Podman, the app pods, Dex and Tailscale Serve](docs/architecture/architecture.png)
+
+Drawn from [`architecture.py`](docs/architecture/architecture.py) with `pixi run diagram`.
 
 ## Offerings
 
@@ -189,7 +204,7 @@ pixi run check-image
 npm run test:integration
 ```
 
-`MAYFLY_LIVE=1 npm run test:integration` also calls the model configured in `.env` and may incur charges.
+`MAYFLY_LIVE=1 npm run test:integration` also calls the model configured in `.env` and may incur charges. The Tailscale test runs when Tailscale is signed in with HTTPS enabled. From WSL, point it at Windows' Tailscale with `MAYFLY_TAILSCALE="/mnt/c/Program Files/Tailscale/tailscale.exe"`.
 
 To release, set the version in `extension/package.json` and push it to main. Once CI passes, tag that commit `vX.Y.Z` and push the tag: the release workflow publishes the tested extension image under the version.
 

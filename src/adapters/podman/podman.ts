@@ -70,6 +70,11 @@ export async function down(objects: readonly KubeObject[]): Promise<void> {
   await run(["network", "rm", NETWORK]);
 }
 
+/** Removes a volume, if there is one by that name. */
+export async function removeVolume(name: string): Promise<void> {
+  if ((await run(["volume", "exists", name])).code === 0) await podman(["volume", "rm", name]);
+}
+
 async function ensureNetwork(): Promise<void> {
   const { code } = await run(["network", "exists", NETWORK]);
   if (code !== 0) await podman(["network", "create", NETWORK]);

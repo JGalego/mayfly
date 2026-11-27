@@ -11,3 +11,17 @@ syft = "==1.57.2"
 
 [tasks]
 check-image = "runtime/check.sh"
+
+# Draws docs/architecture/architecture.png from its code: `pixi run diagram`.
+[feature.docs.dependencies]
+python = "3.13.*"
+graphviz = "*"
+
+[feature.docs.pypi-dependencies]
+diagrams = "==0.25.1"
+
+[feature.docs.tasks]
+diagram = "python docs/architecture/architecture.py"
+
+[environments]
+docs = ["docs"]

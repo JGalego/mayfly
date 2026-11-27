@@ -7,6 +7,14 @@ const ready: DoctorPorts = {
   runtimeReady: async () => true,
   signIn: async () => ["running"],
   models: async () => [{ id: "openai", model: "gpt-6.2-sol", hasKey: true, list: async () => ["gpt-6.2-sol", "gpt-6.2-astra"] }],
+  phoneHost: async () => null,
+  phoneNetwork: async () => ({ state: "missing" }),
+};
+
+const onPhone: DoctorPorts = {
+  ...ready,
+  phoneHost: async () => "mayfly.tail1a2b.ts.net",
+  phoneNetwork: async () => ({ state: "ready", host: "mayfly.tail1a2b.ts.net" }),
 };
 
 function statuses({ ready }: Examination): string[] {
@@ -31,6 +39,23 @@ describe("the doctor", () => {
     assert.match(old.ready[0]?.detail ?? "", /Update to 5 or later/);
     assert.deepEqual(statuses(off), ["Podman: fail"]);
     assert.equal(off.models[0]?.status, "pass");
+  });
+
+  it("checks phone access while it's on, and only then", async () => {
+    const examination = await examine(onPhone);
+
+    assert.deepEqual(statuses(examination).at(-1), "Phone access: pass");
+    assert.match(examination.ready.at(-1)?.detail ?? "", /mayfly\.tail1a2b\.ts\.net/);
+  });
+
+  it("says what to fix when Tailscale can't serve the phone, and when it has renamed the computer since", async () => {
+    const noHttps = await examine({ ...onPhone, phoneNetwork: async () => ({ state: "no-https" }) });
+    const renamed = await examine({ ...onPhone, phoneNetwork: async () => ({ state: "ready", host: "laptop.tail1a2b.ts.net" }) });
+
+    assert.deepEqual(statuses(noHttps).at(-1), "Phone access: fail");
+    assert.match(noHttps.ready.at(-1)?.detail ?? "", /Enable HTTPS/);
+    assert.deepEqual(statuses(renamed).at(-1), "Phone access: warn");
+    assert.match(renamed.ready.at(-1)?.detail ?? "", /laptop\.tail1a2b\.ts\.net.*off and on again/);
   });
 
   it("warns about what sorts itself out: a runtime not downloaded yet, a sign-in service not started yet", async () => {

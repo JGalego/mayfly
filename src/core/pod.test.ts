@@ -3,12 +3,23 @@ import assert from "node:assert/strict";
 import { buildPod } from "./pod.ts";
 import type { Container, Pod } from "./kube.ts";
 
+const END_SESSION = "http://localhost:5556/dex/logout";
+
 const pod = buildPod({
   manifest: { name: "expenses", image: "localhost/mayfly-expenses:1" },
   hostPort: 8137,
+  endSessionUrl: END_SESSION,
 });
 const proxy = containerNamed(pod, "auth-proxy");
 const app = containerNamed(pod, "app");
+
+const withPhone = buildPod({
+  manifest: { name: "expenses", image: "localhost/mayfly-expenses:1" },
+  hostPort: 8137,
+  endSessionUrl: END_SESSION,
+  phone: { host: "mayfly.tail1a2b.ts.net", loginUrl: "http://localhost:5556/dex/auth" },
+});
+const door = containerNamed(withPhone, "phone-door");
 
 describe("the pod Mayfly runs for an app", () => {
   it("is named after the app, under Mayfly's prefix", () => {
@@ -34,8 +45,10 @@ describe("the pod Mayfly runs for an app", () => {
     assert.equal(app.imagePullPolicy, "IfNotPresent");
   });
 
-  it("configures the app through $PORT and nothing else", () => {
-    assert.deepEqual(app.env, [{ name: "PORT", value: "8080" }]);
+  it("configures the app through $PORT, and tells the runtime where its sign-out link goes", () => {
+    assert.deepEqual(app.env?.map((env) => env.name), ["PORT", "MAYFLY_SIGN_OUT"]);
+    assert.equal(valueOf(app, "PORT"), "8080");
+    assert.deepEqual(Object.keys(JSON.parse(valueOf(app, "MAYFLY_SIGN_OUT"))), ["localhost:8137"]);
   });
 
   it("checks the app's health by running the runtime's own check, which needs no shell or curl", () => {
@@ -56,7 +69,15 @@ describe("the pod Mayfly runs for an app", () => {
 
   it("signs people in over OIDC and sends them back to this app's port", () => {
     assert.ok(proxy.args?.includes("--provider=oidc"));
-    assert.ok(proxy.args?.includes("--redirect-url=http://localhost:8137/oauth2/callback"));
+    assert.ok(proxy.args?.includes("--redirect-url=http://localhost:8137/.mayfly/callback"));
+  });
+
+  it("keeps the proxy's own pages apart from the app's, so the runtime answers the sign-out link", () => {
+    assert.ok(proxy.args?.includes("--proxy-prefix=/.mayfly"));
+  });
+
+  it("lets the proxy send people on to the identity provider to end its session, and nowhere else", () => {
+    assert.deepEqual(proxy.args?.filter((arg) => arg.startsWith("--whitelist-domain")), ["--whitelist-domain=localhost:5556"]);
   });
 
   it("reads roles from the groups claim", () => {
@@ -85,7 +106,7 @@ describe("the pod Mayfly runs for an app", () => {
   });
 
   it("hardens every container the same way, whatever the manifest says", () => {
-    for (const container of pod.spec.containers) {
+    for (const container of [...pod.spec.containers, ...withPhone.spec.containers]) {
       assert.deepEqual(container.securityContext, {
         runAsNonRoot: true,
         runAsUser: 65534,
@@ -98,9 +119,46 @@ describe("the pod Mayfly runs for an app", () => {
   });
 
   it("caps every container's CPU and memory", () => {
-    for (const container of pod.spec.containers) {
+    for (const container of [...pod.spec.containers, ...withPhone.spec.containers]) {
       assert.ok(container.resources.limits.cpu, `${container.name} cpu`);
       assert.ok(container.resources.limits.memory, `${container.name} memory`);
+    }
+  });
+});
+
+describe("the pod with phone access", () => {
+  it("adds a phone door beside the localhost door, which stays exactly as it was", () => {
+    assert.deepEqual(
+      withPhone.spec.containers.map((c) => c.name),
+      ["auth-proxy", "phone-door", "app"],
+    );
+    assert.deepEqual(containerNamed(withPhone, "auth-proxy"), proxy);
+  });
+
+  it("publishes the phone door on loopback only, 10000 above the app's port, for the private network to forward to", () => {
+    assert.deepEqual(door.ports, [{ containerPort: 4181, hostPort: 18137, hostIP: "127.0.0.1" }]);
+    assert.ok(door.args?.includes("--http-address=0.0.0.0:4181"));
+  });
+
+  it("signs the phone in on the phone's address, on the phone's side of the app's port and the sign-in page's", () => {
+    assert.ok(door.args?.includes("--redirect-url=https://mayfly.tail1a2b.ts.net:28137/.mayfly/callback"));
+    assert.ok(door.args?.includes("--login-url=https://mayfly.tail1a2b.ts.net:25556/dex/auth"));
+  });
+
+  it("signs the phone out on the phone's address too, apart from the computer", () => {
+    assert.deepEqual(door.args?.filter((arg) => arg.startsWith("--whitelist-domain")), ["--whitelist-domain=mayfly.tail1a2b.ts.net:25556"]);
+    assert.deepEqual(Object.keys(JSON.parse(valueOf(containerNamed(withPhone, "app"), "MAYFLY_SIGN_OUT"))), ["localhost:8137", "mayfly.tail1a2b.ts.net:28137"]);
+  });
+
+  it("keeps the phone's session in a Secure cookie, since the phone only uses HTTPS", () => {
+    assert.ok(door.args?.includes("--cookie-secure=true"));
+  });
+
+  it("admits the same people as the localhost door, from the same settings and secrets, to the same app", () => {
+    assert.deepEqual(door.envFrom, proxy.envFrom);
+    assert.deepEqual(secretRefs(door), secretRefs(proxy));
+    for (const arg of ["--upstream=http://127.0.0.1:8080/", "--oidc-groups-claim=groups", "--cookie-name=mayfly-expenses", "--pass-user-headers=true", "--proxy-prefix=/.mayfly"]) {
+      assert.ok(door.args?.includes(arg), arg);
     }
   });
 });
@@ -109,6 +167,12 @@ function containerNamed(pod: Pod, name: string): Container {
   const container = pod.spec.containers.find((c) => c.name === name);
   assert.ok(container, `no container named ${name}`);
   return container;
+}
+
+function valueOf(container: Container, name: string): string {
+  const env = container.env?.find((variable) => variable.name === name);
+  assert.ok(env && "value" in env, `no value for ${name}`);
+  return env.value;
 }
 
 /** Each variable drawn from a Secret, as "secret/key". */

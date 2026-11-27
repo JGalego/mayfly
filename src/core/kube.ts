@@ -21,7 +21,16 @@ export interface Secret {
   readonly stringData: Readonly<Record<string, string>>;
 }
 
-export type KubeObject = Pod | ConfigMap | Secret;
+/** Storage that outlives a pod: Podman keeps its volume until it's removed on purpose. */
+export interface PersistentVolumeClaim {
+  readonly apiVersion: "v1";
+  readonly kind: "PersistentVolumeClaim";
+  /** Podman reads volume.podman.io/uid and gid to give the volume to the user who writes to it. */
+  readonly metadata: { readonly name: string; readonly annotations: Readonly<Record<string, string>> };
+  readonly spec: { readonly accessModes: readonly ["ReadWriteOnce"]; readonly resources: { readonly requests: { readonly storage: string } } };
+}
+
+export type KubeObject = Pod | ConfigMap | Secret | PersistentVolumeClaim;
 
 /** Every container Mayfly writes is hardened and capped. */
 export interface Container {
@@ -53,7 +62,7 @@ export interface ContainerPort {
   readonly hostIP: string;
 }
 
-export type Volume = SecretVolume | ConfigMapVolume;
+export type Volume = SecretVolume | ConfigMapVolume | ClaimVolume;
 
 export interface SecretVolume {
   readonly name: string;
@@ -65,11 +74,18 @@ export interface ConfigMapVolume {
   readonly configMap: { readonly name: string };
 }
 
-/** Always read-only, like the root filesystem. */
+export interface ClaimVolume {
+  readonly name: string;
+  readonly persistentVolumeClaim: { readonly claimName: string };
+}
+
+/** Read-only, like the root filesystem, but for the state a service has to keep. */
 export interface VolumeMount {
   readonly name: string;
   readonly mountPath: string;
-  readonly readOnly: true;
+  /** One file of the volume, mounted in place of the file at mountPath. */
+  readonly subPath?: string;
+  readonly readOnly: boolean;
 }
 
 export interface Probe {

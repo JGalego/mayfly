@@ -1,12 +1,13 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { PortTaken } from "../../engine/ports.ts";
 import { failure, withInstallDirs } from "./cli.ts";
 
 describe("finding podman", () => {
-  it("adds Podman's Windows install folder to the PATH Windows spells as Path", () => {
-    const env = withInstallDirs({ Path: "C:\\Windows" }, "win32");
+  it("adds Podman's Windows install folders, for everyone and for this user, to the PATH Windows spells as Path", () => {
+    const env = withInstallDirs({ Path: "C:\\Windows", LOCALAPPDATA: "C:\\Users\\ana\\AppData\\Local" }, "win32");
 
-    assert.deepEqual(env, { Path: "C:\\Windows;C:\\Program Files\\RedHat\\Podman" });
+    assert.equal(env.Path, "C:\\Windows;C:\\Program Files\\RedHat\\Podman;C:\\Users\\ana\\AppData\\Local\\Programs\\Podman");
   });
 
   it("adds the macOS install folders after the person's own PATH", () => {
@@ -26,8 +27,16 @@ describe("podman's errors", () => {
       "Error: starting container 2569: rootlessport listen tcp 127.0.0.1:5556: bind: address already in use",
       "Error: failed to expose ports via proxy: listen tcp 127.0.0.1:8100: bind: Only one usage of each socket address (protocol/network address/port) is normally permitted.",
     ]) {
-      assert.match(failure(["kube", "play"], stderr).message, /^Port (5556|8100) on this computer is in use by another program\./);
+      const error = failure(["kube", "play"], stderr);
+      assert.ok(error instanceof PortTaken && [5556, 8100].includes(error.port));
+      assert.match(error.message, /^Port (5556|8100) on this computer is in use by another program\./);
     }
+  });
+
+  it("says to start Podman's machine when Podman can't reach it", () => {
+    const stderr = "Cannot connect to Podman. Please verify your connection to the Linux system using `podman system connection list`, or try `podman machine init` and `podman machine start` to manage a new Linux VM\nError: unable to connect to Podman socket: failed to connect: dial tcp 127.0.0.1:59825: connectex: No connection could be made because the target machine actively refused it.";
+
+    assert.equal(failure(["ps"], stderr).message, "Podman's machine isn't running. Start it in Podman Desktop's Dashboard, then try again.");
   });
 
   it("passes any other error on as Podman gave it", () => {

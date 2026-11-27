@@ -13,6 +13,11 @@ export class Browser {
     return this.#follow(url, { method: "GET" });
   }
 
+  /** Drops the cookies whose names start so, as when one site's session ends. */
+  forget(prefix: string): void {
+    for (const name of [...this.#cookies.keys()]) if (name.startsWith(prefix)) this.#cookies.delete(name);
+  }
+
   /** Submits the first form on a page. */
   submit(page: Page, fields: Record<string, string>): Promise<Page> {
     return this.#follow(formAction(page), { method: "POST", body: new URLSearchParams(fields) });

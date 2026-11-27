@@ -1,8 +1,8 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { buildDex, dexSettings } from "../../src/adapters/dex/dex.ts";
-import { down, health, play } from "../../src/adapters/podman/podman.ts";
+import { buildDex, DEX_VOLUME, dexEndSession, dexSettings } from "../../src/adapters/dex/dex.ts";
+import { down, health, play, removeVolume } from "../../src/adapters/podman/podman.ts";
 import { appUrl, callbackUrl } from "../../src/core/app-url.ts";
 import { buildAuthConfigMap } from "../../src/core/auth-config-map.ts";
 import { buildAuthSecret } from "../../src/core/auth-secret.ts";
@@ -16,18 +16,18 @@ const APP = appUrl(HOST_PORT);
 
 const owner = { email: "owner@mayfly.test", username: "owner", password: secret(), groups: ["owner"] };
 const guest = { email: "guest@mayfly.test", username: "guest", password: secret(), groups: ["guest"] };
-const client = { id: "mayfly-echo", secret: secret(), redirectUri: callbackUrl(HOST_PORT) };
+const client = { id: "mayfly-echo", secret: secret(), redirectUris: [callbackUrl(HOST_PORT)], postLogoutRedirectUris: [APP] };
 
 let dex: KubeObject[] = [];
 let app: KubeObject[] = [];
 
 before(async () => {
   const image = buildEchoImage();
-  dex = await buildDex({ users: [owner, guest], clients: [client], logo: readFileSync("assets/logo.svg", "utf8") });
+  dex = await buildDex({ users: [owner, guest], clients: [client], logo: readFileSync("assets/logo.svg", "utf8"), sessionKey: secret() });
   app = [
     buildAuthConfigMap({ appName: "echo", policy: { roles: ["owner"] }, idp: dexSettings(client.id) }),
     buildAuthSecret({ appName: "echo", clientSecret: client.secret, cookieSecret: secret() }),
-    buildPod({ manifest: { name: "echo", image }, hostPort: HOST_PORT }),
+    buildPod({ manifest: { name: "echo", image }, hostPort: HOST_PORT, endSessionUrl: dexEndSession() }),
   ];
   await play(dex);
   await play(app);
@@ -38,6 +38,7 @@ before(async () => {
 after(async () => {
   await down(app);
   await down(dex);
+  await removeVolume(DEX_VOLUME);
 });
 
 describe("an app behind Mayfly's sign-in, on Podman", () => {
@@ -73,14 +74,14 @@ describe("an app behind Mayfly's sign-in, on Podman", () => {
     assert.equal(echo?.containers.find((container) => container.name === "app")?.health, "healthy");
   });
 
-  it("signs the owner out at /oauth2/sign_out, so the app asks them to sign in again", async () => {
+  it("signs the owner out of the app and of Dex at /oauth2/sign_out, so the app asks them to sign in again", async () => {
     const browser = new Browser();
-    await browser.submit(await browser.get(APP), { login: owner.email, password: owner.password });
+    await browser.submit(await browser.get(APP), { login: owner.email, password: owner.password, remember_me: "on" });
 
-    await browser.get(`${APP}oauth2/sign_out`);
-    const page = await browser.get(APP);
+    const signedOut = await browser.get(`${APP}oauth2/sign_out`);
 
-    assert.match(page.url, /^http:\/\/localhost:5556\/dex\/auth\/local/);
+    assert.match(signedOut.url, /^http:\/\/localhost:5556\/dex\/auth\/local/);
+    assert.match((await browser.get(APP)).url, /^http:\/\/localhost:5556\/dex\/auth\/local/);
   });
 
   it("turns away a signed-in user without an allowed role", async () => {
@@ -93,6 +94,23 @@ describe("an app behind Mayfly's sign-in, on Podman", () => {
     const page = await signIn({ ...owner, password: "wrong" });
 
     assert.equal(page.status, 401);
+  });
+});
+
+describe("Dex's sign-in sessions", () => {
+  it("skip the password when signing in again, even after Dex starts again", async () => {
+    const browser = new Browser();
+    await browser.submit(await browser.get(APP), { login: owner.email, password: owner.password, remember_me: "on" });
+
+    browser.forget("mayfly-echo");
+    const again = await browser.get(APP);
+    await play(dex);
+    await waitUntilUp("http://localhost:5556/dex/healthz");
+    browser.forget("mayfly-echo");
+    const afterRestart = await browser.get(APP);
+
+    assert.equal(JSON.parse(again.body).email, owner.email);
+    assert.equal(JSON.parse(afterRestart.body).email, owner.email);
   });
 });
 

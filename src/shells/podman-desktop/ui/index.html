@@ -34,7 +34,27 @@
             <div id="sign-in-popover" class="popover sign-in" hidden>
               <p class="popover-title">App credentials</p>
               <button id="copy-email" class="chip" type="button" title="Copy email"><span id="owner"></span><span class="chip-note"><span class="to-copy" data-icon="copy">Copy</span><span class="copied-note" data-icon="check">Copied</span></span></button>
-              <button id="copy-password" class="chip" type="button" title="Copy password"><span class="dots" aria-label="password">••••••••</span><span class="chip-note"><span class="to-copy" data-icon="copy">Copy</span><span class="copied-note" data-icon="check">Copied</span></span></button>
+              <button id="copy-password" class="chip" type="button" title="Copy password" data-password-hidden><span class="dots" aria-label="password">••••••••</span><span class="chip-note"><span class="to-copy" data-icon="copy">Copy</span><span class="copied-note" data-icon="check">Copied</span></span></button>
+              <div class="password-shown" data-password-shown hidden></div>
+              <button id="show-password" class="quiet-button" type="button" aria-pressed="false" data-icon="eye">Show password</button>
+            </div>
+          </div>
+          <div id="share-anchor" class="popover-anchor" hidden>
+            <button id="show-share" class="secondary" type="button" aria-expanded="false" aria-controls="share-popover" data-icon="users">Share</button>
+            <div id="share-popover" class="popover share" hidden>
+              <p class="popover-title">Who can open it</p>
+              <ul id="share-list" class="share-list"></ul>
+              <p id="share-note" class="quiet"></p>
+              <button id="share-people-settings" class="quiet-button" type="button" data-icon="settings">People settings</button>
+            </div>
+          </div>
+          <div id="phone-anchor" class="popover-anchor" hidden>
+            <button id="show-phone" class="secondary" type="button" aria-expanded="false" aria-controls="phone-popover" data-icon="phone">On your phone</button>
+            <div id="phone-popover" class="popover phone" hidden>
+              <p class="popover-title">Open on your phone</p>
+              <div id="phone-qr"></div>
+              <code id="phone-url" class="phone-url"></code>
+              <p class="quiet">Scan it with your phone's camera. Your phone needs Tailscale, signed in to the same account.</p>
             </div>
           </div>
           <button id="start-app" class="primary" type="button" title="Start the app and sign-in service" data-icon="play" hidden>Start</button>
@@ -133,6 +153,7 @@
         <h1>Settings</h1>
         <div id="settings-tabs" class="tabs" role="tablist" aria-label="Settings">
           <button id="settings-tab-general" role="tab" type="button" data-icon="sliders">General</button>
+          <button id="settings-tab-people" role="tab" type="button" data-icon="users">People</button>
           <button id="settings-tab-models" role="tab" type="button" data-icon="bot">Models</button>
           <button id="settings-tab-logs" role="tab" type="button" data-icon="logs">Logs</button>
           <button id="settings-tab-usage" role="tab" type="button" data-icon="chart">Usage</button>
@@ -145,43 +166,74 @@
               <h2>Setup checks</h2>
               <button id="run-doctor" class="quiet-button" type="button">Check again</button>
             </div>
+            <p class="hint">Checks whether Podman, the app runtime and sign-in are ready.</p>
             <ul id="doctor" class="checks"></ul>
           </section>
           <section>
             <h2>App credentials</h2>
+            <p class="hint">All apps use this email and password.</p>
             <form id="owner-form" class="sign-in-row">
               <input id="owner-email" type="email" required autocomplete="off" aria-label="Email">
               <button class="quiet-button" type="submit">Save</button>
             </form>
             <div class="sign-in-row">
-              <span class="chip"><span class="dots" aria-label="password">••••••••</span></span>
+              <span class="chip" data-password-hidden><span class="dots" aria-label="password">••••••••</span></span>
+              <button id="settings-show-password" class="quiet-button" type="button" aria-pressed="false" aria-label="Show password" data-icon="eye">Show</button>
               <button id="settings-copy-password" class="quiet-button" type="button">Copy password</button>
               <button id="new-password" class="quiet-button" type="button">Reset password</button>
             </div>
+            <div class="password-shown" data-password-shown hidden></div>
+          </section>
+          <section>
+            <h2>Phone</h2>
+            <label class="check"><input id="phone-access" type="checkbox" aria-describedby="phone-note"> Open apps from my phone</label>
+            <p id="phone-note" class="hint"></p>
           </section>
           <section>
             <h2>Advanced</h2>
-            <label class="check"><input id="developer" type="checkbox"> Enable developer mode</label>
-            <label class="check"><input id="autostart" type="checkbox"> Start stopped apps automatically</label>
-            <p class="quiet">Runs when Podman Desktop starts.</p>
+            <label class="check"><input id="developer" type="checkbox" aria-describedby="developer-hint"> Enable developer mode</label>
+            <p id="developer-hint" class="hint">Shows app code, version history and logs, plus health and model usage in Settings.</p>
+            <label class="check"><input id="autostart" type="checkbox" aria-describedby="autostart-hint"> Start stopped apps automatically</label>
+            <p id="autostart-hint" class="hint">Starts stopped apps when Podman Desktop opens and Podman is ready.</p>
+          </section>
+        </div>
+        <div id="settings-people-tab" class="settings-page" role="tabpanel" aria-labelledby="settings-tab-people">
+          <section>
+            <p class="hint">Share apps with other people. Each signs in with their own email and password.</p>
+            <p id="people-phone-note" class="hint" hidden>They open apps through Tailscale, as your phone does. Turn on phone access in General first.</p>
+            <ul id="people" class="model-list" hidden></ul>
+            <form id="person-form" class="sign-in-row">
+              <input id="person-email" type="email" required autocomplete="off" placeholder="name@example.com" aria-label="Their email">
+              <button class="quiet-button" type="submit" data-icon="plus">Add user</button>
+            </form>
+            <p class="hint">Mayfly makes them a password, and offers to email it to them.</p>
+          </section>
+          <section>
+            <h2>Tailscale</h2>
+            <p class="hint">To reach your apps, each person needs this computer shared with them in Tailscale.</p>
+            <button id="share-tailscale" class="quiet-button" type="button" data-icon-after="external">Share this computer in Tailscale</button>
           </section>
         </div>
         <div id="settings-models-tab" class="settings-page" role="tabpanel" aria-labelledby="settings-tab-models">
           <section>
-            <p class="quiet">Your requests, their attachments and your apps' code go to the provider of the model doing the work.</p>
+            <p class="hint">New apps use the default model unless you choose another.</p>
+            <p class="hint">Requests and attachments go to the selected provider. When you ask about or change an app, its code goes too.</p>
             <ul id="model-list" class="model-list"></ul>
             <button id="add-model" class="quiet-button add-model" type="button">+ Add a model</button>
             <form id="model-form" hidden>
               <h3 id="model-form-title">Add a model</h3>
               <label for="provider">Provider</label>
-              <select id="provider"></select>
+              <select id="provider" aria-describedby="provider-hint"></select>
+              <p id="provider-hint" class="hint">OpenAI, or any service with an OpenAI-compatible API.</p>
               <label for="endpoint" class="compatible-only">Endpoint</label>
-              <input id="endpoint" class="compatible-only" type="url" placeholder="http://localhost:11434/v1">
+              <input id="endpoint" class="compatible-only" type="url" placeholder="http://localhost:11434/v1" aria-describedby="endpoint-hint">
+              <p id="endpoint-hint" class="hint compatible-only">The API's base URL, such as a local model server's.</p>
               <label for="model-name">Model</label>
-              <input id="model-name" type="text" maxlength="200" required placeholder="gpt-6.2-sol">
+              <input id="model-name" type="text" maxlength="200" required placeholder="gpt-6.2-sol" aria-describedby="model-name-hint">
+              <p id="model-name-hint" class="hint">The model's name, as the provider lists it.</p>
               <label for="api-key">API key</label>
-              <input id="api-key" type="password" autocomplete="off">
-              <p class="quiet">Stored in Podman Desktop's secret storage. Sent only to the saved endpoint.</p>
+              <input id="api-key" type="password" autocomplete="off" aria-describedby="api-key-hint">
+              <p id="api-key-hint" class="hint">Stored in Podman Desktop's secret storage and sent only to the saved API endpoint.</p>
               <div class="editor-actions">
                 <button id="cancel-model" class="quiet-button" type="button">Cancel</button>
                 <button class="primary" type="submit">Save</button>
@@ -195,12 +247,14 @@
               <h2>Health</h2>
               <button id="refresh-health" class="quiet-button" type="button">Refresh</button>
             </div>
+            <p class="hint">Podman's container status for apps and the sign-in service.</p>
             <ul id="health" class="health-list"></ul>
           </section>
           <div id="settings-logs"></div>
         </div>
         <div id="settings-usage-tab" class="settings-page" role="tabpanel" aria-labelledby="settings-tab-usage">
           <section>
+            <p class="hint">Token counts and trial results, grouped by app, model or provider.</p>
             <div id="ledger"></div>
           </section>
         </div>
@@ -221,6 +275,16 @@
         <div class="editor-actions">
           <button value="keep" class="quiet-button" autofocus>Cancel</button>
           <button id="confirm-remove" value="remove" class="danger">Remove</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="email-dialog" aria-labelledby="email-title">
+      <form method="dialog">
+        <h2 id="email-title"></h2>
+        <p id="email-text"></p>
+        <div class="editor-actions">
+          <button value="skip" class="quiet-button">Not now</button>
+          <button value="email" class="primary" data-icon="mail" autofocus>Email them</button>
         </div>
       </form>
     </dialog>
