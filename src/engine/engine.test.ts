@@ -658,7 +658,10 @@ function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: st
       synced.push(next);
     },
     stop: async () => void log.push("stop"),
-    settingsFor: (_app, port) => ({ OAUTH2_PROXY_CLIENT_ID: "fake", OAUTH2_PROXY_LOGIN_URL: `http://localhost:${port}/dex/auth` }),
+    settingsFor: (_app, port) => ({
+      proxy: { OAUTH2_PROXY_CLIENT_ID: "fake", OAUTH2_PROXY_LOGIN_URL: `http://localhost:${port}/dex/auth` },
+      endSessionUrl: `http://localhost:${port}/dex/logout`,
+    }),
   };
   const models = (id: string | null): ModelProvider => ({
     name: named(id),

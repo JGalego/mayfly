@@ -38,6 +38,8 @@ export interface DexClient {
   readonly id: string;
   readonly secret: string;
   readonly redirectUris: readonly string[];
+  /** Where Dex may send people back to once it has signed them out. */
+  readonly postLogoutRedirectUris: readonly string[];
 }
 
 export interface DexInput {
@@ -84,6 +86,11 @@ function dataClaim(): PersistentVolumeClaim {
   };
 }
 
+/** Where the browser ends its Dex session: OIDC's RP-initiated logout, which Dex serves only with sessions on. */
+export function dexEndSession(port = PREFERRED_SIGN_IN_PORT): string {
+  return `${issuerOn(port)}/logout`;
+}
+
 /** How an app's auth proxy signs people in with Dex: the browser uses the issuer, the proxy uses the network. */
 export function dexSettings(clientId: string, port = PREFERRED_SIGN_IN_PORT): IdpSettings {
   const issuer = issuerOn(port);
@@ -102,8 +109,8 @@ async function staticPassword({ email, username, password, groups }: DexUser) {
   return { email, username, userID: username, groups, hash: await hash(password, 10) };
 }
 
-function staticClient({ id, secret, redirectUris }: DexClient) {
-  return { id, secret, name: id, redirectURIs: redirectUris };
+function staticClient({ id, secret, redirectUris, postLogoutRedirectUris }: DexClient) {
+  return { id, secret, name: id, redirectURIs: redirectUris, postLogoutRedirectURIs: postLogoutRedirectUris };
 }
 
 // A Secret, not a ConfigMap: the config holds client secrets and password hashes.

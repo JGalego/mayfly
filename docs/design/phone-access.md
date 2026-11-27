@@ -32,7 +32,7 @@ The phone uses its own port numbers, the computer's plus 20000, so Serve never l
 | Address | `http://localhost:18100/` | `https://<machine>.<tailnet>.ts.net:38100/` |
 | Listens on | `127.0.0.1:18100` | `127.0.0.1:28100`, reached only through Serve |
 | Sign-in page | `http://localhost:5556/dex` | the tailnet name, port 25556, through Serve |
-| Redirect URL | `http://localhost:18100/oauth2/callback` | the same path on the tailnet name, port 38100 |
+| Redirect URL | `http://localhost:18100/.mayfly/callback` | the same path on the tailnet name, port 38100 |
 | Cookie | not Secure | Secure |
 | Dex issuer, checked in tokens | `http://localhost:5556/dex` | the same |
 

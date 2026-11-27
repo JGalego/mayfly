@@ -1,6 +1,6 @@
 import { callbackUrl } from "./app-url.ts";
 import { AUTH_SECRET_KEYS } from "./auth-secret.ts";
-import { APP_PORT, ROLES_CLAIM } from "./contract.ts";
+import { APP_PORT, PROXY_PREFIX, ROLES_CLAIM } from "./contract.ts";
 import { HARDENED, LOOPBACK } from "./hardening.ts";
 import type { Container, EnvVar } from "./kube.ts";
 import { authConfigName, mayflyName } from "./names.ts";
@@ -15,6 +15,8 @@ const PHONE_DOOR_PORT = 4181;
 export interface AuthProxyInput {
   readonly appName: string;
   readonly hostPort: number;
+  /** Where the computer's browser ends its session with the identity provider. */
+  readonly endSessionUrl: string;
 }
 
 /** Where a door sends people back to after they sign in, and how it keeps their session. */
@@ -22,6 +24,8 @@ interface Origin {
   readonly redirectUrl: string;
   /** Overrides the ConfigMap's sign-in page, which is the computer's. */
   readonly loginUrl?: string;
+  /** Where this door's browser ends its session with the identity provider, after the app's. */
+  readonly endSessionUrl: string;
   readonly secureCookie: boolean;
 }
 
@@ -29,15 +33,15 @@ interface Origin {
  * Signs people in, admits only the policy's roles, and passes identity to the app in headers.
  * No liveness probe: the image is one binary with nothing to run a probe with. A crash still restarts it.
  */
-export function buildAuthProxyContainer({ appName, hostPort }: AuthProxyInput): Container {
+export function buildAuthProxyContainer({ appName, hostPort, endSessionUrl }: AuthProxyInput): Container {
   // Plain HTTP on loopback, where a Secure cookie never comes back.
-  const origin = { redirectUrl: callbackUrl(hostPort), secureCookie: false };
+  const origin = { redirectUrl: callbackUrl(hostPort), endSessionUrl, secureCookie: false };
   return door("auth-proxy", appName, origin, { listen: PORT, publish: hostPort });
 }
 
 /** The same proxy for the phone, which the private network forwards to from the phone's side of the app's port. */
-export function buildPhoneDoorContainer({ appName, hostPort, host, loginUrl }: AuthProxyInput & PhoneSignIn): Container {
-  const origin = { redirectUrl: onPhone(callbackUrl(hostPort), host), loginUrl: onPhone(loginUrl, host), secureCookie: true };
+export function buildPhoneDoorContainer({ appName, hostPort, endSessionUrl, host, loginUrl }: AuthProxyInput & PhoneSignIn): Container {
+  const origin = { redirectUrl: onPhone(callbackUrl(hostPort), host), loginUrl: onPhone(loginUrl, host), endSessionUrl: onPhone(endSessionUrl, host), secureCookie: true };
   return door("phone-door", appName, origin, { listen: PHONE_DOOR_PORT, publish: phoneDoorPort(hostPort) });
 }
 
@@ -55,9 +59,11 @@ function door(name: string, appName: string, origin: Origin, ports: { readonly l
   };
 }
 
-function signInArgs(appName: string, { redirectUrl, loginUrl, secureCookie }: Origin): string[] {
+function signInArgs(appName: string, { redirectUrl, loginUrl, endSessionUrl, secureCookie }: Origin): string[] {
   return [
     "--provider=oidc",
+    // The runtime answers the app's sign-out link, so the proxy's own pages live elsewhere.
+    `--proxy-prefix=${PROXY_PREFIX}`,
     `--redirect-url=${redirectUrl}`,
     // A flag outranks the ConfigMap's environment variable.
     ...(loginUrl === undefined ? [] : [`--login-url=${loginUrl}`]),
@@ -67,6 +73,8 @@ function signInArgs(appName: string, { redirectUrl, loginUrl, secureCookie }: Or
     // Browsers share localhost cookies across ports, so each app needs its own.
     `--cookie-name=${mayflyName(appName)}`,
     `--cookie-secure=${secureCookie}`,
+    // After ending the app's session, the one place the proxy sends people on to.
+    `--whitelist-domain=${new URL(endSessionUrl).host}`,
   ];
 }
 

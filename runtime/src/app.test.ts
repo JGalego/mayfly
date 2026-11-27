@@ -17,9 +17,11 @@ const routes = new Hono<Env>()
   .get("/tailscale", (c) => c.json({ login: c.req.header("Tailscale-User-Login") ?? null, name: c.req.header("tailscale-user-name") ?? null }))
   .get("/boom", () => {
     throw new Error("database password is hunter2");
-  });
+  })
+  .get("/oauth2/sign_out", (c) => c.text("the app's own sign-out"));
 
-const app = buildApp(routes);
+const signOut = { "localhost:18100": "/.mayfly/sign_out?rd=computer", "mayfly.tail1a2b.ts.net:38100": "/.mayfly/sign_out?rd=phone" };
+const app = buildApp(routes, signOut);
 let logged: string[] = [];
 
 beforeEach(() => {
@@ -91,6 +93,27 @@ describe("the runtime around a generated app", () => {
     assert.match(csp, /script-src 'nonce-[^']+'/);
     assert.match(csp, /frame-ancestors 'none'/);
     assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+  });
+
+  it("signs people out on the address they opened the app at, ahead of any route the app has there", async () => {
+    const computer = await app.request("http://localhost:18100/oauth2/sign_out", { headers: signedIn });
+    const phone = await app.request("https://mayfly.tail1a2b.ts.net:38100/oauth2/sign_out", { headers: signedIn });
+
+    assert.equal(computer.status, 302);
+    assert.equal(computer.headers.get("location"), signOut["localhost:18100"]);
+    assert.equal(phone.headers.get("location"), signOut["mayfly.tail1a2b.ts.net:38100"]);
+  });
+
+  it("signs out from a form too, whichever way it sends", async () => {
+    const response = await app.request("http://localhost:18100/oauth2/sign_out", { method: "POST", headers: signedIn });
+
+    assert.equal(response.headers.get("location"), signOut["localhost:18100"]);
+  });
+
+  it("finds nothing to sign out of on an address Mayfly never gave the app", async () => {
+    const response = await app.request("http://127.0.0.1:18100/oauth2/sign_out", { headers: signedIn });
+
+    assert.equal(response.status, 404);
   });
 
   it("refuses bodies over 1 MB", async () => {

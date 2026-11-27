@@ -1,11 +1,11 @@
 import { createHmac } from "node:crypto";
-import { callbackUrl } from "../../core/app-url.ts";
+import { appUrl, callbackUrl } from "../../core/app-url.ts";
 import { mayflyName } from "../../core/names.ts";
 import { onPhone } from "../../core/phone.ts";
 import type { IdentitySource } from "../../engine/ports.ts";
 import { OWNER_ROLE, type App, type Owner, type State } from "../../engine/state.ts";
 import { down, play, removeVolume } from "../podman/podman.ts";
-import { buildDex, DEX_POD, DEX_VOLUME, dexSettings, PREFERRED_SIGN_IN_PORT, type DexClient, type DexUser } from "./dex.ts";
+import { buildDex, DEX_POD, DEX_VOLUME, dexEndSession, dexSettings, PREFERRED_SIGN_IN_PORT, type DexClient, type DexUser } from "./dex.ts";
 
 /** Dex on Podman, with the owner as its one user and one client per app, and the logo on its sign-in page. */
 export function dexIdentity(logo?: string): IdentitySource {
@@ -25,7 +25,7 @@ export function dexIdentity(logo?: string): IdentitySource {
     },
 
     settingsFor(app, port) {
-      return dexSettings(clientId(app), port);
+      return { proxy: dexSettings(clientId(app), port), endSessionUrl: dexEndSession(port) };
     },
   };
 }
@@ -44,9 +44,8 @@ function usersOf({ owner }: State): DexUser[] {
 
 /** An app's client: Dex sends people back to its localhost door, and while phone access is on, the phone to its phone door. */
 export function clientFor(app: App, phoneHost: string | null): DexClient {
-  const callback = callbackUrl(app.hostPort);
-  const redirectUris = phoneHost === null ? [callback] : [callback, onPhone(callback, phoneHost)];
-  return { id: clientId(app), secret: app.clientSecret, redirectUris };
+  const doors = (url: string) => (phoneHost === null ? [url] : [url, onPhone(url, phoneHost)]);
+  return { id: clientId(app), secret: app.clientSecret, redirectUris: doors(callbackUrl(app.hostPort)), postLogoutRedirectUris: doors(appUrl(app.hostPort)) };
 }
 
 function clientId(app: App): string {

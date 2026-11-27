@@ -1,4 +1,4 @@
-import type { IdpSettings } from "../core/auth-config-map.ts";
+import type { SignInSettings } from "../core/sign-out.ts";
 import type { KubeObject } from "../core/kube.ts";
 import type { App, State } from "./state.ts";
 import type { Usage } from "./usage.ts";
@@ -64,8 +64,8 @@ export interface IdentitySource {
   sync(state: State, port: number): Promise<void>;
   /** Stops and removes the identity provider. */
   stop(): Promise<void>;
-  /** The proxy settings an app uses to sign people in on this port. */
-  settingsFor(app: App, port: number): IdpSettings;
+  /** How an app signs people in on this port, and out again. */
+  settingsFor(app: App, port: number): SignInSettings;
 }
 
 /** A piece of what the person says to the model: text, or an image, in base64. */
