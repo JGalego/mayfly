@@ -42,6 +42,8 @@ export function failure(args: readonly string[], stderr: string): Error {
   // Rootless Podman and the Podman machine's port forwarder both say "listen tcp <address>:<port>: bind: …".
   const port = /listen tcp\S* \S*:(\d+): bind:/.exec(stderr)?.[1];
   if (port !== undefined) return new Error(`Port ${port} on this computer is in use by another program. Stop that program, then try again.`);
+  // On Windows and macOS, Podman runs containers in a machine it reaches over a socket.
+  if (/Cannot connect to Podman|unable to connect to Podman socket/.test(stderr)) return new Error("Podman's machine isn't running. Start it in Podman Desktop's Dashboard, then try again.");
   return new Error(`podman ${args.join(" ")} failed: ${stderr.trim()}`);
 }
 

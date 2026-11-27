@@ -30,6 +30,12 @@ describe("podman's errors", () => {
     }
   });
 
+  it("says to start Podman's machine when Podman can't reach it", () => {
+    const stderr = "Cannot connect to Podman. Please verify your connection to the Linux system using `podman system connection list`, or try `podman machine init` and `podman machine start` to manage a new Linux VM\nError: unable to connect to Podman socket: failed to connect: dial tcp 127.0.0.1:59825: connectex: No connection could be made because the target machine actively refused it.";
+
+    assert.equal(failure(["ps"], stderr).message, "Podman's machine isn't running. Start it in Podman Desktop's Dashboard, then try again.");
+  });
+
   it("passes any other error on as Podman gave it", () => {
     assert.equal(failure(["pod", "start", "x"], "Error: no pod with name or ID x found\n").message, "podman pod start x failed: Error: no pod with name or ID x found");
   });
