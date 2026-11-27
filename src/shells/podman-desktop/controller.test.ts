@@ -210,7 +210,7 @@ describe("the Mayfly panel's controller", () => {
 
     await handle({ type: "doctor" });
 
-    assert.deepEqual(posted, [{ type: "doctor", ready: [{ name: "Podman", status: "pass", detail: "Podman 5.8.9 is running." }], models: [{ id: "openai", status: "pass", detail: "Ready." }] }]);
+    assert.deepEqual(posted, [{ type: "doctor", ready: [{ name: "Podman", status: "pass", detail: "Podman 5.8.9 is running" }], models: [{ id: "openai", status: "pass", detail: "Ready" }] }]);
   });
 
   it("changes the owner's email, and copies a new password without sending it to the page", async () => {
@@ -833,7 +833,7 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
     openExternal: async (url) => void opened.push(url),
     copy: async (text) => void copied.push(text),
     doctor: async (tell) => {
-      const examination: Examination = { ready: [{ name: "Podman", status: "pass", detail: "Podman 5.8.9 is running." }], models: [{ id: "openai", status: "pass", detail: "Ready." }] };
+      const examination: Examination = { ready: [{ name: "Podman", status: "pass", detail: "Podman 5.8.9 is running" }], models: [{ id: "openai", status: "pass", detail: "Ready" }] };
       tell(examination);
       return examination;
     },

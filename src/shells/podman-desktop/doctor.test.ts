@@ -26,7 +26,7 @@ describe("the doctor", () => {
     const examination = await examine(ready);
 
     assert.deepEqual(statuses(examination), ["Podman: pass", "App runtime: pass", "Sign-in service: pass"]);
-    assert.deepEqual(examination.models, [{ id: "openai", status: "pass", detail: "Ready." }]);
+    assert.deepEqual(examination.models, [{ id: "openai", status: "pass", detail: "Ready" }]);
   });
 
   it("lists every check before any finishes, then tells each as it finishes", async () => {
@@ -49,12 +49,31 @@ describe("the doctor", () => {
     const off = await examine({ ...ready, podman: async () => ({ client: "5.8.9", server: null }) });
     const old = await examine({ ...ready, podman: async () => ({ client: "4.3.1", server: "4.3.1" }) });
 
-    assert.match(missing.ready[0]?.detail ?? "", /Set it up in Podman Desktop's Dashboard/);
-    assert.match(off.ready[0]?.detail ?? "", /Start it in Podman Desktop's Dashboard/);
-    assert.match(old.ready[0]?.detail ?? "", /Update to 5 or later/);
+    assert.match(missing.ready[0]?.detail ?? "", /Set up Podman in Podman Desktop's Dashboard/);
+    assert.match(off.ready[0]?.detail ?? "", /Start the Podman machine in Podman Desktop's Dashboard/);
+    assert.match(old.ready[0]?.detail ?? "", /Update Podman 4\.3\.1 to 5 or later/);
     assert.deepEqual(statuses(off), ["Podman: fail", "App runtime: skip", "Sign-in service: skip"]);
-    assert.equal(off.ready[1]?.detail, "Waits for Podman.");
+    assert.equal(off.ready[1]?.detail, "Waits for Podman");
     assert.equal(off.models[0]?.status, "pass");
+  });
+
+  it("writes each finding as one sentence, without commas or full stops", async () => {
+    const failing = (phoneNetwork: DoctorPorts["phoneNetwork"]): DoctorPorts => ({ ...onPhone, phoneNetwork, models: async () => [{ id: "busy", model: "m", list: async () => Promise.reject(new Error("The provider is limiting requests. Try again in a moment.")) }] });
+    const examinations = await Promise.all([
+      examine(ready),
+      examine(onPhone),
+      examine({ ...ready, podman: async () => undefined }),
+      examine({ ...ready, podman: async () => ({ client: "5.8.9", server: null }) }),
+      examine({ ...ready, podman: async () => ({ client: "4.3.1", server: "4.3.1" }) }),
+      examine({ ...ready, runtimeReady: async () => false, signIn: async () => [] }),
+      examine({ ...ready, signIn: async () => ["exited"] }),
+      ...(["missing", "off", "signed-out", "no-https"] as const).map((state) => examine(failing(async () => ({ state })))),
+      examine(failing(async () => ({ state: "other-user", user: "ana" }))),
+      examine(failing(async () => ({ state: "failed", reason: "tailscale status: exit 1." }))),
+      examine(failing(async () => ({ state: "ready", host: "laptop.tail1a2b.ts.net" }))),
+    ]);
+
+    for (const { detail } of examinations.flatMap(({ ready, models }) => [...ready, ...models])) assert.doesNotMatch(detail, /,|\.$|\. /, detail);
   });
 
   it("checks phone access while it's on, and only then", async () => {
@@ -71,7 +90,7 @@ describe("the doctor", () => {
     assert.deepEqual(statuses(noHttps).at(-1), "Phone access: fail");
     assert.match(noHttps.ready.at(-1)?.detail ?? "", /Enable HTTPS/);
     assert.deepEqual(statuses(renamed).at(-1), "Phone access: warn");
-    assert.match(renamed.ready.at(-1)?.detail ?? "", /laptop\.tail1a2b\.ts\.net.*off and on again/);
+    assert.match(renamed.ready.at(-1)?.detail ?? "", /off and on to use the new name laptop\.tail1a2b\.ts\.net/);
   });
 
   it("warns about what sorts itself out: a runtime not downloaded yet, a sign-in service not started yet", async () => {
@@ -94,7 +113,7 @@ describe("the doctor", () => {
     assert.deepEqual(models.map(({ id, status }) => `${id}: ${status}`), ["local: pass", "keyed: pass", "refused: fail", "unknown: warn"]);
     assert.deepEqual(
       models.map(({ detail }) => detail),
-      ["Ready.", "Ready.", "The key was refused.", "The provider doesn't list m. Check the model's name."],
+      ["Ready", "Ready", "The key was refused", "The provider doesn't list m"],
     );
   });
 });

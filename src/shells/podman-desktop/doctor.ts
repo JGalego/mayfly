@@ -1,4 +1,3 @@
-import { phoneNotReady } from "../../engine/engine.ts";
 import type { PhoneNetworkStatus } from "../../engine/ports.ts";
 
 /** How a check came out. */
@@ -77,7 +76,7 @@ export async function examine(ports: DoctorPorts, tell: (sofar: Examination) => 
     found(await checkRuntime(ports));
     found(await checkSignIn(ports));
   } else {
-    for (const name of [RUNTIME, SIGN_IN]) found({ name, status: "skip", detail: "Waits for Podman." });
+    for (const name of [RUNTIME, SIGN_IN]) found({ name, status: "skip", detail: "Waits for Podman" });
   }
   if (host !== null) found(await checkPhone(host, ports));
   await modelsTried;
@@ -87,42 +86,65 @@ export async function examine(ports: DoctorPorts, tell: (sofar: Examination) => 
 async function checkPodman({ podman }: DoctorPorts): Promise<Check> {
   const name = PODMAN;
   const found = await podman();
-  if (found === undefined) return { name, status: "fail", detail: "Podman not found. Set it up in Podman Desktop's Dashboard." };
-  if (found.server === null) return { name, status: "fail", detail: "Podman machine unavailable. Start it in Podman Desktop's Dashboard." };
+  if (found === undefined) return { name, status: "fail", detail: "Set up Podman in Podman Desktop's Dashboard" };
+  if (found.server === null) return { name, status: "fail", detail: "Start the Podman machine in Podman Desktop's Dashboard" };
   const major = Number.parseInt(found.server, 10);
-  if (major < NEEDED_PODMAN) return { name, status: "fail", detail: `Podman ${found.server} is installed. Update to ${NEEDED_PODMAN} or later in Podman Desktop.` };
-  return { name, status: "pass", detail: `Podman ${found.server} is running.` };
+  if (major < NEEDED_PODMAN) return { name, status: "fail", detail: `Update Podman ${found.server} to ${NEEDED_PODMAN} or later in Podman Desktop` };
+  return { name, status: "pass", detail: `Podman ${found.server} is running` };
 }
 
 async function checkRuntime({ runtimeReady }: DoctorPorts): Promise<Check> {
   const name = RUNTIME;
-  if (await runtimeReady()) return { name, status: "pass", detail: "Runtime image downloaded." };
-  return { name, status: "warn", detail: "The runtime image downloads when you build your first app." };
+  if (await runtimeReady()) return { name, status: "pass", detail: "Runtime image downloaded" };
+  return { name, status: "warn", detail: "Downloads when you build your first app" };
 }
 
 async function checkSignIn({ signIn }: DoctorPorts): Promise<Check> {
   const name = SIGN_IN;
   const states = await signIn();
-  if (states.length === 0) return { name, status: "warn", detail: "The sign-in service starts when you run an app." };
-  if (states.every((state) => state === "running")) return { name, status: "pass", detail: "Running." };
-  return { name, status: "fail", detail: "The sign-in service is not running. Check its logs in Settings." };
+  if (states.length === 0) return { name, status: "warn", detail: "Starts when you run an app" };
+  if (states.every((state) => state === "running")) return { name, status: "pass", detail: "Running" };
+  return { name, status: "fail", detail: "Check its logs in Settings" };
 }
 
 async function checkPhone(host: string, { phoneNetwork }: DoctorPorts): Promise<Check> {
   const name = PHONE;
   const network = await phoneNetwork();
-  if (network.state !== "ready") return { name, status: "fail", detail: phoneNotReady(network) };
-  if (network.host !== host) return { name, status: "warn", detail: `Tailscale now calls this computer ${network.host}. Turn phone access off and on again to use that name.` };
-  return { name, status: "pass", detail: `Your phone opens apps at ${host}.` };
+  if (network.state !== "ready") return { name, status: "fail", detail: tailscaleProblem(network) };
+  if (network.host !== host) return { name, status: "warn", detail: `Turn phone access off and on to use the new name ${network.host}` };
+  return { name, status: "pass", detail: `Your phone opens apps at ${host}` };
 }
 
 // The card says whether a key is saved, so this says only whether the model works.
 async function checkModel({ id, model, list }: ModelProbe): Promise<ModelCheck> {
   try {
     const offered = await list();
-    if (offered.includes(model)) return { id, status: "pass", detail: "Ready." };
-    return { id, status: "warn", detail: `The provider doesn't list ${model}. Check the model's name.` };
+    if (offered.includes(model)) return { id, status: "pass", detail: "Ready" };
+    return { id, status: "warn", detail: `The provider doesn't list ${model}` };
   } catch (error) {
-    return { id, status: "fail", detail: error instanceof Error ? error.message : String(error) };
+    return { id, status: "fail", detail: firstSentence(error instanceof Error ? error.message : String(error)) };
   }
+}
+
+// The banner for turning phone access on says what to try next. A finding says only what to fix.
+function tailscaleProblem(status: Exclude<PhoneNetworkStatus, { readonly state: "ready" }>): string {
+  switch (status.state) {
+    case "missing":
+      return "Install Tailscale from tailscale.com/download and sign in";
+    case "off":
+      return "Turn Tailscale on";
+    case "signed-out":
+      return "Sign in to Tailscale";
+    case "no-https":
+      return "Choose Enable HTTPS under DNS in Tailscale's admin console";
+    case "other-user":
+      return `Run Podman Desktop as ${status.user} who runs Tailscale`;
+    case "failed":
+      return "Mayfly can't read Tailscale's status";
+  }
+}
+
+// Errors come from the provider's adapter as sentences for a banner. A finding keeps the first, without its full stop.
+function firstSentence(message: string): string {
+  return (message.split(". ")[0] ?? "").replace(/\.$/, "").replaceAll(",", "");
 }
