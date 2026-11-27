@@ -91,6 +91,8 @@ export type FromUi =
   | { readonly type: "focus"; readonly on: boolean }
   /** Sent by the extension, not the page, when Podman Desktop starts and the person wants stopped apps started. */
   | { readonly type: "start-stopped" }
+  /** Sent by the extension, not the page, the first time Podman answers after Mayfly updates. */
+  | { readonly type: "updated" }
   | { readonly type: "rename"; readonly app: string; readonly name: string }
   | { readonly type: "deploy"; readonly app: string; readonly version: string }
   | { readonly type: "save"; readonly app: string; readonly from: string; readonly routes: string; readonly message: string };

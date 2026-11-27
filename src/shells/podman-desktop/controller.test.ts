@@ -296,6 +296,15 @@ describe("the Mayfly panel's controller", () => {
     assert.deepEqual(posted.flatMap((m) => stateOf(m)?.working?.app ?? []), ["lunch-split", "notes"]);
   });
 
+  it("starts each running app again once Mayfly updates, as work it shows, so each runs the way the new version runs apps", async () => {
+    const { handle, posted, calls } = setUp({ apps: [lunch], running: ["lunch", "notes"] });
+
+    await handle({ type: "updated" });
+
+    assert.deepEqual(calls, ["start lunch", "start notes"]);
+    assert.deepEqual(posted.flatMap((m) => stateOf(m)?.working?.app ?? []), ["lunch", "notes"]);
+  });
+
   it("opens a new app only once an attempt at it passed", async () => {
     const { handle, opened, posted } = setUp({ apps: [], created: { ...lunch, head: null } });
 
@@ -687,6 +696,7 @@ interface Options {
   waitForCreate?: boolean;
   /** The apps Podman is not running. */
   stopped?: string[];
+  running?: string[];
   /** Why turning phone access on fails, if it does. */
   phoneFails?: string;
   /** Why the mail server won't let Mayfly sign in, if it won't. */
@@ -695,7 +705,7 @@ interface Options {
   sendFails?: string;
 }
 
-function setUp({ apps, created: made = lunch, steps = [], developer: developing = false, keyFor = [OPENAI_ENDPOINT], createFails, changeFails, waitForCreate = false, stopped: stoppedApps = [], phoneFails, signInFails, sendFails }: Options) {
+function setUp({ apps, created: made = lunch, steps = [], developer: developing = false, keyFor = [OPENAI_ENDPOINT], createFails, changeFails, waitForCreate = false, stopped: stoppedApps = [], running: runningApps = [], phoneFails, signInFails, sendFails }: Options) {
   let phoneHost: string | null = null;
   let account: MailAccount | undefined;
   const verified: MailAccount[] = [];
@@ -780,6 +790,7 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
     logs: async (pod, container) => [`2026-11-26T15:04:05Z ${pod} ${container}`],
     health: async () => [{ name: "lunch-split", kind: "app", pod: "mayfly-lunch-split", containers: [] }],
     stopped: async () => stoppedApps,
+    running: async () => runningApps,
     phoneAccess: async () => phoneHost,
     turnOnPhone: async () => {
       calls.push("turn on phone");
