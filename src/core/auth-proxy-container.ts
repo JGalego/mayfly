@@ -4,14 +4,25 @@ import { APP_PORT, ROLES_CLAIM } from "./contract.ts";
 import { HARDENED, LOOPBACK } from "./hardening.ts";
 import type { Container, EnvVar } from "./kube.ts";
 import { authConfigName, mayflyName } from "./names.ts";
+import { onPhone, phonePort, type PhoneSignIn } from "./phone.ts";
 
 // Pinned: every app runs the proxy the contract was tested against.
 const IMAGE = "quay.io/oauth2-proxy/oauth2-proxy:v7.15.6";
 const PORT = 4180;
+// The phone door shares the pod's network with the localhost door, so it listens on the next port.
+const PHONE_DOOR_PORT = 4181;
 
 export interface AuthProxyInput {
   readonly appName: string;
   readonly hostPort: number;
+}
+
+/** Where a door sends people back to after they sign in, and how it keeps their session. */
+interface Origin {
+  readonly redirectUrl: string;
+  /** Overrides the ConfigMap's sign-in page, which is the computer's. */
+  readonly loginUrl?: string;
+  readonly secureCookie: boolean;
 }
 
 /**
@@ -19,30 +30,47 @@ export interface AuthProxyInput {
  * No liveness probe: the image is one binary with nothing to run a probe with. A crash still restarts it.
  */
 export function buildAuthProxyContainer({ appName, hostPort }: AuthProxyInput): Container {
+  // Plain HTTP on loopback, where a Secure cookie never comes back.
+  const origin = { redirectUrl: callbackUrl(hostPort), secureCookie: false };
+  return door("auth-proxy", appName, origin, { listen: PORT, publish: hostPort });
+}
+
+/** The same proxy for the phone, which the private network forwards to from the app's port on the phone's address. */
+export function buildPhoneDoorContainer({ appName, hostPort, address, loginUrl }: AuthProxyInput & PhoneSignIn): Container {
+  const origin = {
+    redirectUrl: onPhone(callbackUrl(hostPort), address),
+    loginUrl: onPhone(loginUrl, address),
+    secureCookie: address.scheme === "https",
+  };
+  return door("phone-door", appName, origin, { listen: PHONE_DOOR_PORT, publish: phonePort(hostPort) });
+}
+
+function door(name: string, appName: string, origin: Origin, ports: { readonly listen: number; readonly publish: number }): Container {
   return {
-    name: "auth-proxy",
+    name,
     image: IMAGE,
-    args: [...signInArgs(appName, hostPort), ...authorizationArgs(), ...forwardingArgs()],
+    args: [...signInArgs(appName, origin), ...authorizationArgs(), ...forwardingArgs(ports.listen)],
     // Identity provider and allowed roles live in the ConfigMap, so a recipient never edits the pod.
     envFrom: [{ configMapRef: { name: authConfigName(appName) } }],
     env: secretEnv(appName),
-    ports: [{ containerPort: PORT, hostPort, hostIP: LOOPBACK }],
+    ports: [{ containerPort: ports.listen, hostPort: ports.publish, hostIP: LOOPBACK }],
     securityContext: HARDENED,
     resources: { limits: { cpu: "100m", memory: "64Mi" } },
   };
 }
 
-function signInArgs(appName: string, hostPort: number): string[] {
+function signInArgs(appName: string, { redirectUrl, loginUrl, secureCookie }: Origin): string[] {
   return [
     "--provider=oidc",
-    `--redirect-url=${callbackUrl(hostPort)}`,
+    `--redirect-url=${redirectUrl}`,
+    // A flag outranks the ConfigMap's environment variable.
+    ...(loginUrl === undefined ? [] : [`--login-url=${loginUrl}`]),
     "--skip-provider-button=true",
     // Ask for consent once, not at every sign-in.
     "--approval-prompt=auto",
     // Browsers share localhost cookies across ports, so each app needs its own.
     `--cookie-name=${mayflyName(appName)}`,
-    // Plain HTTP on loopback, where a Secure cookie never comes back.
-    "--cookie-secure=false",
+    `--cookie-secure=${secureCookie}`,
   ];
 }
 
@@ -54,9 +82,9 @@ function authorizationArgs(): string[] {
   ];
 }
 
-function forwardingArgs(): string[] {
+function forwardingArgs(listen: number): string[] {
   return [
-    `--http-address=0.0.0.0:${PORT}`,
+    `--http-address=0.0.0.0:${listen}`,
     `--upstream=http://${LOOPBACK}:${APP_PORT}/`,
     "--pass-user-headers=true",
   ];

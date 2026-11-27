@@ -10,6 +10,14 @@ const pod = buildPod({
 const proxy = containerNamed(pod, "auth-proxy");
 const app = containerNamed(pod, "app");
 
+const phoneSignIn = { loginUrl: "http://localhost:5556/dex/auth" };
+const withPhone = buildPod({
+  manifest: { name: "expenses", image: "localhost/mayfly-expenses:1" },
+  hostPort: 8137,
+  phone: { address: { host: "mayfly.tail1a2b.ts.net", scheme: "https" }, ...phoneSignIn },
+});
+const door = containerNamed(withPhone, "phone-door");
+
 describe("the pod Mayfly runs for an app", () => {
   it("is named after the app, under Mayfly's prefix", () => {
     assert.equal(pod.metadata.name, "mayfly-expenses");
@@ -85,7 +93,7 @@ describe("the pod Mayfly runs for an app", () => {
   });
 
   it("hardens every container the same way, whatever the manifest says", () => {
-    for (const container of pod.spec.containers) {
+    for (const container of [...pod.spec.containers, ...withPhone.spec.containers]) {
       assert.deepEqual(container.securityContext, {
         runAsNonRoot: true,
         runAsUser: 65534,
@@ -98,9 +106,48 @@ describe("the pod Mayfly runs for an app", () => {
   });
 
   it("caps every container's CPU and memory", () => {
-    for (const container of pod.spec.containers) {
+    for (const container of [...pod.spec.containers, ...withPhone.spec.containers]) {
       assert.ok(container.resources.limits.cpu, `${container.name} cpu`);
       assert.ok(container.resources.limits.memory, `${container.name} memory`);
+    }
+  });
+});
+
+describe("the pod with phone access", () => {
+  it("adds a phone door beside the localhost door, which stays exactly as it was", () => {
+    assert.deepEqual(
+      withPhone.spec.containers.map((c) => c.name),
+      ["auth-proxy", "phone-door", "app"],
+    );
+    assert.deepEqual(containerNamed(withPhone, "auth-proxy"), proxy);
+  });
+
+  it("publishes the phone door on loopback only, 10000 above the app's port, for the private network to forward to", () => {
+    assert.deepEqual(door.ports, [{ containerPort: 4181, hostPort: 18137, hostIP: "127.0.0.1" }]);
+    assert.ok(door.args?.includes("--http-address=0.0.0.0:4181"));
+  });
+
+  it("signs the phone in on the phone's address, at the app's own port and the sign-in page's", () => {
+    assert.ok(door.args?.includes("--redirect-url=https://mayfly.tail1a2b.ts.net:8137/oauth2/callback"));
+    assert.ok(door.args?.includes("--login-url=https://mayfly.tail1a2b.ts.net:5556/dex/auth"));
+  });
+
+  it("keeps the session in a Secure cookie over HTTPS, and a plain one in the HTTP mode", () => {
+    const overHttp = buildPod({
+      manifest: { name: "expenses", image: "localhost/mayfly-expenses:1" },
+      hostPort: 8137,
+      phone: { address: { host: "mayfly.tail1a2b.ts.net", scheme: "http" }, ...phoneSignIn },
+    });
+
+    assert.ok(door.args?.includes("--cookie-secure=true"));
+    assert.ok(containerNamed(overHttp, "phone-door").args?.includes("--cookie-secure=false"));
+  });
+
+  it("admits the same people as the localhost door, from the same settings and secrets, to the same app", () => {
+    assert.deepEqual(door.envFrom, proxy.envFrom);
+    assert.deepEqual(secretRefs(door), secretRefs(proxy));
+    for (const arg of ["--upstream=http://127.0.0.1:8080/", "--oidc-groups-claim=groups", "--cookie-name=mayfly-expenses", "--pass-user-headers=true"]) {
+      assert.ok(door.args?.includes(arg), arg);
     }
   });
 });
