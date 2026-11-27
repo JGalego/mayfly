@@ -790,6 +790,11 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
       calls.push("turn off phone");
       phoneHost = null;
     },
+    offerPairing: async () => ({ code: "pairing-code", expires: 0 }),
+    pair: async () => "phone-token",
+    pairedPhone: async () => null,
+    phones: async () => [],
+    forgetPhone: async () => {},
     people: async () => [...people.keys()],
     person: async (email) => ({ email, password: people.get(email) ?? "", group: "person-1" }),
     addPerson: async (email) => {
