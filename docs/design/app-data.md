@@ -1,6 +1,6 @@
 # Design: data that apps keep
 
-Status: being built on `feat/app-data`, for 0.5.0. It changes the contract, and takes "Server-side persistence" off the README's non-goals.
+Status: on `main`, for 0.5.0. It changes the contract, and takes "Server-side persistence" off the README's non-goals.
 
 Built so far: the store, the check in every trial, undo and deploy on the data, backups with restore and export, rename and remove. Still to build: offering the backup when an undo doesn't fit.
 
