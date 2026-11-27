@@ -38,7 +38,7 @@ Describe a small web app. Mayfly builds it and runs it locally in Podman behind 
 ### Steps
 
 1. In Podman Desktop, open **Extensions**, choose **Install custom…**, and enter `ghcr.io/jgalego/mayfly-extension:main`.
-2. Open **Mayfly → Settings → Models**. The default is OpenAI's `gpt-6.2-sol`. Add a key or choose another provider and model. Podman Desktop stores the key, and Mayfly sends it only to the endpoint it was saved for. Your requests, their attachments and your apps' code go to that provider.
+2. Open **Mayfly → Settings → Models**. The default is OpenAI's `gpt-6.2-sol`. Add a key or choose another provider and model. Podman Desktop stores the key, and Mayfly sends it only to the endpoint it was saved for. Your requests, their attachments and your apps' code go to that provider, and `/fix` sends the errors an app logged, which can hold what its users typed.
 3. Choose **New app** and describe what you need. You can attach images, such as a mockup, and text files with data (`.txt`, `.md`, `.csv`, `.tsv`, `.json`): use the paperclip, or paste or drop them. After deployment, sign in with the email and password under **Sign-in details**, next to **Open app**.
 4. Ask for changes in the app's conversation. A successful update replaces the previous version at the same address. Type `/` for commands: `/ask` a question without changing the app, `/fix` the errors it logged, `/retry` your last request, `/undo` the last deploy, `/start` it again after it stopped, or switch its `/model`, `/rename` it or `/remove` it.
 
@@ -86,7 +86,7 @@ Applications like [Dyad](https://www.dyad.sh/) and [Lovable](https://lovable.dev
 
 A generated app is one TypeScript file, `routes.ts`, using [Hono](https://hono.dev/) on Node 24. The runtime listens on `$PORT`, serves `/healthz` and writes JSON logs to stdout. The app serves HTML at `/` with a link to `/oauth2/sign_out`. It has no server-side storage; data that must survive a restart can live in the browser.
 
-[oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/) handles sign-in, checks the OIDC `groups` claim against the app's allowed roles and forwards identity in headers. It keeps the browser's cookies from the app, since browsers send every app on a host the cookies of all the others. [Dex](https://dexidp.io/) provides local OIDC. The app's port is not published; the proxy listens on loopback.
+[oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/) handles sign-in, checks the OIDC `groups` claim against the app's allowed roles and forwards identity in headers. It keeps the browser's cookies from the app, since browsers send every app on a host the cookies of all the others. [Dex](https://dexidp.io/) provides local OIDC. The app's port is not published; the proxy's is, on loopback only.
 
 Mayfly deploys an OCI image and Kubernetes objects with `podman kube play`. Containers run as non-root with a read-only root filesystem, no Linux capabilities and CPU and memory limits. The proxy's ConfigMap sets the identity provider and allowed roles; credentials live in a Secret.
 

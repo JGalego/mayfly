@@ -1,6 +1,6 @@
 import type { ConfigMap } from "./kube.ts";
 import { authConfigName } from "./names.ts";
-import type { Policy } from "./policy.ts";
+import { allowedRoles, type Policy } from "./policy.ts";
 
 /** oauth2-proxy settings for one identity provider, keyed by environment variable. */
 export type IdpSettings = Readonly<Record<`OAUTH2_PROXY_${string}`, string>>;
@@ -17,6 +17,6 @@ export function buildAuthConfigMap({ appName, policy, idp }: AuthConfigInput): C
     apiVersion: "v1",
     kind: "ConfigMap",
     metadata: { name: authConfigName(appName) },
-    data: { ...idp, OAUTH2_PROXY_ALLOWED_GROUPS: policy.roles.join(",") },
+    data: { ...idp, OAUTH2_PROXY_ALLOWED_GROUPS: allowedRoles(policy) },
   };
 }

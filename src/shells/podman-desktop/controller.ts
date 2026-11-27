@@ -50,10 +50,10 @@ export interface ControllerPorts {
   readonly mail: MailPorts["mail"];
 }
 
-// One request at a time: each one reads and writes the whole state.
+// The work under way, one piece at a time, for the page to follow. The engine keeps changes to the state in order.
 type Session = ControllerPorts & { working: Progress | null; draftDue: boolean; activity: Activity[]; focused: boolean };
 
-/** Handles what the page asks for. The page is trusted with nothing: it names apps, never URLs, and never sees a secret. */
+/** Handles what the page asks for. The page is trusted with nothing: it names apps, never URLs, and sees no secret but a password the person asks to see. */
 export function createController(ports: ControllerPorts): (message: unknown) => Promise<void> {
   const session: Session = { ...ports, working: null, draftDue: false, activity: [], focused: true };
   return async (message) => {
@@ -104,7 +104,7 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       return showState(session);
     case "new-password":
       if (request.email !== undefined) return newPersonPassword(request.email, session);
-      // Straight to the clipboard: like the old one, the new password never goes to the page.
+      // Straight to the clipboard: the page gets a password only when the person asks to see it.
       await session.copy((await session.engine.newPassword()).password);
       return session.post({ type: "notice", text: "Password reset. The new password is on your clipboard." });
     case "add-person":
@@ -352,7 +352,7 @@ async function remove(name: string, session: Session): Promise<void> {
   await showState(session);
 }
 
-// The page shows that it copied. The password itself never goes to the page.
+// The page shows that it copied, without the password, which goes to the page only to be seen.
 async function copySignIn(what: "email" | "password", session: Session): Promise<void> {
   await session.copy((await session.engine.owner())[what]);
 }
@@ -498,7 +498,10 @@ async function mailFor(about: MailAbout, session: Session): Promise<Mail> {
   const host = await session.engine.phoneAccess();
   const app = (await session.engine.list()).find((candidate) => candidate.name === about.app);
   if (host === null || app === undefined) throw new Error(`\`${about.app}\` can't be reached from another device now. Turn on phone access in Settings first.`);
-  return sharedMail(about.email, app.name, onPhone(app.url, host));
+  // The page names the address, so the app has to be shared with it: the owner's account sends to no one else.
+  const to = about.email.trim().toLowerCase();
+  if (!app.people.includes(to)) throw new Error(`\`${app.name}\` isn't shared with \`${about.email}\`.`);
+  return sharedMail(to, app.name, onPhone(app.url, host));
 }
 
 async function showState(session: Session): Promise<void> {

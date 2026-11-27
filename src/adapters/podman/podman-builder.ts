@@ -3,7 +3,7 @@ import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { APP_PORT, HEALTH_CHECK, NODE } from "../../core/contract.ts";
+import { APP_PORT, HEALTH_CHECK, HOME_PAGE_TIMEOUT_MS, NODE } from "../../core/contract.ts";
 import { homePageProblem, type HomePage } from "../../core/home-page.ts";
 import type { Builder, Trial } from "../../engine/ports.ts";
 import { podman, run } from "./cli.ts";
@@ -88,10 +88,11 @@ async function isRunning(container: string): Promise<boolean> {
   return (await podman(["inspect", "--format", "{{.State.Running}}", container])).trim() === "true";
 }
 
-// Visits the home page from inside the container, since the trial has no network to reach it from outside.
+// Visits the home page from inside the container, since the trial has no network to reach it from outside. The model's code
+// decides how long it takes, so the visit gives up in time, body and all; then it answered nothing.
 async function requestHome(container: string): Promise<HomePage> {
   const headers = JSON.stringify(TRIAL_USER);
-  const script = `fetch("http://127.0.0.1:${APP_PORT}/", { headers: ${headers} }).then(async (r) => process.stdout.write(JSON.stringify({ status: r.status, type: r.headers.get("content-type") ?? "", body: await r.text() })))`;
+  const script = `fetch("http://127.0.0.1:${APP_PORT}/", { headers: ${headers}, signal: AbortSignal.timeout(${HOME_PAGE_TIMEOUT_MS}) }).then(async (r) => process.stdout.write(JSON.stringify({ status: r.status, type: r.headers.get("content-type") ?? "", body: await r.text() })))`;
   const { code, stdout } = await run(["exec", container, NODE, "--eval", script]);
   return code === 0 ? (JSON.parse(stdout) as HomePage) : { status: 0, type: "", body: "" };
 }

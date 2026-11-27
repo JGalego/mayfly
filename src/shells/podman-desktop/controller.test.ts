@@ -641,6 +641,16 @@ describe("the Mayfly panel's controller", () => {
     assert.match(decodeURIComponent(opened.at(-1) ?? ""), /You can now open lunch-split, an app I made with Mayfly:\s+https:\/\/mayfly\.tail1a2b\.ts\.net:38100\//);
   });
 
+  it("emails a shared app only to someone it's shared with", async () => {
+    const { handle, posted, opened } = setUp({ apps: [lunch] });
+    await handle({ type: "phone", on: true });
+
+    await handle({ type: "email", about: "shared", email: "anyone@example.com", app: "lunch-split" });
+
+    assert.deepEqual(opened, []);
+    assert.ok(posted.some((message) => message.type === "error" && message.text === "`lunch-split` isn't shared with `anyone@example.com`."));
+  });
+
   it("sets up the account Mayfly sends email from once it signs in to the server with it, and never shows the password again", async () => {
     const { handle, posted, mail } = setUp({ apps: [lunch] });
 
@@ -897,6 +907,7 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
     removePerson: async (email) => void people.delete(email),
     share: async (name, email, shared) => {
       calls.push(`share ${name} ${email} ${shared}`);
+      apps = apps.map((app) => (app.name === name ? { ...app, people: shared ? [...app.people, email] : app.people.filter((other) => other !== email) } : app));
       return { ...lunch, people: shared ? [email] : [] };
     },
   };

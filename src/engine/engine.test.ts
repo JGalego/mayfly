@@ -9,6 +9,43 @@ import { EMPTY_STATE, type State } from "./state.ts";
 const COST = { input: 100, output: 20, thinking: 0 };
 const crashed: Trial = { ok: false, problem: "crashed" };
 
+describe("changes made at once", () => {
+  it("keep a password reset made while an app deploys, in the state and in sign-in", async () => {
+    const { engine, synced, holdDeploy } = setUp([reply("lunch")]);
+    const lunch = await engine.create("split lunch bills");
+    const release = holdDeploy();
+
+    const deploying = engine.deploy("lunch", lunch.head ?? "");
+    await settled();
+    const resetting = engine.newPassword();
+    release();
+    const [, owner] = await Promise.all([deploying, resetting]);
+
+    assert.equal((await engine.owner()).password, owner.password);
+    assert.equal(synced.at(-1)?.owner?.password, owner.password);
+  });
+
+  it("keep an app starred while another deploys", async () => {
+    const { engine, holdDeploy } = setUp([reply("lunch"), reply("notes")]);
+    const lunch = await engine.create("split lunch bills");
+    await engine.create("keep notes");
+    const release = holdDeploy();
+
+    const deploying = engine.deploy("lunch", lunch.head ?? "");
+    await settled();
+    const starring = engine.star("notes", true);
+    release();
+    await Promise.all([deploying, starring]);
+
+    assert.equal((await engine.list()).find((app) => app.name === "notes")?.starred, true);
+  });
+});
+
+/** Lets every promise that can go on do so, as when a slow call is under way. */
+async function settled(): Promise<void> {
+  for (let turn = 0; turn < 20; turn++) await Promise.resolve();
+}
+
 describe("the engine", () => {
   it("creates an app from a description and runs it behind sign-in at a loopback URL", async () => {
     const { engine, deployed } = setUp([reply("lunch")]);
@@ -224,6 +261,7 @@ describe("the engine", () => {
     await assert.rejects(engine.rename("lunch", "Lunch Bills"), /`Lunch Bills` can't be an app's name: use lowercase letters/);
     await assert.rejects(engine.rename("lunch", "notes"), /There is already an app called `notes`/);
     await assert.rejects(engine.rename("lunch", "lunch"), /`lunch` is already called that/);
+    await assert.rejects(engine.rename("lunch", "dex"), /`dex` is the name of Mayfly's sign-in/);
   });
 
   it("starts the running version again, with the sign-in service, changing nothing about the app", async () => {
@@ -456,6 +494,52 @@ describe("the engine", () => {
     assert.notEqual(after.password, before.password);
     assert.equal(synced.at(-1)?.owner?.password, after.password);
     await assert.rejects(engine.changeEmail("not an email"), /Enter a valid email address/);
+  });
+
+  it("refuses an email for the owner that someone apps are shared with has, since sign-in would hold two passwords for it", async () => {
+    const { engine } = setUp([]);
+    await engine.addPerson("ana@example.com");
+
+    await assert.rejects(engine.changeEmail("Ana@example.com"), /`ana@example.com` is someone you share apps with/);
+  });
+
+  it("signs the owner out of every app with a new password, giving each a new cookie secret and running it again", async () => {
+    const { engine, deployed } = setUp([reply("lunch")]);
+    await engine.create("split lunch bills");
+    const before = cookieSecretIn(deployed.at(-1));
+
+    await engine.newPassword();
+
+    assert.notEqual(cookieSecretIn(deployed.at(-1)), before);
+  });
+
+  it("keeps someone it couldn't stop every app letting in, so removing them can be tried again", async () => {
+    const { engine, deployFailures } = setUp([reply("lunch")]);
+    await engine.create("split lunch bills");
+    await engine.addPerson("ana@example.com");
+    await engine.share("lunch", "ana@example.com", true);
+    deployFailures.push("Podman refused");
+
+    await assert.rejects(engine.removePerson("ana@example.com"), /Podman refused/);
+    const kept = await engine.people();
+    await engine.removePerson("ana@example.com");
+
+    assert.deepEqual(kept, ["ana@example.com"]);
+    assert.deepEqual(await engine.people(), []);
+  });
+
+  it("removes the files attached in an app's conversation with it, but not one another app has too", async () => {
+    const { engine, kept } = setUp([reply("lunch"), reply("notes"), reply("lunch"), reply("notes")]);
+    await engine.create("split lunch bills");
+    await engine.create("keep notes");
+    const mockup = { name: "mockup.png", type: "image/png", data: new Uint8Array([1, 2, 3]) };
+    const bills = { name: "bills.csv", type: "text/csv", data: new TextEncoder().encode("who,amount") };
+    await engine.change("lunch", "use these", undefined, [mockup, bills]);
+    await engine.change("notes", "use this", undefined, [mockup]);
+
+    await engine.remove("lunch");
+
+    assert.equal(kept.size, 1);
   });
 
   it("creates the owner once, with a long random password", async () => {
@@ -733,8 +817,16 @@ function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: st
   };
   /** Why the next deploys fail, one reason each, as when something else holds a port. */
   const deployFailures: string[] = [];
+  /** Deploys that wait until a test lets them go on, as a slow Podman makes them. */
+  const holds: Promise<void>[] = [];
+  const holdDeploy = (): (() => void) => {
+    let release = (): void => {};
+    holds.push(new Promise((resolve) => (release = resolve)));
+    return release;
+  };
   const deployer: Deployer = {
     deploy: async (objects) => {
+      await holds.shift();
       const failure = deployFailures.shift();
       if (failure !== undefined) throw new Error(failure);
       log.push("deploy");
@@ -787,6 +879,7 @@ function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: st
       return id;
     },
     get: async (id) => kept.get(id) ?? Promise.reject(new Error(`no file ${id}`)),
+    remove: async (id) => void kept.delete(id),
   };
   // What the private network serves for the phone: each port, and the loopback port it forwards to.
   const served = new Map<number, number>();
@@ -796,7 +889,13 @@ function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: st
     stop: async (port) => void served.delete(port),
   };
   const engine = createEngine({ store, deployer, observer, identity, models, builder, files, phoneNetwork });
-  return { engine, deployed, removed, synced, forgotten, served, log, asked, logged, kept, deployFailures, takenPorts };
+  return { engine, deployed, removed, synced, forgotten, served, log, asked, logged, kept, deployFailures, takenPorts, holdDeploy };
+}
+
+/** The cookie secret an app's proxy got, from the Secret among its objects. */
+function cookieSecretIn(objects: readonly KubeObject[] | undefined): string | undefined {
+  const secret = objects?.find((object) => object.kind === "Secret");
+  return secret?.kind === "Secret" ? secret.stringData["cookie-secret"] : undefined;
 }
 
 function names(objects: readonly KubeObject[] | undefined): string[] {

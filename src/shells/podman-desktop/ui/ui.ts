@@ -347,7 +347,6 @@ function receiveState(next: State): void {
   if (view.kind === "app" && shownApp() === undefined) view = { kind: "new" };
   // The ledger grows when work ends, which sends the state.
   if (view.kind === "settings") post({ type: "ledger" });
-  // On first use, Settings opens on the default model, so the person can paste its key.
   render();
 }
 
@@ -594,7 +593,6 @@ function openApp(): void {
   if (view.kind === "app") post({ type: "open", name: view.name });
 }
 
-// Removing an app loses its conversation and versions for good, so a dialog asks first, with keeping it the default.
 /** Does what a command says, or says what it is missing. What follows the command stays in the composer until it is done. */
 function runCommand(command: Command, argument: string): void {
   if (command.needsApp && view.kind !== "app") return showError(`/${command.name} works in an app's conversation.`);
@@ -702,7 +700,7 @@ function makeNewPassword(): void {
     return post({ type: "new-password" });
   }
   newPasswordArmed = true;
-  control.textContent = "Confirm reset (old password expires)";
+  control.textContent = "Confirm reset (signs out every device)";
   window.setTimeout(() => {
     newPasswordArmed = false;
     control.textContent = "Reset password";
@@ -920,7 +918,6 @@ function renderChat(state: State, app: AppView | undefined): void {
   const pending = working === null ? failure : [...asked, turn("mayfly", pendingView(working, showing, SPEAKING), SPEAKING)];
   const thread = element("thread");
   const following = thread.scrollHeight - thread.scrollTop - thread.clientHeight < FOLLOW_PX;
-  // The Code tab is behind the curtain.
   // History and Code are for developers.
   const tab = view.kind !== "app" || !state.developer ? "chat" : view.tab;
   // The editor has its own message box; a second one for the model would only confuse.
@@ -1040,7 +1037,6 @@ function scrollToEnd(box: HTMLElement): void {
   box.scrollTop = box.scrollHeight;
 }
 
-/** Work the person asked for from a conversation fails in that conversation, as Mayfly's reply, with what they typed back in the composer. Anything else fails in the banner. */
 /**
  * Work the person asked for from a conversation fails in that conversation, with what they typed back in the composer. The engine keeps
  * most failures in the app's conversation itself; the rest, like a new app's, the page says there until something else is asked.

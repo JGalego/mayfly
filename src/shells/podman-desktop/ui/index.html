@@ -253,7 +253,7 @@
         <div id="settings-models-tab" class="settings-page" role="tabpanel" aria-labelledby="settings-tab-models">
           <section>
             <p class="hint">New apps use the default model unless you choose another.</p>
-            <p class="hint">Requests and attachments go to the selected provider. When you ask about or change an app, its code goes too.</p>
+            <p class="hint">Requests and attachments go to the selected provider. When you ask about or change an app, its code goes too, and /fix sends the errors it logged.</p>
             <ul id="model-list" class="model-list"></ul>
             <button id="add-model" class="quiet-button add-model" type="button">+ Add a model</button>
             <form id="model-form" class="settings-form" hidden>
@@ -307,7 +307,7 @@
     <dialog id="remove-dialog" aria-labelledby="remove-title">
       <form method="dialog">
         <h2 id="remove-title">Remove this app?</h2>
-        <p>This stops the app and deletes its conversation and all versions. Data stored in browsers is not removed.</p>
+        <p>This stops the app and deletes its conversation, the files attached in it, and all versions. Data stored in browsers is not removed.</p>
         <div class="editor-actions">
           <button value="keep" class="quiet-button" autofocus>Cancel</button>
           <button id="confirm-remove" value="remove" class="danger">Remove</button>

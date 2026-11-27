@@ -8,6 +8,8 @@ export const NODE = "/usr/bin/node";
 /** The runtime image answers its own health check: Node calls the app's /healthz. */
 export const HEALTH_CHECK = [NODE, "/app/runtime/health-check.ts"];
 export const ROLES_CLAIM = "groups";
+/** How long the home page may take to answer, all of it, when the trial visits. */
+export const HOME_PAGE_TIMEOUT_MS = 10_000;
 /** Where people sign out. Every app's home page links to it, and the runtime answers it, so it ends every session that would sign them back in. */
 export const SIGN_OUT_PATH = "/oauth2/sign_out";
 /** The auth proxy's own pages, apart from the app's. */

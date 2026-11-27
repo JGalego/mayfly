@@ -25,4 +25,8 @@ describe("homePageProblem", () => {
       assert.match(homePageProblem({ status: 200, type: html, body }) ?? "", /no link to \/oauth2\/sign_out/, body);
     }
   });
+
+  it("says a home page that gave no answer in time must answer at once", () => {
+    assert.match(homePageProblem({ status: 0, type: "", body: "" }) ?? "", /GET \/ gave no answer within 10 seconds/);
+  });
 });

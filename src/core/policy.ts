@@ -1,5 +1,5 @@
 import { ContractViolation } from "./contract-violation.ts";
-import { requireMatch, requireObject, type Rule } from "./rules.ts";
+import { requireMatch, type Rule } from "./rules.ts";
 
 /** Who may use an app. Lives outside the app; the auth proxy enforces it. */
 export interface Policy {
@@ -8,20 +8,13 @@ export interface Policy {
 
 const ROLE: Rule = {
   subject: "role",
-  // The proxy splits on commas, so roles must be plain tokens.
+  // The proxy splits roles on commas, and its settings list them in YAML, so each must be a plain token.
   pattern: /^[\w.:-]+$/,
   description: "letters, digits, '_', '.', ':' or '-'",
 };
 
-export function parsePolicy(value: unknown): Policy {
-  const { roles } = requireObject(value, "policy");
-  return { roles: requireRoleList(roles).map((role) => requireMatch(role, ROLE)) };
-}
-
-// Given no roles, the proxy lets every signed-in user in.
-function requireRoleList(value: unknown): unknown[] {
-  if (!Array.isArray(value) || value.length === 0) {
-    throw new ContractViolation("policy roles must be a non-empty list");
-  }
-  return value;
+/** The roles the proxy lets in, as it takes them. Never none, which the proxy would read as everyone. */
+export function allowedRoles({ roles }: Policy): string {
+  if (roles.length === 0) throw new ContractViolation("policy roles must be a non-empty list");
+  return roles.map((role) => requireMatch(role, ROLE)).join(",");
 }

@@ -12,6 +12,8 @@ export interface StateStore {
 export interface FileStore {
   put(data: Uint8Array): Promise<string>;
   get(id: string): Promise<Uint8Array>;
+  /** Removes a file. One already gone counts as removed. */
+  remove(id: string): Promise<void>;
 }
 
 export interface Deployer {

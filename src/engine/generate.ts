@@ -1,3 +1,4 @@
+import { SIGN_IN } from "../core/names.ts";
 import type { Builder, Listener, Message, ModelProvider } from "./ports.ts";
 import { changeFor, repairFor, requestFor, SYSTEM_PROMPT, withFiles } from "./prompt.ts";
 import type { FileData } from "./attachments.ts";
@@ -100,9 +101,9 @@ async function tryCode(name: string, routes: string, builder: Builder, watch: Wa
   return trial.ok ? { problem: null, image } : { problem: trial.problem, image: null };
 }
 
-/** Models pick obvious names, and a second "notes" must not replace the first. */
+/** Models pick obvious names, and a second "notes" must not replace the first, nor a "dex" Mayfly's sign-in. */
 function unusedName(name: string, taken: readonly string[]): string {
   let candidate = name;
-  for (let n = 2; taken.includes(candidate); n++) candidate = `${name.slice(0, MAX_NAME_LENGTH - `-${n}`.length)}-${n}`;
+  for (let n = 2; taken.includes(candidate) || candidate === SIGN_IN; n++) candidate = `${name.slice(0, MAX_NAME_LENGTH - `-${n}`.length)}-${n}`;
   return candidate;
 }
