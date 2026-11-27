@@ -4,7 +4,7 @@ import { problemWithFiles, type FileData } from "../../engine/attachments.ts";
 import { onPhone } from "../../core/phone.ts";
 import type { Examination } from "./doctor.ts";
 import { mailto, newPasswordMail, sharedMail, welcomeMail, type Mail } from "./invitations.ts";
-import type { Activity, FromUi, Progress, ToUi, Upload, Work } from "./messages.ts";
+import type { Activity, FromUi, MailAbout, Progress, ToUi, Upload, Work } from "./messages.ts";
 import { makeDefault, modelViews, readModel, removeModel, saveModel } from "./model-settings.ts";
 import type { Models, ModelSetting } from "./settings.ts";
 
@@ -103,8 +103,8 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       return addPerson(request.email, session);
     case "remove-person":
       return removePerson(request.email, session);
-    case "invite":
-      return draft(welcomeMail(await session.engine.person(request.email)), session);
+    case "email":
+      return email(request, session);
     case "share":
       return share(request.app, request.email, request.shared, session);
     case "developer":
@@ -374,9 +374,8 @@ async function addPerson(email: string, session: Session): Promise<void> {
   if (session.working !== null) return void (await session.post({ type: "error", text: BUSY }));
   const person = await session.engine.addPerson(email);
   note(session, "info", `Added ${person.email}`);
-  await draft(welcomeMail(person), session);
-  await session.post({ type: "notice", text: `Added ${person.email}. Your mail app has an email for them, with their password.` });
   await showState(session);
+  await session.post({ type: "offer-email", about: "welcome", email: person.email });
 }
 
 async function removePerson(email: string, session: Session): Promise<void> {
@@ -390,9 +389,9 @@ async function removePerson(email: string, session: Session): Promise<void> {
 async function newPersonPassword(email: string, session: Session): Promise<void> {
   if (session.working !== null) return void (await session.post({ type: "error", text: BUSY }));
   const person = await session.engine.newPersonPassword(email);
-  await draft(newPasswordMail(person), session);
-  await session.post({ type: "notice", text: `New password for ${person.email}. Their old one no longer works, and your mail app has an email for them.` });
+  note(session, "info", `New password for ${person.email}`);
   await showState(session);
+  await session.post({ type: "offer-email", about: "new-password", email: person.email });
 }
 
 // Other people reach apps only through the private network, so sharing needs phone access on.
@@ -400,15 +399,26 @@ async function share(app: string, email: string, shared: boolean, session: Sessi
   if (session.working !== null) return void (await session.post({ type: "error", text: BUSY }));
   const host = await session.engine.phoneAccess();
   if (shared && host === null) throw new Error("Turn on phone access in Settings first: other people open your apps through Tailscale.");
-  const view = await session.engine.share(app, email, shared);
+  await session.engine.share(app, email, shared);
   note(session, "info", shared ? `Shared ${app} with ${email}` : `Stopped sharing ${app} with ${email}`);
-  if (shared && host !== null) await draft(sharedMail(email, app, onPhone(view.url, host)), session);
   await showState(session);
+  if (shared) await session.post({ type: "offer-email", about: "shared", email, app });
 }
 
-/** Opens an email in the owner's mail app, for them to send. */
-async function draft(mail: Mail, session: Session): Promise<void> {
-  await session.openExternal(mailto(mail));
+/** Opens an email in the owner's mail app, for them to send. Mayfly sends nothing itself. */
+async function email(about: MailAbout, session: Session): Promise<void> {
+  await session.openExternal(mailto(await mailFor(about, session)));
+}
+
+async function mailFor(about: MailAbout, session: Session): Promise<Mail> {
+  if (about.about !== "shared") {
+    const person = await session.engine.person(about.email);
+    return about.about === "welcome" ? welcomeMail(person) : newPasswordMail(person);
+  }
+  const host = await session.engine.phoneAccess();
+  const app = (await session.engine.list()).find((candidate) => candidate.name === about.app);
+  if (host === null || app === undefined) throw new Error(`${about.app} can't be reached from another device now. Turn on phone access in Settings first.`);
+  return sharedMail(about.email, app.name, onPhone(app.url, host));
 }
 
 async function showState(session: Session): Promise<void> {
@@ -430,7 +440,7 @@ async function showState(session: Session): Promise<void> {
 // Messages come from the page, so each is checked for its shape before anything acts on it.
 function readRequest(message: unknown): FromUi | undefined {
   if (typeof message !== "object" || message === null) return undefined;
-  const { type, app, request, question, name, apiKey, on, version, what, from, routes, message: words, model, id, pod, container, starred, email, url, files, shared } = message as Record<string, unknown>;
+  const { type, app, request, question, name, apiKey, on, version, what, from, routes, message: words, model, id, pod, container, starred, email, url, files, shared, about } = message as Record<string, unknown>;
   switch (type) {
     case "new-password":
     case "show-password":
@@ -438,8 +448,11 @@ function readRequest(message: unknown): FromUi | undefined {
       return typeof email === "string" ? { type, email } : undefined;
     case "add-person":
     case "remove-person":
-    case "invite":
       return typeof email === "string" ? { type, email } : undefined;
+    case "email":
+      if (typeof email !== "string") return undefined;
+      if (about === "welcome" || about === "new-password") return { type, about, email };
+      return about === "shared" && typeof app === "string" ? { type, about, email, app } : undefined;
     case "share":
       return typeof app === "string" && typeof email === "string" && typeof shared === "boolean" ? { type, app, email, shared } : undefined;
     case "ready":

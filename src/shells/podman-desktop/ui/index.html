@@ -204,9 +204,9 @@
             <ul id="people" class="model-list" hidden></ul>
             <form id="person-form" class="sign-in-row">
               <input id="person-email" type="email" required autocomplete="off" placeholder="name@example.com" aria-label="Their email">
-              <button class="quiet-button" type="submit" data-icon="mail">Add &amp; email</button>
+              <button class="quiet-button" type="submit" data-icon="plus">Add user</button>
             </form>
-            <p class="hint">Mayfly drafts an email in your mail app with their password, for you to send.</p>
+            <p class="hint">Mayfly makes them a password, and offers to email it to them.</p>
           </section>
           <section>
             <h2>Tailscale</h2>
@@ -275,6 +275,16 @@
         <div class="editor-actions">
           <button value="keep" class="quiet-button" autofocus>Cancel</button>
           <button id="confirm-remove" value="remove" class="danger">Remove</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="email-dialog" aria-labelledby="email-title">
+      <form method="dialog">
+        <h2 id="email-title"></h2>
+        <p id="email-text"></p>
+        <div class="editor-actions">
+          <button value="skip" class="quiet-button">Not now</button>
+          <button value="email" class="primary" data-icon="mail" autofocus>Email them</button>
         </div>
       </form>
     </dialog>

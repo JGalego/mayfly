@@ -41,6 +41,9 @@ export interface Activity {
   readonly text: string;
 }
 
+/** An email Mayfly can draft for the owner to send: a welcome or a new password, with the password, or a shared app's link. */
+export type MailAbout = { readonly about: "welcome" | "new-password"; readonly email: string } | { readonly about: "shared"; readonly email: string; readonly app: string };
+
 /** What the page asks the extension to do. */
 export type FromUi =
   | { readonly type: "ready" }
@@ -58,14 +61,13 @@ export type FromUi =
   | { readonly type: "use-model"; readonly app: string; readonly model: string }
   | { readonly type: "star"; readonly app: string; readonly starred: boolean }
   | { readonly type: "owner-email"; readonly email: string }
-  /** A new password for the owner, or for the person named, whose email app gets a draft telling them. */
+  /** A new password for the owner, or for the person named. */
   | { readonly type: "new-password"; readonly email?: string }
-  /** Adds someone to share apps with, and drafts the email that welcomes them. */
   | { readonly type: "add-person"; readonly email: string }
   | { readonly type: "remove-person"; readonly email: string }
-  /** Drafts the welcome email again, with their password. */
-  | { readonly type: "invite"; readonly email: string }
-  /** Lets someone open an app, or no longer. Sharing drafts the email with its address. */
+  /** Drafts an email in the owner's mail app, for them to send. */
+  | ({ readonly type: "email" } & MailAbout)
+  /** Lets someone open an app, or no longer. */
   | { readonly type: "share"; readonly app: string; readonly email: string; readonly shared: boolean }
   | { readonly type: "developer"; readonly on: boolean }
   | { readonly type: "health" }
@@ -124,6 +126,8 @@ export type ToUi =
   | { readonly type: "logs"; readonly pod: string; readonly container: string; readonly lines: readonly string[] }
   | { readonly type: "code"; readonly app: string; readonly version: string; readonly routes: string; readonly thinking: string }
   | { readonly type: "notice"; readonly text: string }
+  /** Asks the owner whether to email someone about what just changed for them. */
+  | ({ readonly type: "offer-email" } & MailAbout)
   /** A password the person asked to see: the owner's, or that of the person named. */
   | { readonly type: "password"; readonly password: string; readonly email?: string }
   /** Recorded when the app's conversation already says it, so the page need not. */

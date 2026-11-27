@@ -1,5 +1,5 @@
 import type { AppView } from "../../../engine/engine.ts";
-import type { FromUi } from "../messages.ts";
+import type { FromUi, MailAbout } from "../messages.ts";
 import { h } from "./dom.ts";
 import { icon, type IconName } from "./icons.ts";
 import { passwordCard, PASSWORD_SHOWN_MS } from "./password-card.ts";
@@ -33,6 +33,20 @@ export function setUpPeople(send: Post, rerender: () => void, openPeople: () => 
   });
   element("share-tailscale").addEventListener("click", () => post({ type: "open-link", url: TAILSCALE_MACHINES }));
   element("share-people-settings").addEventListener("click", openPeople);
+}
+
+/** Asks whether to email someone about what just changed for them, and drafts it in the owner's mail app if so. */
+export function offerEmail(mail: MailAbout): void {
+  const dialog = element<HTMLDialogElement>("email-dialog");
+  const titles = { welcome: "their sign-in", "new-password": "their new password", shared: "the link" };
+  element("email-title").textContent = `Email ${mail.email} ${titles[mail.about]}?`;
+  element("email-text").textContent =
+    mail.about === "shared"
+      ? `Mayfly drafts an email in your mail app with the link to ${mail.app}, for you to send.`
+      : "Mayfly drafts an email in your mail app with their password, for you to send.";
+  dialog.returnValue = "";
+  dialog.addEventListener("close", () => dialog.returnValue === "email" && post({ type: "email", ...mail }), { once: true });
+  dialog.showModal();
 }
 
 /** The state came: whatever sharing was under way has run its course. */
@@ -86,7 +100,7 @@ function shareNote(anyone: boolean, phoneOn: boolean, busy: boolean): string {
   if (busy) return "Restarting the app with the new access…";
   if (!anyone) return "Add people in Settings to share this app.";
   if (!phoneOn) return "Turn on phone access in Settings first. Other people open apps through Tailscale.";
-  return "When you add someone, Mayfly drafts an email in your mail app with the app's link.";
+  return "When you add someone, Mayfly offers to email them the link.";
 }
 
 function shareOption(label: string, checked: boolean, disabled: boolean, change: (on: boolean) => void): HTMLElement {
@@ -107,7 +121,7 @@ function personCard(email: string): HTMLElement {
     action(showing === undefined ? "eye" : "eye-off", showing === undefined ? "Show" : "Hide", `${showing === undefined ? "Show" : "Hide"} ${email}'s password`, () =>
       showing === undefined ? post({ type: "show-password", email }) : hidePassword(),
     ),
-    action("mail", "Email again", `Draft an email to ${email} with their password`, () => post({ type: "invite", email })),
+    action("mail", "Email again", `Draft an email to ${email} with their password`, () => post({ type: "email", about: "welcome", email })),
     confirming(email, "reset", "Reset password", "Confirm reset", () => post({ type: "new-password", email })),
     confirming(email, "remove", "Remove", "Confirm removal", () => post({ type: "remove-person", email })),
   );

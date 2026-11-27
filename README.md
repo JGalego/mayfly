@@ -58,9 +58,9 @@ Your phone can open the apps too, over HTTPS through [Tailscale](https://tailsca
 Other people open your apps the way your phone does, with their own email and password.
 
 1. Turn on phone access, as above.
-2. In **Settings → People**, add each person by email. Mayfly drafts an email in your mail app with their password, for you to send.
+2. In **Settings → People**, choose **Add user** for each person. Mayfly makes them a password and offers to draft an email in your mail app with it, for you to send.
 3. In Tailscale's admin console, share this computer with them.
-4. In an app, choose **Share** and tick who can open it. Mayfly drafts an email with the app's link.
+4. In an app, choose **Share** and tick who can open it. Mayfly offers to draft an email with the app's link.
 
 Each person has a sign-in group of their own. Each app lets in only yours and those of the people it's shared with, which you choose in the app. Taking someone off an app, removing them, or resetting their password restarts the apps involved and ends their sessions there. You stay signed in. Apps see who is signed in, so an app can treat you and others differently.
 

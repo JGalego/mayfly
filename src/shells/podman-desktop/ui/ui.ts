@@ -26,7 +26,7 @@ import { renderStatusbar, setUpStatusbar } from "./statusbar.ts";
 import { openForm, renderModels, savedModel, setUpModels } from "./models.ts";
 import { popover } from "./popover.ts";
 import { passwordCard, PASSWORD_SHOWN_MS } from "./password-card.ts";
-import { renderPeople, renderShare, settleSharing, setUpPeople, showPersonPassword } from "./people.ts";
+import { offerEmail, renderPeople, renderShare, settleSharing, setUpPeople, showPersonPassword } from "./people.ts";
 import { qrCode } from "./qr.ts";
 import { onPhone } from "../../../core/phone.ts";
 import { makingOf, progressView, tickClocks, whatChanged, type Showing } from "./progress.ts";
@@ -307,6 +307,8 @@ function receive(message: ToUi): void {
       return followRename(message.from, message.to);
     case "notice":
       return showBanner(message.text, "notice");
+    case "offer-email":
+      return offerEmail(message);
     case "password":
       return message.email === undefined ? showPassword(message.password) : showPersonPassword(message.email, message.password);
     case "error":

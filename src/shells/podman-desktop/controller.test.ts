@@ -512,16 +512,25 @@ describe("the Mayfly panel's controller", () => {
     );
   });
 
-  it("adds someone and drafts the email that welcomes them, without sending their password to the page", async () => {
+  it("adds someone and offers to email them, without sending their password to the page", async () => {
     const { handle, posted, opened } = setUp({ apps: [lunch] });
 
     await handle({ type: "add-person", email: "ana@example.com" });
 
-    assert.equal(opened.length, 1);
+    assert.deepEqual(stateOf(posted.at(-2))?.people, ["ana@example.com"]);
+    assert.deepEqual(posted.at(-1), { type: "offer-email", about: "welcome", email: "ana@example.com" });
+    assert.deepEqual(opened, []);
+    assert.ok(!JSON.stringify(posted).includes("ana-six-word-pass"));
+  });
+
+  it("drafts the welcome email in the mail app when the owner says so, with the password", async () => {
+    const { handle, opened } = setUp({ apps: [lunch] });
+    await handle({ type: "add-person", email: "ana@example.com" });
+
+    await handle({ type: "email", about: "welcome", email: "ana@example.com" });
+
     assert.match(opened[0] ?? "", /^mailto:ana@example\.com\?/);
     assert.match(decodeURIComponent(opened[0] ?? ""), /Password: ana-six-word-pass/);
-    assert.deepEqual(stateOf(posted.at(-1))?.people, ["ana@example.com"]);
-    assert.ok(!JSON.stringify(posted).includes("ana-six-word-pass"));
   });
 
   it("shows someone's password only when asked", async () => {
@@ -533,14 +542,16 @@ describe("the Mayfly panel's controller", () => {
     assert.deepEqual(posted.at(-1), { type: "password", email: "ana@example.com", password: "ana-six-word-pass" });
   });
 
-  it("shares an app and drafts an email with its address on the private network", async () => {
-    const { handle, opened, calls } = setUp({ apps: [lunch] });
+  it("shares an app, offers to email them, and drafts its address on the private network when the owner says so", async () => {
+    const { handle, posted, opened, calls } = setUp({ apps: [lunch] });
     await handle({ type: "phone", on: true });
     await handle({ type: "add-person", email: "ana@example.com" });
 
     await handle({ type: "share", app: "lunch-split", email: "ana@example.com", shared: true });
+    await handle({ type: "email", about: "shared", email: "ana@example.com", app: "lunch-split" });
 
     assert.ok(calls.includes("share lunch-split ana@example.com true"));
+    assert.ok(posted.some((message) => message.type === "offer-email" && message.about === "shared"));
     assert.match(decodeURIComponent(opened.at(-1) ?? ""), /You can now open lunch-split: https:\/\/mayfly\.tail1a2b\.ts\.net:38100\//);
   });
 
