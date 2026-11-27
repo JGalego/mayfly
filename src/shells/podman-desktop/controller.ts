@@ -146,15 +146,15 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
     case "attachment":
       return sendAttachment(request.app, request.id, session);
     case "fix":
-      return runAlone({ app: request.app, request: "Fix the errors in the app's logs", kind: "change" }, session, (watch) => session.engine.fix(request.app, watch));
+      return runAlone({ app: request.app, request: "/fix", kind: "change" }, session, (watch) => session.engine.fix(request.app, watch));
     case "retry":
-      return runAlone({ app: request.app, request: "Retry the last request", kind: "change" }, session, (watch) => session.engine.retry(request.app, watch));
+      return runAlone({ app: request.app, request: "/retry", kind: "change" }, session, (watch) => session.engine.retry(request.app, watch));
     case "undo":
-      return runAlone({ app: request.app, request: "Redeploy the previous version", kind: "deploy" }, session, (watch) => session.engine.undo(request.app, watch));
+      return runAlone({ app: request.app, request: "/undo", kind: "deploy" }, session, (watch) => session.engine.undo(request.app, watch));
     case "rename":
       return rename(request.app, request.name.trim(), session);
     case "start":
-      return runAlone({ app: request.app, request: "Start the app", kind: "start" }, session, (watch) => session.engine.start(request.app, watch));
+      return runAlone({ app: request.app, request: "/start", kind: "start" }, session, (watch) => session.engine.start(request.app, watch));
     case "deploy":
       return deploy(request.app, request.version, session);
     case "save":
@@ -204,7 +204,7 @@ async function ask(app: string, question: string, uploads: readonly Upload[], se
   const files = filesOf(uploads);
   const problem = problemWithWork({ app, request: question }, session) ?? problemWithFiles(files);
   if (problem !== undefined) return void (await session.post({ type: "error", text: problem }));
-  await run({ app, request: question, kind: "ask" }, session, (watch) => session.engine.ask(app, question, watch, files));
+  await run({ app, request: `/ask ${question}`, kind: "ask" }, session, (watch) => session.engine.ask(app, question, watch, files));
 }
 
 /** The files the page sent, decoded. */
@@ -219,7 +219,7 @@ async function sendAttachment(app: string, id: string, session: Session): Promis
 
 // The page hears the new name before the state that no longer has the old one, so it stays on the app.
 async function rename(app: string, to: string, session: Session): Promise<void> {
-  await runAlone({ app, request: `Rename to \`${to}\``, kind: "rename" }, session, async (watch) => {
+  await runAlone({ app, request: `/rename ${to}`, kind: "rename" }, session, async (watch) => {
     const renamed = await session.engine.rename(app, to, watch);
     await session.post({ type: "renamed", from: app, to: renamed.name });
     return renamed;
@@ -360,7 +360,7 @@ async function startRunningAgain(session: Session): Promise<void> {
 async function startEach(apps: readonly string[], session: Session): Promise<void> {
   for (const app of apps) {
     if (session.working !== null) return;
-    await run({ app, request: "Start the app", kind: "start" }, session, (watch) => session.engine.start(app, watch)).catch(async (error: unknown) => {
+    await run({ app, request: "Start the app", kind: "start" }, session, (watch) => session.engine.runAgain(app, watch)).catch(async (error: unknown) => {
       const text = `Mayfly could not start ${app}: ${error instanceof Error ? error.message : String(error)}`;
       note(session, "error", text);
       await session.post({ type: "error", text });

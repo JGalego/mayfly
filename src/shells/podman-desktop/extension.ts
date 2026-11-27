@@ -152,6 +152,7 @@ function keyStore(secrets: api.SecretStorage): KeyStore {
 function configuredModel(setting: ModelSetting, keys: KeyStore): ModelProvider {
   return {
     name: labelOf(setting),
+    called: nameOf(setting),
     provider: providerOf(setting),
     // Without a key when none is saved, as local providers often need none. One that does says so, and the person hears where to add it.
     async complete(system, messages, listener) {

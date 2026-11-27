@@ -195,7 +195,7 @@ describe("the engine", () => {
     const after = await engine.ask("lunch", "How does it split?");
 
     assert.deepEqual([after.versions, after.head, deployed.length], [before.versions, before.head, 1]);
-    assert.deepEqual(after.conversation.slice(-2).map((turn) => [turn.from, turn.text]), [["person", "How does it split?"], ["mayfly", "It adds the bills up and splits them evenly."]]);
+    assert.deepEqual(after.conversation.slice(-2).map((turn) => [turn.from, turn.text]), [["person", "/ask How does it split?"], ["mayfly", "It adds the bills up and splits them evenly."]]);
     assert.match(asked.at(-1) ?? "", /export default 1;[\s\S]*How does it split\?/);
     assert.partialDeepStrictEqual((await engine.ledger()).at(-1), { app: "lunch", spent: COST, question: true });
     assert.deepEqual(after.spent, { input: 200, output: 40, thinking: 0 });
@@ -212,6 +212,7 @@ describe("the engine", () => {
     assert.match(asked.at(-1) ?? "", /bills is not defined/);
     assert.doesNotMatch(asked.at(-1) ?? "", /GET \/ 200/);
     assert.equal(fixed.versions.length, 2);
+    assert.equal(fixed.conversation.at(-2)?.text, "/fix");
   });
 
   it("sends the last request to the app's model again", async () => {
@@ -223,6 +224,7 @@ describe("the engine", () => {
 
     assert.match(asked.at(-1) ?? "", /add totals/);
     assert.equal(again.versions.at(-1)?.request, "add totals");
+    assert.equal(again.conversation.at(-2)?.text, "/retry");
   });
 
   it("puts back the version that ran before, and undoing again puts back the one undone", async () => {
@@ -235,6 +237,7 @@ describe("the engine", () => {
     const redone = await engine.undo("lunch");
 
     assert.deepEqual([undone.head, redone.head, deployed.length], [first.head, changed.head, 4]);
+    assert.equal(undone.conversation.at(-2)?.text, "/undo");
   });
 
   it("renames an app, running it again under the new name at the same address, with its ledger", async () => {
@@ -249,7 +252,7 @@ describe("the engine", () => {
     assert.ok(names(deployed.at(-1)).every((name) => name.includes("mayfly-bills")));
     assert.deepEqual(forgotten, ["lunch"]);
     assert.deepEqual((await engine.ledger()).map((call) => call.app), ["bills"]);
-    assert.deepEqual(after.conversation.slice(-2).map((turn) => turn.text), ["Rename to `bills`", "Renamed `lunch` to `bills` so sign in again to use it"]);
+    assert.deepEqual(after.conversation.slice(-2).map((turn) => turn.text), ["/rename bills", "Renamed `lunch` to `bills` so sign in again to use it"]);
   });
 
   it("refuses a new name that is not usable, taken, or the same", async () => {
@@ -263,15 +266,26 @@ describe("the engine", () => {
     await assert.rejects(engine.rename("lunch", "dex"), /`dex` is the name of Mayfly's sign-in/);
   });
 
-  it("starts the running version again, with the sign-in service, changing nothing about the app", async () => {
+  it("starts the running version again, with the sign-in service, keeping /start in the conversation", async () => {
     const { engine, deployed, synced } = setUp([reply("lunch")]);
     const before = await engine.create("split lunch bills");
 
     const started = await engine.start("lunch");
 
-    assert.deepEqual([started.head, started.versions, started.conversation], [before.head, before.versions, before.conversation]);
+    assert.deepEqual([started.head, started.versions], [before.head, before.versions]);
+    assert.deepEqual(started.conversation.slice(-2).map((turn) => turn.text), ["/start", "Started `lunch`"]);
     assert.deepEqual(names(deployed.at(-1)), names(deployed.at(-2)));
     assert.equal(synced.length, 2);
+  });
+
+  it("runs an app again for Mayfly's own reasons without a word in the conversation", async () => {
+    const { engine, deployed } = setUp([reply("lunch")]);
+    const before = await engine.create("split lunch bills");
+
+    const again = await engine.runAgain("lunch");
+
+    assert.deepEqual([again.head, again.conversation], [before.head, before.conversation]);
+    assert.deepEqual(names(deployed.at(-1)), names(deployed.at(-2)));
   });
 
   it("names the apps that have a version to run but that Podman is not running", async () => {
@@ -353,7 +367,7 @@ describe("the engine", () => {
 
     assert.equal(made.model, "fast");
     assert.equal(made.versions[0]?.by.name, "Fast model");
-    assert.match(switched.conversation.at(-1)?.text ?? "", /Model set to Careful model/);
+    assert.deepEqual(switched.conversation.slice(-2).map((turn) => turn.text), ["/model Careful model", "Model set to Careful model"]);
     assert.equal(changed.versions.at(-1)?.by.name, "Careful model");
   });
 

@@ -131,7 +131,7 @@ describe("the Mayfly panel's controller", () => {
     assert.equal(posted.at(-1)?.type, "error");
   });
 
-  it("fixes, retries, undoes and starts, showing each as work while it runs", async () => {
+  it("fixes, retries, undoes and starts, showing each as work while it runs, as the command that asked for it", async () => {
     const { handle, posted, calls } = setUp({ apps: [lunch] });
 
     for (const type of ["fix", "retry", "undo", "start"] as const) await handle({ type, app: "lunch-split" });
@@ -140,6 +140,10 @@ describe("the Mayfly panel's controller", () => {
     assert.deepEqual(
       posted.flatMap((m) => stateOf(m)?.working?.kind ?? []),
       ["change", "change", "deploy", "start"],
+    );
+    assert.deepEqual(
+      posted.flatMap((m) => stateOf(m)?.working?.request ?? []),
+      ["/fix", "/retry", "/undo", "/start"],
     );
   });
 
@@ -288,12 +292,12 @@ describe("the Mayfly panel's controller", () => {
     assert.equal(stateOf(posted.at(-1))?.phoneHost, null);
   });
 
-  it("starts each stopped app in turn, as work it shows", async () => {
+  it("starts each stopped app in turn, as work it shows, leaving the conversations alone", async () => {
     const { handle, posted, calls } = setUp({ apps: [lunch], stopped: ["lunch-split", "notes"] });
 
     await handle({ type: "start-stopped" });
 
-    assert.deepEqual(calls, ["start lunch-split", "start notes"]);
+    assert.deepEqual(calls, ["run again lunch-split", "run again notes"]);
     assert.deepEqual(posted.flatMap((m) => stateOf(m)?.working?.app ?? []), ["lunch-split", "notes"]);
   });
 
@@ -302,7 +306,7 @@ describe("the Mayfly panel's controller", () => {
 
     await handle({ type: "updated" });
 
-    assert.deepEqual(calls, ["start lunch", "start notes"]);
+    assert.deepEqual(calls, ["run again lunch", "run again notes"]);
     assert.deepEqual(posted.flatMap((m) => stateOf(m)?.working?.app ?? []), ["lunch", "notes"]);
   });
 
@@ -783,6 +787,10 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
     },
     start: async (name) => {
       calls.push(`start ${name}`);
+      return lunch;
+    },
+    runAgain: async (name) => {
+      calls.push(`run again ${name}`);
       return lunch;
     },
     ask: async (name, question, watch = () => {}) => {
