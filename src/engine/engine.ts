@@ -6,7 +6,7 @@ import { generateApp, listenFor, type Ask, type Attempt, type Generation } from 
 import { ASK_PROMPT, fixFor, questionFor, withFiles } from "./prompt.ts";
 import type { Attachment, FileData } from "./attachments.ts";
 import { errorsIn } from "./log-errors.ts";
-import { mayflyName } from "../core/names.ts";
+import { mayflyName, SIGN_IN } from "../core/names.ts";
 import { parseAppName } from "../core/manifest.ts";
 import { PortTaken, type ContainerHealth, type ModelProvider, type PhoneNetworkStatus, type Ports } from "./ports.ts";
 import { newPassword, newSecret } from "./secrets.ts";
@@ -708,6 +708,7 @@ function runs({ containers }: ServiceHealth): boolean {
 function usableName(state: State, name: string, to: string): string {
   if (to === name) throw new Error(`\`${name}\` is already called that.`);
   if (findApp(state, to) !== undefined) throw new Error(`There is already an app called \`${to}\`.`);
+  if (to === SIGN_IN) throw new Error(`\`${to}\` is the name of Mayfly's sign-in. Choose another.`);
   try {
     return parseAppName(to);
   } catch {

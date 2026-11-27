@@ -1,4 +1,6 @@
-import { requireMatch, requireObject, type Rule } from "./rules.ts";
+import { ContractViolation } from "./contract-violation.ts";
+import { SIGN_IN } from "./names.ts";
+import { requireMatch, type Rule } from "./rules.ts";
 
 /** A generated app as Mayfly knows it. No field can loosen the contract. */
 export interface Manifest {
@@ -13,14 +15,13 @@ const NAME: Rule = {
   description: "lowercase letters, digits and inner hyphens, at most 40 characters",
 };
 
-const IMAGE: Rule = { subject: "app image", pattern: /^\S+$/, description: "an image reference without spaces" };
-
-/** Reads untrusted input, keeping only the fields the contract defines. */
-export function parseManifest(value: unknown): Manifest {
-  const fields = requireObject(value, "manifest");
-  return { name: parseAppName(fields.name), image: requireMatch(fields.image, IMAGE) };
+/** A name a model proposed, which needs only an app name's shape: Mayfly then picks one that's free. */
+export function parseProposedName(value: unknown): string {
+  return requireMatch(value, NAME);
 }
 
 export function parseAppName(value: unknown): string {
-  return requireMatch(value, NAME);
+  const name = parseProposedName(value);
+  if (name === SIGN_IN) throw new ContractViolation(`app name must not be ${JSON.stringify(name)}, the name of Mayfly's sign-in`);
+  return name;
 }

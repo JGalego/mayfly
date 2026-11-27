@@ -224,6 +224,7 @@ describe("the engine", () => {
     await assert.rejects(engine.rename("lunch", "Lunch Bills"), /`Lunch Bills` can't be an app's name: use lowercase letters/);
     await assert.rejects(engine.rename("lunch", "notes"), /There is already an app called `notes`/);
     await assert.rejects(engine.rename("lunch", "lunch"), /`lunch` is already called that/);
+    await assert.rejects(engine.rename("lunch", "dex"), /`dex` is the name of Mayfly's sign-in/);
   });
 
   it("starts the running version again, with the sign-in service, changing nothing about the app", async () => {

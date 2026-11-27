@@ -1,5 +1,5 @@
 import { ContractViolation } from "../core/contract-violation.ts";
-import { parseAppName } from "../core/manifest.ts";
+import { parseProposedName } from "../core/manifest.ts";
 import type { Edit } from "./edits.ts";
 
 /** The whole of routes.ts, or edits to the routes.ts there is. */
@@ -37,7 +37,7 @@ function after(reply: string, match: RegExpExecArray | RegExpMatchArray): string
 
 function problemWithName(name: string): string | undefined {
   try {
-    parseAppName(name);
+    parseProposedName(name);
     return undefined;
   } catch (error) {
     if (error instanceof ContractViolation) return `The name is not usable: ${error.message}.`;

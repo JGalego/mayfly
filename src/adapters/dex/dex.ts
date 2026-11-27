@@ -2,12 +2,13 @@ import { hash } from "bcryptjs";
 import type { IdpSettings } from "../../core/auth-config-map.ts";
 import { HARDENED, LOOPBACK } from "../../core/hardening.ts";
 import type { ConfigMap, KubeObject, PersistentVolumeClaim, Pod, Secret, Volume, VolumeMount } from "../../core/kube.ts";
+import { mayflyName, SIGN_IN } from "../../core/names.ts";
 import { execProbe } from "../../core/probe.ts";
 import { PASSWORD_PAGE } from "./password-page.ts";
 
 // Pinned: v2.45 is the first release that gives static users groups.
 const IMAGE = "ghcr.io/dexidp/dex:v2.46.1";
-const NAME = "mayfly-dex";
+const NAME = mayflyName(SIGN_IN);
 export const DEX_POD = NAME;
 const CONFIG = `${NAME}-config`;
 const BRAND = `${NAME}-brand`;

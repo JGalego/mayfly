@@ -37,6 +37,14 @@ describe("generateApp", () => {
     assert.equal(generated.name, "notes-3");
   });
 
+  it("never names a new app as Mayfly's sign-in is named", async () => {
+    const { model, builder } = fakes([good.replace("name: notes", "name: dex")], [{ ok: true }]);
+
+    const generated = await generateApp(newNotes, { model, builder });
+
+    assert.equal(generated.name, "dex-2");
+  });
+
   it("changes an app from its current code, keeping its name whatever the model calls it", async () => {
     const { model, builder, conversations } = fakes([good], [{ ok: true }]);
     const app = { name: "my-notes", routes: "export default 0;\n" };
