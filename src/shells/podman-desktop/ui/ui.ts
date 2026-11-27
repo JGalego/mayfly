@@ -25,6 +25,8 @@ import { addIcons, icon } from "./icons.ts";
 import { renderStatusbar, setUpStatusbar } from "./statusbar.ts";
 import { openForm, renderModels, savedModel, setUpModels } from "./models.ts";
 import { popover } from "./popover.ts";
+import { passwordCard, PASSWORD_SHOWN_MS } from "./password-card.ts";
+import { renderPeople, renderShare, settleSharing, setUpPeople, showPersonPassword } from "./people.ts";
 import { qrCode } from "./qr.ts";
 import { onPhone } from "../../../core/phone.ts";
 import { makingOf, progressView, tickClocks, whatChanged, type Showing } from "./progress.ts";
@@ -38,9 +40,9 @@ type View = { readonly kind: "new" } | { readonly kind: "app"; readonly name: st
 /** An app's conversation, or its history. */
 type Tab = "chat" | "history" | "code" | "logs";
 /** What Mayfly needs, the models, how everything is running, or how the models did. */
-type SettingsTab = "general" | "models" | "logs" | "usage";
+type SettingsTab = "general" | "people" | "models" | "logs" | "usage";
 
-const SETTINGS_TABS: readonly SettingsTab[] = ["general", "models", "logs", "usage"];
+const SETTINGS_TABS: readonly SettingsTab[] = ["general", "people", "models", "logs", "usage"];
 // Logs and usage are for developers.
 const DEVELOPER_TABS: readonly SettingsTab[] = ["logs", "usage"];
 
@@ -49,8 +51,6 @@ const TITLES: Record<Exclude<Progress["kind"], "remove">, string> = { create: "C
 const NOTICE_MS = 4000;
 const CONFIRM_MS = 4000;
 const COPIED_MS = 1500;
-// Long enough to type it on a phone, and no longer on screen than that.
-const PASSWORD_SHOWN_MS = 30_000;
 // Long enough to read what removing does before the button lets you.
 const REMOVE_WAIT_S = 2;
 const FIND_APPS_FROM = 6;
@@ -127,6 +127,8 @@ setUpModels(post, () => render());
 setUpStatusbar((tab) => go({ kind: "settings", tab }));
 popover(element("show-sign-in"), element("sign-in-popover"));
 popover(element("show-phone"), element("phone-popover"));
+popover(element("show-share"), element("share-popover"));
+setUpPeople(post, () => render(), () => go({ kind: "settings", tab: "people" }));
 // In a narrow window the sidebar is a drawer: the menu button opens it, and Esc, a click elsewhere or going anywhere closes it.
 element("show-sidebar").addEventListener("click", () => showSidebar(!document.body.classList.contains("sidebar-open")));
 document.addEventListener("keydown", (event) => event.key === "Escape" && showSidebar(false));
@@ -306,7 +308,7 @@ function receive(message: ToUi): void {
     case "notice":
       return showBanner(message.text, "notice");
     case "password":
-      return showPassword(message.password);
+      return message.email === undefined ? showPassword(message.password) : showPersonPassword(message.email, message.password);
     case "error":
       savedModel(false);
       return showError(message.text, message.recorded === true);
@@ -319,8 +321,9 @@ function receiveState(next: State): void {
   // Asked again when work ends too, or a new or renamed app shows as stopped until the next check.
   if (previous === undefined || ended) post({ type: "health" });
   state = next;
-  // Whichever way it went, the state that follows says where phone access stands.
+  // Whichever way it went, the state that follows says where phone access and sharing stand.
   phoneSwitching = false;
+  settleSharing();
   // Whatever the outcome, an error for it came before this.
   if (ended) lastSent = undefined;
   if (view.kind === "app" && shownApp() === undefined) view = { kind: "new" };
@@ -407,16 +410,6 @@ function showingPassword(password: string | undefined): void {
     element(id).setAttribute("aria-label", password === undefined ? "Show password" : "Hide password");
     element(id).setAttribute("aria-pressed", String(password !== undefined));
   }
-}
-
-/** The passphrase, its hyphens set apart so they're typed too, over a bar that drains until it hides. */
-function passwordCard(password: string): HTMLElement[] {
-  // A long passphrase wraps after a hyphen, never inside a word, so each word reads whole.
-  const words = password.split("-").flatMap((word, index) => (index === 0 ? [word] : [h("span", "password-hyphen", "-"), document.createElement("wbr"), word]));
-  const timer = h("span", "password-timer");
-  timer.setAttribute("aria-hidden", "true");
-  timer.style.animationDuration = `${PASSWORD_SHOWN_MS}ms`;
-  return [h("p", "password-words", ...words), timer];
 }
 
 // The chip says it copied, briefly, so the person knows without looking anywhere else.
@@ -787,6 +780,7 @@ function renderSettings(current: State, wanted: SettingsTab): void {
     element(`settings-${name}-tab`).hidden = tab !== name;
   }
   renderModels(current, examination?.models, post, () => render());
+  renderPeople(current.people, current.apps, current.phoneHost !== null);
   element("doctor").replaceChildren(...doctorView(examination?.ready));
   element("health").replaceChildren(...healthView(health));
   ledger.show(calls, { spent: current.spent, apps: current.apps.map((app) => app.name) });
@@ -852,6 +846,7 @@ function renderChat(state: State, app: AppView | undefined): void {
   }
   element("start-app").hidden = !stopped;
   renderPhoneDoor(app, state.phoneHost, app?.head === null || removing);
+  renderShare(app, state.people, state.phoneHost !== null, removing);
   openApp.classList.toggle("primary", !stopped);
   openApp.classList.toggle("secondary", stopped);
   for (const tab of element("app-tabs").querySelectorAll("button")) tab.disabled = removing;

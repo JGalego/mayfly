@@ -16,6 +16,7 @@ const lunch: AppView = {
   head: "v1",
   versions: [],
   spent: { input: 100, output: 20, thinking: 0 },
+  people: [],
 };
 const owner = { email: "owner@mayfly.local", username: "owner", password: "s3cret-pass" };
 const openai: ModelSetting = { id: "openai", provider: "openai", baseUrl: "", model: "gpt-6.2-sol" };
@@ -38,6 +39,7 @@ describe("the Mayfly panel's controller", () => {
       type: "state",
       apps: [lunch],
       owner: owner.email,
+      people: [],
       models: [{ ...openai, label: "OpenAI · gpt-6.2-sol", hasApiKey: true }],
       defaultModel: "openai",
       spent: { input: 500, output: 80, thinking: 0 },
@@ -510,6 +512,49 @@ describe("the Mayfly panel's controller", () => {
     );
   });
 
+  it("adds someone and drafts the email that welcomes them, without sending their password to the page", async () => {
+    const { handle, posted, opened } = setUp({ apps: [lunch] });
+
+    await handle({ type: "add-person", email: "ana@example.com" });
+
+    assert.equal(opened.length, 1);
+    assert.match(opened[0] ?? "", /^mailto:ana@example\.com\?/);
+    assert.match(decodeURIComponent(opened[0] ?? ""), /Password: ana-six-word-pass/);
+    assert.deepEqual(stateOf(posted.at(-1))?.people, ["ana@example.com"]);
+    assert.ok(!JSON.stringify(posted).includes("ana-six-word-pass"));
+  });
+
+  it("shows someone's password only when asked", async () => {
+    const { handle, posted } = setUp({ apps: [lunch] });
+    await handle({ type: "add-person", email: "ana@example.com" });
+
+    await handle({ type: "show-password", email: "ana@example.com" });
+
+    assert.deepEqual(posted.at(-1), { type: "password", email: "ana@example.com", password: "ana-six-word-pass" });
+  });
+
+  it("shares an app and drafts an email with its address on the private network", async () => {
+    const { handle, opened, calls } = setUp({ apps: [lunch] });
+    await handle({ type: "phone", on: true });
+    await handle({ type: "add-person", email: "ana@example.com" });
+
+    await handle({ type: "share", app: "lunch-split", email: "ana@example.com", shared: true });
+
+    assert.ok(calls.includes("share lunch-split ana@example.com true"));
+    assert.match(decodeURIComponent(opened.at(-1) ?? ""), /You can now open lunch-split: https:\/\/mayfly\.tail1a2b\.ts\.net:38100\//);
+  });
+
+  it("won't share an app while phone access is off, since no one else could reach it", async () => {
+    const { handle, posted, calls } = setUp({ apps: [lunch] });
+    await handle({ type: "add-person", email: "ana@example.com" });
+
+    await handle({ type: "share", app: "lunch-split", email: "ana@example.com", shared: true });
+
+    assert.ok(!calls.some((call) => call.startsWith("share")));
+    const error = posted.find((message) => message.type === "error");
+    assert.match(error?.type === "error" ? error.text : "", /Turn on phone access/);
+  });
+
   it("ignores messages it does not understand", async () => {
     const { handle, posted } = setUp({ apps: [] });
 
@@ -544,6 +589,7 @@ interface Options {
 
 function setUp({ apps, created: made = lunch, steps = [], developer: developing = false, keyFor = [OPENAI_ENDPOINT], createFails, changeFails, waitForCreate = false, stopped: stoppedApps = [], phoneFails }: Options) {
   let phoneHost: string | null = null;
+  const people = new Map<string, string>();
   const posted: ToUi[] = [];
   const notes: { text: string; failed: boolean; seen: boolean }[] = [];
   const opened: string[] = [];
@@ -632,6 +678,18 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
     turnOffPhone: async () => {
       calls.push("turn off phone");
       phoneHost = null;
+    },
+    people: async () => [...people.keys()],
+    person: async (email) => ({ email, password: people.get(email) ?? "", group: "person-1" }),
+    addPerson: async (email) => {
+      people.set(email, `${email.split("@")[0]}-six-word-pass`);
+      return { email, password: people.get(email) ?? "", group: "person-1" };
+    },
+    newPersonPassword: async (email) => ({ email, password: "brand-new-six-words", group: "person-2" }),
+    removePerson: async (email) => void people.delete(email),
+    share: async (name, email, shared) => {
+      calls.push(`share ${name} ${email} ${shared}`);
+      return { ...lunch, people: shared ? [email] : [] };
     },
   };
   const handle = createController({

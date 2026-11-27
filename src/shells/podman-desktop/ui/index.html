@@ -39,6 +39,15 @@
               <button id="show-password" class="quiet-button" type="button" aria-pressed="false" data-icon="eye">Show password</button>
             </div>
           </div>
+          <div id="share-anchor" class="popover-anchor" hidden>
+            <button id="show-share" class="secondary" type="button" aria-expanded="false" aria-controls="share-popover" data-icon="users">Share</button>
+            <div id="share-popover" class="popover share" hidden>
+              <p class="popover-title">Who can open it</p>
+              <ul id="share-list" class="share-list"></ul>
+              <p id="share-note" class="quiet"></p>
+              <button id="share-people-settings" class="quiet-button" type="button" data-icon="settings">People settings</button>
+            </div>
+          </div>
           <div id="phone-anchor" class="popover-anchor" hidden>
             <button id="show-phone" class="secondary" type="button" aria-expanded="false" aria-controls="phone-popover" data-icon="phone">On your phone</button>
             <div id="phone-popover" class="popover phone" hidden>
@@ -144,6 +153,7 @@
         <h1>Settings</h1>
         <div id="settings-tabs" class="tabs" role="tablist" aria-label="Settings">
           <button id="settings-tab-general" role="tab" type="button" data-icon="sliders">General</button>
+          <button id="settings-tab-people" role="tab" type="button" data-icon="users">People</button>
           <button id="settings-tab-models" role="tab" type="button" data-icon="bot">Models</button>
           <button id="settings-tab-logs" role="tab" type="button" data-icon="logs">Logs</button>
           <button id="settings-tab-usage" role="tab" type="button" data-icon="chart">Usage</button>
@@ -185,6 +195,23 @@
             <p id="developer-hint" class="hint">Shows app code, version history and logs, plus health and model usage in Settings.</p>
             <label class="check"><input id="autostart" type="checkbox" aria-describedby="autostart-hint"> Start stopped apps automatically</label>
             <p id="autostart-hint" class="hint">Starts stopped apps when Podman Desktop opens and Podman is ready.</p>
+          </section>
+        </div>
+        <div id="settings-people-tab" class="settings-page" role="tabpanel" aria-labelledby="settings-tab-people">
+          <section>
+            <p class="hint">Share apps with other people. Each signs in with their own email and password.</p>
+            <p id="people-phone-note" class="hint" hidden>They open apps through Tailscale, as your phone does. Turn on phone access in General first.</p>
+            <ul id="people" class="model-list" hidden></ul>
+            <form id="person-form" class="sign-in-row">
+              <input id="person-email" type="email" required autocomplete="off" placeholder="name@example.com" aria-label="Their email">
+              <button class="quiet-button" type="submit" data-icon="mail">Add &amp; email</button>
+            </form>
+            <p class="hint">Mayfly drafts an email in your mail app with their password, for you to send.</p>
+          </section>
+          <section>
+            <h2>Tailscale</h2>
+            <p class="hint">To reach your apps, each person needs this computer shared with them in Tailscale.</p>
+            <button id="share-tailscale" class="quiet-button" type="button" data-icon-after="external">Share this computer in Tailscale</button>
           </section>
         </div>
         <div id="settings-models-tab" class="settings-page" role="tabpanel" aria-labelledby="settings-tab-models">

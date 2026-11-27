@@ -21,6 +21,7 @@ const ICONS = {
   history: [circle(6, 6, 2), circle(6, 18, 2), circle(18, 6, 2), path("M6 8v8M18 8v5a5 5 0 0 1-5 5H8")],
   key: [circle(8, 15, 4), path("M11 12l9-9M16 7l3 3M14 9l2 2")],
   logs: [path("M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01")],
+  mail: [["rect", { x: 3, y: 5, width: 18, height: 14, rx: 2 }], path("M3 7l9 6 9-6")],
   menu: [path("M4 6h16M4 12h16M4 18h16")],
   paperclip: [path("M20 11.5l-8.3 8.3a5 5 0 0 1-7.1-7.1l8.8-8.8a3.3 3.3 0 0 1 4.7 4.7l-8.8 8.8a1.7 1.7 0 0 1-2.4-2.4l8.1-8.1")],
   phone: [["rect", { x: 7, y: 2, width: 10, height: 20, rx: 2 }], path("M11 18h2")],
@@ -35,6 +36,7 @@ const ICONS = {
   ],
   sliders: [path("M4 6h8M16 6h4M4 12h2M10 12h10M4 18h10M18 18h2"), circle(14, 6, 2), circle(8, 12, 2), circle(16, 18, 2)],
   star: [path("M12 3l2.8 5.8 6.2.8-4.5 4.3 1.1 6.2L12 17.2l-5.6 2.9 1.1-6.2L3 9.6l6.2-.8z")],
+  users: [circle(9, 8, 3.5), path("M2.5 20a6.5 6.5 0 0 1 13 0"), path("M15.5 4.6a3.5 3.5 0 0 1 0 6.8"), path("M18 14.3a6.5 6.5 0 0 1 3.5 5.7")],
   thinking: [["ellipse", { cx: 13, cy: 9, rx: 8, ry: 5.5 }], circle(6.5, 17, 1.6), circle(4, 20.5, 0.8)],
 } satisfies Record<string, readonly Shape[]>;
 

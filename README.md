@@ -53,6 +53,17 @@ Your phone can open the apps too, over HTTPS through [Tailscale](https://tailsca
 3. In Mayfly, turn on **Settings → General → Open apps from my phone**.
 4. In an app, choose **On your phone** and scan the QR code with your phone's camera. Sign in with the same email and password.
 
+### Share apps with other people
+
+Other people open your apps the way your phone does, with their own email and password.
+
+1. Turn on phone access, as above.
+2. In **Settings → People**, add each person by email. Mayfly drafts an email in your mail app with their password, for you to send.
+3. In Tailscale's admin console, share this computer with them.
+4. In an app, choose **Share** and tick who can open it. Mayfly drafts an email with the app's link.
+
+Each person has a sign-in group of their own, and each app lets in only yours and those of the people it's shared with. Taking someone off an app, removing them, or resetting their password restarts the apps involved and ends their sessions there. You stay signed in. Apps see who is signed in, so an app can treat you and others differently.
+
 To remove Mayfly, `/remove` each app, which takes its pod and images with it, and then uninstall the extension. Sign-in and Mayfly's Podman network go with the last app. The runtime, Dex and oauth2-proxy images stay under **Images** until you remove them.
 
 ## Why not Dyad?
@@ -154,7 +165,7 @@ Asking for a change turns any light orange, until a new version is deployed or t
 | ⭕ Unhealthy | Running, but its health check fails. After three failures in a row Podman restarts it, and it starts again. | Read its logs, or `/fix` |
 | 🔴 Stopped | Not running, for example after the Podman machine stopped. | **Start**, or `/start`. To have Mayfly start them when Podman Desktop starts, turn on **Settings → General → Start stopped apps automatically**. |
 
-Each app runs as one pod: oauth2-proxy in front, on 127.0.0.1, and the app behind it with no port on the host, so it only sees people who are signed in and allowed. With phone access on, a second proxy in the pod, the phone door, takes the requests Tailscale Serve forwards from the computer's Tailscale name over HTTPS. Both doors sign people in with the same Dex.
+Each app runs as one pod: oauth2-proxy in front, on 127.0.0.1, and the app behind it with no port on the host, so it only sees people who are signed in and allowed. With phone access on, a second proxy in the pod, the phone door, takes the requests Tailscale Serve forwards from the computer's Tailscale name over HTTPS. Both doors sign people in with the same Dex, which keeps them signed in across apps, and signing out of an app signs them out of Dex too.
 
 ```mermaid
 flowchart LR

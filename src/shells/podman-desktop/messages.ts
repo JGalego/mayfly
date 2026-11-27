@@ -50,15 +50,23 @@ export type FromUi =
   | { readonly type: "open-link"; readonly url: string }
   | { readonly type: "remove"; readonly name: string }
   | { readonly type: "copy"; readonly what: "email" | "password" }
-  /** Shows the owner's password in the page, for typing it on another device. */
-  | { readonly type: "show-password" }
+  /** Shows a password in the page, for typing it on another device: the owner's, or that of the person named. */
+  | { readonly type: "show-password"; readonly email?: string }
   | { readonly type: "save-model"; readonly model: ModelSetting; readonly apiKey: string }
   | { readonly type: "remove-model"; readonly id: string }
   | { readonly type: "default-model"; readonly id: string }
   | { readonly type: "use-model"; readonly app: string; readonly model: string }
   | { readonly type: "star"; readonly app: string; readonly starred: boolean }
   | { readonly type: "owner-email"; readonly email: string }
-  | { readonly type: "new-password" }
+  /** A new password for the owner, or for the person named, whose email app gets a draft telling them. */
+  | { readonly type: "new-password"; readonly email?: string }
+  /** Adds someone to share apps with, and drafts the email that welcomes them. */
+  | { readonly type: "add-person"; readonly email: string }
+  | { readonly type: "remove-person"; readonly email: string }
+  /** Drafts the welcome email again, with their password. */
+  | { readonly type: "invite"; readonly email: string }
+  /** Lets someone open an app, or no longer. Sharing drafts the email with its address. */
+  | { readonly type: "share"; readonly app: string; readonly email: string; readonly shared: boolean }
   | { readonly type: "developer"; readonly on: boolean }
   | { readonly type: "health" }
   | { readonly type: "ledger" }
@@ -81,12 +89,14 @@ export type FromUi =
   | { readonly type: "deploy"; readonly app: string; readonly version: string }
   | { readonly type: "save"; readonly app: string; readonly from: string; readonly routes: string; readonly message: string };
 
-/** What the extension tells the page. Never a secret, but for the owner's password when the person asks to see it. */
+/** What the extension tells the page. Never a secret, but for a password the person asks to see. */
 export type ToUi =
   | {
       readonly type: "state";
       readonly apps: readonly AppView[];
       readonly owner: string;
+      /** Everyone the owner can share apps with, by email. */
+      readonly people: readonly string[];
       readonly models: readonly ModelView[];
       /** The model new apps use. */
       readonly defaultModel: string;
@@ -114,6 +124,7 @@ export type ToUi =
   | { readonly type: "logs"; readonly pod: string; readonly container: string; readonly lines: readonly string[] }
   | { readonly type: "code"; readonly app: string; readonly version: string; readonly routes: string; readonly thinking: string }
   | { readonly type: "notice"; readonly text: string }
-  | { readonly type: "password"; readonly password: string }
+  /** A password the person asked to see: the owner's, or that of the person named. */
+  | { readonly type: "password"; readonly password: string; readonly email?: string }
   /** Recorded when the app's conversation already says it, so the page need not. */
   | { readonly type: "error"; readonly text: string; readonly recorded?: true };

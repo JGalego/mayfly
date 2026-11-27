@@ -10,7 +10,8 @@ import { mayflyName } from "../core/names.ts";
 import { parseAppName } from "../core/manifest.ts";
 import { PortTaken, type ContainerHealth, type ModelProvider, type PhoneNetworkStatus, type Ports } from "./ports.ts";
 import { newPassword, newSecret } from "./secrets.ts";
-import { findApp, findVersion, runningVersion, withApp, withoutApp, type App, type Author, type ModelCall, type Owner, type State, type Turn, type Version } from "./state.ts";
+import { allowedGroups, EMAIL, findPerson, peopleOf, sharing, withNewPassword, withoutPerson, withPerson } from "./people.ts";
+import { findApp, findVersion, runningVersion, withApp, withoutApp, type App, type Author, type ModelCall, type Owner, type Person, type State, type Turn, type Version } from "./state.ts";
 import { UNWATCHED, type Watcher } from "./step.ts";
 import { addUsage, metered, NO_USAGE, type Usage } from "./usage.ts";
 
@@ -18,7 +19,6 @@ const FIRST_PORT = 18100;
 // Enough to look back a while, which the page's filters then narrow.
 const LOG_LINES = 1000;
 const CONTAINER = /^[a-z0-9-]+$/;
-const EMAIL = /^[^\s@]+@[^\s@]+$/;
 // What Mayfly says when the model said nothing after the code.
 const MADE = "App deployed.";
 const CHANGED = "Update deployed.";
@@ -83,6 +83,8 @@ export interface AppView {
   readonly versions: readonly VersionView[];
   readonly conversation: readonly Turn[];
   readonly spent: Usage;
+  /** The people it's shared with, by email. */
+  readonly people: readonly string[];
 }
 
 export interface Engine {
@@ -124,6 +126,18 @@ export interface Engine {
   changeEmail(email: string): Promise<Owner>;
   /** Gives the owner a new random password, and returns them with it. */
   newPassword(): Promise<Owner>;
+  /** Everyone the owner can share apps with, by email. */
+  people(): Promise<readonly string[]>;
+  /** Someone the owner can share apps with, and their password, for showing it or sending it to them. */
+  person(email: string): Promise<Person>;
+  /** Adds someone to share apps with, and returns them with their new password. */
+  addPerson(email: string): Promise<Person>;
+  /** Gives someone a new password, which ends every session the old one opened. */
+  newPersonPassword(email: string): Promise<Person>;
+  /** Removes someone. No app lets them in from then on. */
+  removePerson(email: string): Promise<void>;
+  /** Lets someone open an app, or no longer, from the moment it runs again. */
+  share(name: string, email: string, shared: boolean): Promise<AppView>;
   /** What the model has spent on every app, including removed ones and attempts that failed. */
   spent(): Promise<Usage>;
   /** Every call to a model, oldest first, removed apps' included. */
@@ -287,10 +301,26 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     return ready;
   }
 
-  /** Runs an app's image, and while phone access is on, through its phone door too. */
+  /** Runs an app's image, letting in the people it's shared with, and while phone access is on, through its phone door too. */
   async function runApp(state: State, app: App, image: string): Promise<void> {
-    await deployer.deploy(appObjects(app, image, identity.settingsFor(app, signInPortOf(state)), state.phoneHost));
+    await deployer.deploy(appObjects(app, image, identity.settingsFor(app, signInPortOf(state)), state.phoneHost, allowedGroups(state, app)));
     if (state.phoneHost !== null) await phoneNetwork.serve(phoneSidePort(app.hostPort), phoneDoorPort(app.hostPort));
+  }
+
+  /**
+   * Keeps a change to who may sign in or open what. Sign-in learns of it when people changed, and the named apps run again,
+   * since each app's auth proxy decides whom it lets in.
+   */
+  async function applyAccess(state: State, apps: readonly string[], peopleChanged: boolean): Promise<void> {
+    await store.save(state);
+    if (!anyRunning(state)) return;
+    const ready = peopleChanged ? await syncSignIn(state) : state;
+    // Moving sign-in ran every app again already.
+    if (ready !== state) return void (await store.save(ready));
+    for (const app of state.apps) {
+      const running = runningVersion(app);
+      if (apps.includes(app.name) && running !== undefined) await runApp(ready, app, await builder.build(app.name, running.routes));
+    }
   }
 
   /** Runs every app that has a version to run again, with or without its phone door as the state says. */
@@ -572,6 +602,41 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       return updateOwner((owner) => ({ ...owner, password: newPassword() }));
     },
 
+    async people() {
+      return (await store.load()).people.map((person) => person.email);
+    },
+
+    async person(email) {
+      const person = findPerson(await store.load(), email);
+      if (person === undefined) throw new Error(`No one called ${email} is here.`);
+      return person;
+    },
+
+    async addPerson(email) {
+      const { state, person } = withPerson(withOwner(await store.load()), email);
+      await applyAccess(state, [], true);
+      return person;
+    },
+
+    async newPersonPassword(email) {
+      const { state, person } = withNewPassword(await store.load(), email);
+      await applyAccess(state, sharedWith(state, person.email), true);
+      return person;
+    },
+
+    async removePerson(email) {
+      const before = await store.load();
+      const shared = sharedWith(before, email);
+      await applyAccess(withoutPerson(before, email), shared, true);
+    },
+
+    async share(name, email, shared) {
+      const before = await store.load();
+      const state = sharing(before, existingApp(before, name).name, email, shared);
+      await applyAccess(state, [name], false);
+      return appView(existingApp(state, name));
+    },
+
     async health() {
       const running = (await store.load()).apps.filter((app) => app.head !== null);
       const services: Omit<ServiceHealth, "containers">[] = [
@@ -589,6 +654,12 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     },
   };
   return engine;
+}
+
+/** The apps shared with someone. */
+function sharedWith(state: State, email: string): string[] {
+  const person = findPerson(state, email);
+  return person === undefined ? [] : state.apps.filter((app) => peopleOf(app).includes(person.email)).map((app) => app.name);
 }
 
 /** Whether any app has a version deployed. */
@@ -694,5 +765,5 @@ function appView(app: App): AppView {
     lines: routes.split("\n").length - 1,
     thinkingWords: thinking.split(/\s+/).filter(Boolean).length,
   }));
-  return { name: app.name, url: appUrl(app.hostPort), model: app.model, starred: app.starred, head: app.head, versions, conversation: app.conversation, spent: app.spent };
+  return { name: app.name, url: appUrl(app.hostPort), model: app.model, starred: app.starred, head: app.head, versions, conversation: app.conversation, spent: app.spent, people: peopleOf(app) };
 }

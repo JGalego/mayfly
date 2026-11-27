@@ -6,12 +6,12 @@ import { buildPod } from "../core/pod.ts";
 import type { SignInSettings } from "../core/sign-out.ts";
 import { OWNER_ROLE, type App } from "./state.ts";
 
-/** What runs an app's image: its sign-in settings, its secrets and its pod, with a phone door while phone access is on. */
-export function appObjects(app: App, image: string, { proxy, endSessionUrl }: SignInSettings, phoneHost: string | null = null): KubeObject[] {
+/** What runs an app's image: its sign-in settings and whom they let in, its secrets and its pod, with a phone door while phone access is on. */
+export function appObjects(app: App, image: string, { proxy, endSessionUrl }: SignInSettings, phoneHost: string | null = null, groups: readonly string[] = [OWNER_ROLE]): KubeObject[] {
   const appName = app.name;
   const phone = phoneHost === null ? {} : { phone: phoneSignIn(phoneHost, proxy) };
   return [
-    buildAuthConfigMap({ appName, policy: { roles: [OWNER_ROLE] }, idp: proxy }),
+    buildAuthConfigMap({ appName, policy: { roles: groups }, idp: proxy }),
     buildAuthSecret({ appName, clientSecret: app.clientSecret, cookieSecret: app.cookieSecret }),
     buildPod({ manifest: { name: appName, image }, hostPort: app.hostPort, endSessionUrl, ...phone }),
   ];

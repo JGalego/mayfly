@@ -1,7 +1,9 @@
 import { RecordedFailure, type AppView, type Engine } from "../../engine/engine.ts";
 import type { Step, Watcher } from "../../engine/step.ts";
 import { problemWithFiles, type FileData } from "../../engine/attachments.ts";
+import { onPhone } from "../../core/phone.ts";
 import type { Examination } from "./doctor.ts";
+import { mailto, newPasswordMail, sharedMail, welcomeMail, type Mail } from "./invitations.ts";
 import type { Activity, FromUi, Progress, ToUi, Upload, Work } from "./messages.ts";
 import { makeDefault, modelViews, readModel, removeModel, saveModel } from "./model-settings.ts";
 import type { Models, ModelSetting } from "./settings.ts";
@@ -75,6 +77,7 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
     case "copy":
       return copySignIn(request.what, session);
     case "show-password":
+      if (request.email !== undefined) return session.post({ type: "password", email: request.email, password: (await session.engine.person(request.email)).password });
       return session.post({ type: "password", password: (await session.engine.owner()).password });
     case "save-model":
       return settle(saveModel(request.model, request.apiKey.trim(), session), session, "Saved.");
@@ -92,9 +95,18 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       await session.post({ type: "notice", text: "Sign-in email updated." });
       return showState(session);
     case "new-password":
+      if (request.email !== undefined) return newPersonPassword(request.email, session);
       // Straight to the clipboard: like the old one, the new password never goes to the page.
       await session.copy((await session.engine.newPassword()).password);
       return session.post({ type: "notice", text: "Password reset. The new password is on your clipboard." });
+    case "add-person":
+      return addPerson(request.email, session);
+    case "remove-person":
+      return removePerson(request.email, session);
+    case "invite":
+      return draft(welcomeMail(await session.engine.person(request.email)), session);
+    case "share":
+      return share(request.app, request.email, request.shared, session);
     case "developer":
       return saveDeveloper(request.on, session);
     case "autostart":
@@ -357,11 +369,54 @@ async function setPhone(on: boolean, session: Session): Promise<void> {
   await showState(session);
 }
 
+// Adding, removing and sharing run apps again, so like other work they wait their turn.
+async function addPerson(email: string, session: Session): Promise<void> {
+  if (session.working !== null) return void (await session.post({ type: "error", text: BUSY }));
+  const person = await session.engine.addPerson(email);
+  note(session, "info", `Added ${person.email}`);
+  await draft(welcomeMail(person), session);
+  await session.post({ type: "notice", text: `Added ${person.email}. Your mail app has an email for them, with their password.` });
+  await showState(session);
+}
+
+async function removePerson(email: string, session: Session): Promise<void> {
+  if (session.working !== null) return void (await session.post({ type: "error", text: BUSY }));
+  await session.engine.removePerson(email);
+  note(session, "info", `Removed ${email}`);
+  await session.post({ type: "notice", text: `Removed ${email}. No app lets them in now.` });
+  await showState(session);
+}
+
+async function newPersonPassword(email: string, session: Session): Promise<void> {
+  if (session.working !== null) return void (await session.post({ type: "error", text: BUSY }));
+  const person = await session.engine.newPersonPassword(email);
+  await draft(newPasswordMail(person), session);
+  await session.post({ type: "notice", text: `New password for ${person.email}. Their old one no longer works, and your mail app has an email for them.` });
+  await showState(session);
+}
+
+// Other people reach apps only through the private network, so sharing needs phone access on.
+async function share(app: string, email: string, shared: boolean, session: Session): Promise<void> {
+  if (session.working !== null) return void (await session.post({ type: "error", text: BUSY }));
+  const host = await session.engine.phoneAccess();
+  if (shared && host === null) throw new Error("Turn on phone access in Settings first: other people open your apps through Tailscale.");
+  const view = await session.engine.share(app, email, shared);
+  note(session, "info", shared ? `Shared ${app} with ${email}` : `Stopped sharing ${app} with ${email}`);
+  if (shared && host !== null) await draft(sharedMail(email, app, onPhone(view.url, host)), session);
+  await showState(session);
+}
+
+/** Opens an email in the owner's mail app, for them to send. */
+async function draft(mail: Mail, session: Session): Promise<void> {
+  await session.openExternal(mailto(mail));
+}
+
 async function showState(session: Session): Promise<void> {
   await session.post({
     type: "state",
     apps: await session.engine.list(),
     owner: (await session.engine.owner()).email,
+    people: await session.engine.people(),
     models: await modelViews(session),
     defaultModel: session.settings.models().default,
     spent: await session.engine.spent(),
@@ -375,11 +430,19 @@ async function showState(session: Session): Promise<void> {
 // Messages come from the page, so each is checked for its shape before anything acts on it.
 function readRequest(message: unknown): FromUi | undefined {
   if (typeof message !== "object" || message === null) return undefined;
-  const { type, app, request, question, name, apiKey, on, version, what, from, routes, message: words, model, id, pod, container, starred, email, url, files } = message as Record<string, unknown>;
+  const { type, app, request, question, name, apiKey, on, version, what, from, routes, message: words, model, id, pod, container, starred, email, url, files, shared } = message as Record<string, unknown>;
   switch (type) {
-    case "ready":
     case "new-password":
     case "show-password":
+      if (email === undefined) return { type };
+      return typeof email === "string" ? { type, email } : undefined;
+    case "add-person":
+    case "remove-person":
+    case "invite":
+      return typeof email === "string" ? { type, email } : undefined;
+    case "share":
+      return typeof app === "string" && typeof email === "string" && typeof shared === "boolean" ? { type, app, email, shared } : undefined;
+    case "ready":
     case "health":
     case "ledger":
     case "doctor":

@@ -365,6 +365,35 @@ main {
   align-self: flex-start;
 }
 
+/* Who can open an app: the owner, and each person it's shared with. */
+.share {
+  top: calc(100% + 0.4rem);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 20rem;
+}
+
+.share-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.share-list .check {
+  margin-top: 0;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+.share .quiet-button {
+  align-self: flex-start;
+}
+
 /* Dark on white in either theme: what phone cameras read best. */
 .qr {
   display: block;
@@ -1640,9 +1669,48 @@ pre.problem {
   margin-top: 0.5rem;
 }
 
-#owner-email {
+#owner-email,
+#person-email {
   flex: 1;
   min-width: 0;
+}
+
+/* Someone the owner shares apps with: who they are, what they can open, and what to do about them. */
+.person-card {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.person-facts {
+  display: flex;
+  flex: 1 1 14rem;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.person-email {
+  font-weight: 600;
+}
+
+.person-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.person-actions .quiet-button {
+  white-space: nowrap;
+}
+
+.person-card .password-shown {
+  flex-basis: 100%;
 }
 
 .sign-in-row .chip {

@@ -542,6 +542,59 @@ function loginUrlOf(objects: readonly KubeObject[]): string | undefined {
   return objects.find((o): o is ConfigMap => o.kind === "ConfigMap")?.data.OAUTH2_PROXY_LOGIN_URL;
 }
 
+describe("sharing apps with people", () => {
+  it("tells sign-in about someone new, and runs no app again", async () => {
+    const { engine, deployed, synced } = setUp([reply("lunch")]);
+    await engine.create("split lunch bills");
+
+    const ana = await engine.addPerson("ana@example.com");
+
+    assert.deepEqual(synced.at(-1)?.people, [ana]);
+    assert.equal(deployed.length, 1);
+  });
+
+  it("runs a shared app again letting in the person's group too, and tells sign-in nothing", async () => {
+    const { engine, deployed, synced } = setUp([reply("lunch")]);
+    await engine.create("split lunch bills");
+    const ana = await engine.addPerson("ana@example.com");
+    const syncs = synced.length;
+
+    const view = await engine.share("lunch", ana.email, true);
+
+    assert.deepEqual(view.people, [ana.email]);
+    assert.equal(allowedGroupsIn(deployed.at(-1)), `owner,${ana.group}`);
+    assert.equal(synced.length, syncs);
+  });
+
+  it("runs the apps someone could open again without them when they're removed", async () => {
+    const { engine, deployed, synced } = setUp([reply("lunch")]);
+    await engine.create("split lunch bills");
+    const ana = await engine.addPerson("ana@example.com");
+    await engine.share("lunch", ana.email, true);
+
+    await engine.removePerson(ana.email);
+
+    assert.equal(allowedGroupsIn(deployed.at(-1)), "owner");
+    assert.deepEqual(synced.at(-1)?.people, []);
+    assert.deepEqual(await engine.people(), []);
+  });
+
+  it("lets in only the new group after a new password, so the old sessions end", async () => {
+    const { engine, deployed } = setUp([reply("lunch")]);
+    await engine.create("split lunch bills");
+    const ana = await engine.addPerson("ana@example.com");
+    await engine.share("lunch", ana.email, true);
+
+    const renewed = await engine.newPersonPassword(ana.email);
+
+    assert.equal(allowedGroupsIn(deployed.at(-1)), `owner,${renewed.group}`);
+  });
+});
+
+function allowedGroupsIn(objects: readonly KubeObject[] | undefined): string | undefined {
+  return objects?.find((o): o is ConfigMap => o.kind === "ConfigMap")?.data.OAUTH2_PROXY_ALLOWED_GROUPS;
+}
+
 describe("phone access", () => {
   it("is off until turned on", async () => {
     const { engine } = setUp([]);

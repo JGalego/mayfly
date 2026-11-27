@@ -7,7 +7,7 @@ import { OWNER_ROLE, type App, type Owner, type State } from "../../engine/state
 import { down, play, removeVolume } from "../podman/podman.ts";
 import { buildDex, DEX_POD, DEX_VOLUME, dexEndSession, dexSettings, PREFERRED_SIGN_IN_PORT, type DexClient, type DexUser } from "./dex.ts";
 
-/** Dex on Podman, with the owner as its one user and one client per app, and the logo on its sign-in page. */
+/** Dex on Podman, with the owner and the people they share apps with as its users, one client per app, and the logo on its sign-in page. */
 export function dexIdentity(logo?: string): IdentitySource {
   return {
     pod: DEX_POD,
@@ -38,8 +38,10 @@ export function sessionKeyFor(owner: Owner | null): string | undefined {
   return owner === null ? undefined : createHmac("sha256", owner.password).update("mayfly sign-in sessions").digest("base64url").slice(0, 32);
 }
 
-function usersOf({ owner }: State): DexUser[] {
-  return owner === null ? [] : [{ ...owner, groups: [OWNER_ROLE] }];
+// People sign in by email, which also names them to Dex: never the owner's name, which has no @.
+function usersOf({ owner, people }: State): DexUser[] {
+  const others = people.map(({ email, password, group }) => ({ email, username: email, password, groups: [group] }));
+  return owner === null ? [] : [{ ...owner, groups: [OWNER_ROLE] }, ...others];
 }
 
 /** An app's client: Dex sends people back to its localhost door, and while phone access is on, the phone to its phone door. */
