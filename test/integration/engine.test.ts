@@ -64,12 +64,14 @@ describe("the engine on Podman with Dex", () => {
     const app = await engine.create("count my visits");
     images.push(...imagesOf(await store.load()));
     await waitUntilUp("http://localhost:5556/dex/healthz");
+    await waitUntilUp(app.url);
     const owner = await engine.owner();
     const browser = new Browser();
     await browser.submit(await browser.get(app.url), { login: owner.email, password: owner.password });
     assert.match((await browser.get(app.url)).body, /Visits: 2/);
 
     await engine.rename("tally", "visits");
+    await waitUntilUp(app.url);
     browser.forget("mayfly-");
     const renamed = await browser.get(app.url);
     const page = renamed.body.includes("<form") ? await browser.submit(renamed, { login: owner.email, password: owner.password }) : renamed;
