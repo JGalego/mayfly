@@ -452,7 +452,10 @@ async function mailFor(about: MailAbout, session: Session): Promise<Mail> {
   const host = await session.engine.phoneAccess();
   const app = (await session.engine.list()).find((candidate) => candidate.name === about.app);
   if (host === null || app === undefined) throw new Error(`\`${about.app}\` can't be reached from another device now. Turn on phone access in Settings first.`);
-  return sharedMail(about.email, app.name, onPhone(app.url, host));
+  // The page names the address, so the app has to be shared with it: the owner's account sends to no one else.
+  const to = about.email.trim().toLowerCase();
+  if (!app.people.includes(to)) throw new Error(`\`${app.name}\` isn't shared with \`${about.email}\`.`);
+  return sharedMail(to, app.name, onPhone(app.url, host));
 }
 
 async function showState(session: Session): Promise<void> {
