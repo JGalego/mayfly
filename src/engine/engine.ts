@@ -55,10 +55,10 @@ export class RecordedFailure extends Error {
   }
 }
 
-/** A version as a shell shows it: how long its code and the model's thinking are, but not them, which the shell asks for when it needs them. */
 /** A paired phone, without the hash that proves it. */
 export type PhoneView = Omit<PairedPhone, "tokenHash">;
 
+/** A version as a shell shows it: how long its code and the model's thinking are, but not them, which the shell asks for when it needs them. */
 export type VersionView = Omit<Version, "routes" | "image" | "thinking"> & { readonly lines: number; readonly thinkingWords: number };
 
 /** What one version's author wrote: its code, and the model's thinking, empty when its provider kept that to itself. */
@@ -647,12 +647,14 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       return { code, expires: offer.expires };
     },
 
-    async pair(code, name) {
-      // Checked and spent in one step, so two phones can't both use one code.
-      const { state, token } = withPhone(await store.load(), pairing, code, name, Date.now());
-      pairing = null;
-      await store.save(state);
-      return token;
+    pair(code, name) {
+      return changing(async () => {
+        // Checked and spent in one step, so two phones can't both use one code.
+        const { state, token } = withPhone(await store.load(), pairing, code, name, Date.now());
+        pairing = null;
+        await store.save(state);
+        return token;
+      });
     },
 
     async pairedPhone(token) {
@@ -664,8 +666,8 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       return (await store.load()).phones.map(phoneView);
     },
 
-    async forgetPhone(id) {
-      await store.save(withoutPhone(await store.load(), id));
+    forgetPhone(id) {
+      return changing(async () => store.save(withoutPhone(await store.load(), id)));
     },
 
     async owner() {

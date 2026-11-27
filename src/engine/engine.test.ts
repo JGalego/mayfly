@@ -25,6 +25,23 @@ describe("changes made at once", () => {
     assert.equal(synced.at(-1)?.owner?.password, owner.password);
   });
 
+  it("keep a phone forgotten while an app deploys", async () => {
+    const { engine, holdDeploy } = setUp([reply("lunch")]);
+    const lunch = await engine.create("split lunch bills");
+    const { code } = await engine.offerPairing();
+    const token = await engine.pair(code, "iPhone");
+    const [phone] = await engine.phones();
+    const release = holdDeploy();
+
+    const deploying = engine.deploy("lunch", lunch.head ?? "");
+    await settled();
+    const forgetting = engine.forgetPhone(phone?.id ?? "");
+    release();
+    await Promise.all([deploying, forgetting]);
+
+    assert.equal(await engine.pairedPhone(token), null);
+  });
+
   it("keep an app starred while another deploys", async () => {
     const { engine, holdDeploy } = setUp([reply("lunch"), reply("notes")]);
     const lunch = await engine.create("split lunch bills");
