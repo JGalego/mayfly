@@ -61,7 +61,7 @@ Mayfly runs inside Podman Desktop, so the page answers only while the computer i
 - **The loopback port trusts nobody.** A request without a valid token gets a 401, whoever sends it. In the spike, containers reached neither the computer's loopback nor its tailnet address, but nothing depends on that.
 - **The page loads only itself.** A Content-Security-Policy allows scripts, styles and connections from its own origin only.
 
-Found along the way: by the same RFC, an app may see Dex's single sign-on cookie and other apps' oauth2-proxy cookies, since oauth2-proxy forwards the `Cookie` header. The runtime already drops `Tailscale-*` headers, and it could drop Mayfly's and Dex's cookies the same way. That's for a fix of its own, once the spike confirms it.
+Found along the way, and confirmed by question 7: by the same RFC, an app sees Dex's single sign-on cookie and the other apps' oauth2-proxy cookies, since oauth2-proxy forwards the `Cookie` header, and it can use them to act as whoever opened it in every other app. That's a bug in what's released, for a fix of its own. The fix belongs in front of the app, not in the runtime: the app's code runs in the runtime's process and could read the headers before the runtime drops them.
 
 ## Options considered
 
@@ -82,7 +82,7 @@ Found along the way: by the same RFC, an app may see Dex's single sign-on cookie
 4. Does a pairing made in Safari carry over to the Home Screen app? If not, does Add to Home Screen keep the pairing link's fragment?
 5. Does a file input open the camera from the Home Screen app, and what type and size are the photos?
 6. What does the phone show when Podman Desktop is closed? Can a service worker show the page's own message instead? Half answered on Windows: with nothing on the loopback port, Serve answers `502 Bad Gateway` with an empty body, so without a service worker the phone gets a blank page. The service worker is still to check on the iPhone.
-7. Can an app read Dex's single sign-on cookie through its own `/dex/` path?
+7. ~~Can an app read Dex's single sign-on cookie through its own `/dex/` path?~~ Answered on WSL's Podman, with Dex and two apps deployed as Mayfly deploys them: yes, and more. App B's server received app A's session cookie on every path, and Dex's `dex_session` on `/dex/anything`. From a container on the Mayfly network, with only those cookies, B got into A as the owner twice: by replaying A's cookie to A's proxy, and by signing in to A afresh with Dex's cookie and no password.
 
 ## Plan
 
