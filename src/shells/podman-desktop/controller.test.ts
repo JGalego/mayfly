@@ -19,6 +19,7 @@ const lunch: AppView = {
   versions: [],
   spent: { input: 100, output: 20, thinking: 0 },
   people: [],
+  keepsData: false,
 };
 const owner = { email: "owner@mayfly.local", username: "owner", password: "s3cret-pass" };
 const openai: ModelSetting = { id: "openai", provider: "openai", baseUrl: "", model: "gpt-6.2-sol" };

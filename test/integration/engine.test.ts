@@ -10,18 +10,21 @@ import { jsonFileStore } from "../../src/adapters/json-file/json-file-store.ts";
 import { fileStore } from "../../src/adapters/files/file-store.ts";
 import { podmanBuilder } from "../../src/adapters/podman/podman-builder.ts";
 import { down, podmanDeployer, podmanObserver } from "../../src/adapters/podman/podman.ts";
+import { podmanData } from "../../src/adapters/podman/podman-data.ts";
 import { createEngine } from "../../src/engine/engine.ts";
 import type { ModelProvider, PhoneNetwork } from "../../src/engine/ports.ts";
+import type { State } from "../../src/engine/state.ts";
 import { Browser } from "./browser.ts";
 import { removeImages, replyWith, RUNTIME_IMAGE, waitUntilUp } from "./support.ts";
 
-// A scripted model, so this test needs no API key: it always writes the hello app.
-const model: ModelProvider = { name: "a scripted model", provider: "a script", complete: async () => ({ text: replyWith("hello", "hello-app"), thinking: "", usage: { input: 0, output: 0, thinking: 0 } }) };
+// A scripted model, so this test needs no API key: it writes the app each test sets.
+let writes = { name: "hello", fixture: "hello-app" };
+const model: ModelProvider = { name: "a scripted model", provider: "a script", complete: async () => ({ text: replyWith(writes.name, writes.fixture), thinking: "", usage: { input: 0, output: 0, thinking: 0 } }) };
 const folder = await mkdtemp(join(tmpdir(), "mayfly-"));
 const store = jsonFileStore(join(folder, "state.json"));
 // Phone access stays off here: Tailscale's own test covers serving.
 const phoneNetwork: PhoneNetwork = { status: async () => ({ state: "missing" }), serve: async () => {}, stop: async () => {} };
-const engine = createEngine({ store, deployer: podmanDeployer, observer: podmanObserver, identity: dexIdentity(), models: () => model, builder: podmanBuilder(RUNTIME_IMAGE), files: fileStore(join(folder, "files")), phoneNetwork });
+const engine = createEngine({ store, deployer: podmanDeployer, observer: podmanObserver, identity: dexIdentity(), models: () => model, builder: podmanBuilder(RUNTIME_IMAGE), data: podmanData(RUNTIME_IMAGE), files: fileStore(join(folder, "files")), phoneNetwork });
 const images: string[] = [];
 
 after(async () => {
@@ -55,4 +58,34 @@ describe("the engine on Podman with Dex", () => {
     assert.notEqual(spawnSync("podman", ["network", "exists", "mayfly"]).status, 0);
     assert.notEqual(spawnSync("podman", ["volume", "exists", "mayfly-dex-data"]).status, 0);
   });
+
+  it("keeps an app's records through a rename, refuses a change they don't fit, and deletes them with the app", async () => {
+    writes = { name: "tally", fixture: "tally-app" };
+    const app = await engine.create("count my visits");
+    images.push(...imagesOf(await store.load()));
+    await waitUntilUp("http://localhost:5556/dex/healthz");
+    const owner = await engine.owner();
+    const browser = new Browser();
+    await browser.submit(await browser.get(app.url), { login: owner.email, password: owner.password });
+    assert.match((await browser.get(app.url)).body, /Visits: 2/);
+
+    await engine.rename("tally", "visits");
+    browser.forget("mayfly-");
+    const renamed = await browser.get(app.url);
+    const page = renamed.body.includes("<form") ? await browser.submit(renamed, { login: owner.email, password: owner.password }) : renamed;
+    assert.match(page.body, /Visits: 3/);
+    assert.notEqual(spawnSync("podman", ["volume", "exists", "mayfly-tally-data"]).status, 0);
+
+    writes = { name: "visits", fixture: "tally-strict" };
+    await assert.rejects(engine.change("visits", "note the first visit"), /`visit:` record has no `first`/);
+    images.push(...imagesOf(await store.load()));
+    assert.match((await browser.get(app.url)).body, /Visits: 4/);
+
+    await engine.remove("visits");
+    assert.notEqual(spawnSync("podman", ["volume", "exists", "mayfly-visits-data"]).status, 0);
+  });
 });
+
+function imagesOf(state: State): string[] {
+  return state.apps.flatMap((a) => a.versions.flatMap((v) => v.image ?? []));
+}

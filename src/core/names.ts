@@ -16,3 +16,8 @@ export function authConfigName(appName: string): string {
 export function proxyConfigName(appName: string): string {
   return `${mayflyName(appName)}-proxy`;
 }
+
+/** Names the volume an app keeps its records on. */
+export function dataVolumeName(appName: string): string {
+  return `${mayflyName(appName)}-data`;
+}

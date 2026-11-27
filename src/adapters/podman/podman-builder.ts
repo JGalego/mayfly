@@ -3,24 +3,17 @@ import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { APP_PORT, HEALTH_CHECK, HOME_PAGE_TIMEOUT_MS, NODE } from "../../core/contract.ts";
+import { APP_PORT, DATA_CHECK, DATA_DIR, HEALTH_CHECK, HOME_PAGE_TIMEOUT_MS, NODE } from "../../core/contract.ts";
+import { dataProblem, type DataReport } from "../../core/data-fit.ts";
 import { homePageProblem, type HomePage } from "../../core/home-page.ts";
+import { dataVolumeName } from "../../core/names.ts";
 import type { Builder, Trial } from "../../engine/ports.ts";
 import { podman, run } from "./cli.ts";
+import { copyData } from "./podman-data.ts";
+import { SANDBOX } from "./sandbox.ts";
 
 const STARTUP_TIMEOUT_MS = 15_000;
 const POLL_MS = 500;
-
-// The trial runs the model's code before anyone has looked at it: no network, nothing writable, no privileges.
-const SANDBOX = [
-  "--network", "none",
-  "--read-only",
-  "--user", "65534:65534",
-  "--cap-drop", "ALL",
-  "--security-opt", "no-new-privileges",
-  "--memory", "256m",
-  "--pids-limit", "128",
-];
 
 // Who the trial says is signed in, the way the auth proxy would.
 const TRIAL_USER = { "x-forwarded-user": "trial", "x-forwarded-email": "trial@mayfly.local", "x-forwarded-groups": "owner" };
@@ -59,20 +52,35 @@ async function forget(name: string): Promise<void> {
   if (images.length > 0) await run(["rmi", ...images]);
 }
 
-async function trial(image: string): Promise<Trial> {
+// The trial runs the model's code before anyone has looked at it, sandboxed, on a throwaway copy of the app's records.
+async function trial(image: string, data: string | null): Promise<Trial> {
   const container = `mayfly-trial-${randomUUID().slice(0, 8)}`;
-  await podman(["run", "--detach", "--name", container, ...SANDBOX, "--env", `PORT=${APP_PORT}`, image]);
+  const records = `${container}-data`;
   try {
+    if (data !== null) await copyData(image, dataVolumeName(data), records);
+    await podman(["run", "--detach", "--name", container, ...SANDBOX, "--volume", `${records}:${DATA_DIR}:U`, "--env", `PORT=${APP_PORT}`, image]);
     return await visit(container);
   } finally {
     await run(["rm", "--force", "--time", "0", container]);
+    await run(["volume", "rm", "--force", records]);
   }
 }
 
 async function visit(container: string): Promise<Trial> {
   if (!(await becomesHealthy(container))) return failure(container, "It did not start: its health check never passed.");
+  const data = await checkData(container);
+  if (data.problem !== null) return { ok: false, problem: data.problem };
   const problem = homePageProblem(await requestHome(container));
-  return problem === null ? { ok: true } : failure(container, problem);
+  return problem === null ? { ok: true, keepsData: data.keepsData } : failure(container, problem);
+}
+
+/** Whether the code declares kinds of record, and whether every stored one fits them, as the runtime checks in the container. */
+async function checkData(container: string): Promise<{ readonly keepsData: boolean; readonly problem: string | null }> {
+  const { code, stdout, stderr } = await run(["exec", container, ...DATA_CHECK]);
+  if (code !== 0) return { keepsData: false, problem: `Its stored records couldn't be checked:\n\n${stderr.trim()}` };
+  // The app's code may print as it loads, ahead of the report.
+  const report = JSON.parse(stdout.trim().split("\n").at(-1) ?? "") as DataReport;
+  return { keepsData: report.kinds.length > 0, problem: dataProblem(report) };
 }
 
 async function becomesHealthy(container: string): Promise<boolean> {

@@ -6,8 +6,13 @@ import { podman, run } from "./cli.ts";
 /** Every Mayfly pod joins this network, so auth proxies can reach Dex by name. */
 const NETWORK = "mayfly";
 
-// An app's only volume is the copy Podman makes of its proxy's settings, which would outlive the app.
-export const podmanDeployer: Deployer = { deploy: play, remove: (objects) => down(objects, { volumes: true }) };
+export const podmanDeployer: Deployer = {
+  deploy: play,
+  stop: (objects) => down(objects),
+  // A pod's volumes would outlive it: its records and the copy Podman makes of its proxy's settings. Podman takes the records'
+  // through the pod's claim on them, and Podman 5.8 fails when the claim is listed too, the volume already gone.
+  remove: (objects) => down(objects.filter((object) => object.kind !== "PersistentVolumeClaim"), { volumes: true }),
+};
 
 export const podmanObserver: Observer = { health, logs };
 

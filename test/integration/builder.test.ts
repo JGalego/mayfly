@@ -1,20 +1,26 @@
 import { after, describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { podmanBuilder } from "../../src/adapters/podman/podman-builder.ts";
+import { podmanData } from "../../src/adapters/podman/podman-data.ts";
 import type { Trial } from "../../src/engine/ports.ts";
 import { removeImages, RUNTIME_IMAGE } from "./support.ts";
 
 const builder = podmanBuilder(RUNTIME_IMAGE);
 const built: string[] = [];
+const removed: string[] = [];
 
-after(() => removeImages(built));
+after(() => {
+  removeImages(built);
+  if (removed.length > 0) spawnSync("podman", ["volume", "rm", "--force", ...removed]);
+});
 
 describe("the Podman builder", () => {
   it("builds an app that passes its trial", async () => {
     const trial = await buildAndTry("good", 'import { Hono } from "hono";\nexport default new Hono().get("/", (c) => c.html(\'<h1>hi</h1><a href="/oauth2/sign_out">Sign out</a>\'));\n');
 
-    assert.deepEqual(trial, { ok: true });
+    assert.deepEqual(trial, { ok: true, keepsData: false });
   });
 
   it("reports an app that crashes as it starts, with its logs", async () => {
@@ -38,6 +44,41 @@ describe("the Podman builder", () => {
     assert.equal(trial.ok, false);
     assert.match(trial.ok ? "" : trial.problem, /gave no answer within 10 seconds/);
     assert.ok(Date.now() - started < 60_000);
+  });
+
+  it("runs an app that keeps records on a throwaway store, and says it keeps data", async () => {
+    const trial = await buildAndTry("tally", readFileSync("test/fixtures/tally-app/routes.ts", "utf8"));
+
+    assert.deepEqual(trial, { ok: true, keepsData: true });
+  });
+
+  it("tries an app on a copy of its records, failing a version they don't fit and leaving them as they were", async () => {
+    const volume = "mayfly-tallied-data";
+    removed.push(volume);
+    const tally = await builder.build("tallied", readFileSync("test/fixtures/tally-app/routes.ts", "utf8"));
+    built.push(tally);
+    keep(tally, volume, { "visit:a": { count: 1 }, "visit:b": { count: 5 } });
+
+    const strict = await buildAndTry("tallied", readFileSync("test/fixtures/tally-strict/routes.ts", "utf8"), "tallied");
+    const again = await builder.trial(tally, "tallied");
+
+    assert.equal(strict.ok ? "" : strict.problem, "Stored records don't fit this version:\n\n- 2 `visit:` records have no `first` but this version needs it as `string`");
+    assert.deepEqual(again, { ok: true, keepsData: true });
+    assert.deepEqual(stored(tally, volume), { "visit:a": { count: 1 }, "visit:b": { count: 5 } });
+  });
+
+  it("copies an app's records to a new name, and copies nothing for an app that kept none", async () => {
+    const data = podmanData(RUNTIME_IMAGE);
+    removed.push("mayfly-copied-data", "mayfly-copy-data", "mayfly-none-data");
+    const tally = await builder.build("copied", readFileSync("test/fixtures/tally-app/routes.ts", "utf8"));
+    built.push(tally);
+    keep(tally, "mayfly-copied-data", { "visit:a": { count: 3 } });
+
+    await data.copy("copied", "copy");
+    await data.copy("never", "none");
+
+    assert.deepEqual(stored(tally, "mayfly-copy-data"), { "visit:a": { count: 3 } });
+    assert.notEqual(spawnSync("podman", ["volume", "exists", "mayfly-none-data"]).status, 0);
   });
 
   it("tags an image by its code, so the same routes give the same image", async () => {
@@ -67,8 +108,19 @@ function imagesOf(app: string): string[] {
   return listed.split("\n").filter(Boolean);
 }
 
-async function buildAndTry(name: string, routes: string): Promise<Trial> {
+async function buildAndTry(name: string, routes: string, data: string | null = null): Promise<Trial> {
   const image = await builder.build(name, routes);
   built.push(image);
-  return builder.trial(image);
+  return builder.trial(image, data);
+}
+
+// Writes and reads an app's records with the runtime's own store, as the app would, in a container on the volume.
+function keep(image: string, volume: string, records: Record<string, object>): void {
+  const script = `import { openStore } from "/app/runtime/store.ts"; import { kindsFrom } from "/app/runtime/records.ts"; const store = openStore("/data/app.db", kindsFrom({ "visit:": { count: "number" } })); for (const [key, value] of Object.entries(${JSON.stringify(records)})) store.set(key, value);`;
+  execFileSync("podman", ["run", "--rm", "--user", "65534:65534", "--volume", `${volume}:/data:U`, "--entrypoint", "/usr/bin/node", image, "--input-type=module", "--eval", script]);
+}
+
+function stored(image: string, volume: string): Record<string, object> {
+  const script = `import { openStore } from "/app/runtime/store.ts"; import { kindsFrom } from "/app/runtime/records.ts"; const store = openStore("/data/app.db", kindsFrom({ "visit:": { count: "number" } })); process.stdout.write(JSON.stringify(Object.fromEntries(store.list("visit:").map((entry) => [entry.key, entry.value]))));`;
+  return JSON.parse(execFileSync("podman", ["run", "--rm", "--user", "65534:65534", "--volume", `${volume}:/data:U`, "--entrypoint", "/usr/bin/node", image, "--input-type=module", "--eval", script], { encoding: "utf8" }));
 }

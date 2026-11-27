@@ -656,6 +656,7 @@ function removeApp(): void {
   const dialog = element<HTMLDialogElement>("remove-dialog");
   const confirm = element<HTMLButtonElement>("confirm-remove");
   element("remove-title").replaceChildren("Remove ", nameChip(name), "?");
+  element("remove-what").textContent = shownApp()?.keepsData === true ? "This stops the app and deletes its data, versions and conversation" : "This stops the app and deletes its versions and conversation but not data kept in browsers";
   let left = REMOVE_WAIT_S;
   const count = (): void => {
     confirm.disabled = left > 0;

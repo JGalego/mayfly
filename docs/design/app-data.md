@@ -1,6 +1,8 @@
 # Design: data that apps keep
 
-Status: proposed, for 0.5.0. It changes the contract, and takes "Server-side persistence" off the README's non-goals.
+Status: being built on `feat/app-data`, for 0.5.0. It changes the contract, and takes "Server-side persistence" off the README's non-goals.
+
+Built so far: the store, the check in every trial, undo and deploy on the data, rename and remove. Restore and export come next.
 
 Apps keep data in the browser today. That breaks as soon as an app has more than one browser: two people sharing a tracker each see their own list, an entry made on the phone isn't there on the computer, and clearing the browser deletes it. The goal is data that lives with the app, where the model declares what it keeps and Mayfly makes sure no change can lose it.
 
@@ -103,9 +105,9 @@ The store needs no switch, in Settings or elsewhere. Once an app keeps data, tur
 ## Questions for the spike
 
 1. ~~Does `node:sqlite` work in the runtime image?~~ Answered: yes, in the image `main` published at `bdd848e` (Node 24.22.3), as `nobody` on a read-only root, with no flag and no warning.
-2. ~~Can a pod give the app's user a volume it can write?~~ Answered on Podman 5.8.9: a PersistentVolumeClaim with `volume.podman.io/uid` and `volume.podman.io/gid` set to 65534 mounts writable for the app's user, while writes elsewhere get `EROFS`. The data survives `kube play --replace` and `kube down`. `kube down --force`, which removing an app runs, deletes it.
+2. ~~Can a pod give the app's user a volume it can write?~~ Answered on Podman 5.8.9: a PersistentVolumeClaim with `volume.podman.io/uid` and `volume.podman.io/gid` set to 65534 mounts writable for the app's user, while writes elsewhere get `EROFS`. The data survives `kube play --replace` and `kube down`. `kube down --force`, which removing an app runs, deletes every volume the pod mounts, through the pod's claim alone, and fails with "no such volume" when the claim is listed too. So removing leaves the claim out, and renaming stops the pod with `kube down` before it copies the data.
 3. How should kinds be declared: the short form above or a subset of JSON Schema? Measure which the model writes more reliably, on the same requests.
 4. Can Podman cap a volume's size? The store's limit holds only for code that uses it, and the app can write to `/data` directly.
-5. How should the data be copied before each change, and how long does it take: `podman volume export` and `import`, or SQLite's `VACUUM INTO`?
+5. ~~How should the data be copied before each change?~~ Answered: SQLite's `VACUUM INTO`, in a sandboxed container of the runtime image, with the app's volume mounted read-only. It copies a consistent snapshot while the app writes, where a tar of the volume could catch a write halfway. Still to measure: how long it takes for 100 MB.
 6. Should each person get an id that never changes? `user.id` is the email today, since oauth2-proxy's user id claim defaults to `email` (`pkg/apis/options/providers.go` in v7.15.6). The owner can change their email, which would leave their records under the old one.
 7. Apps that keep data in localStorage today: when one changes, how does its data move to the store, given that it sits in each browser?

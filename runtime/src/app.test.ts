@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { Hono } from "hono";
 import { buildApp } from "./app.ts";
 import type { Env } from "./env.ts";
+import { kindsFrom } from "./records.ts";
+import { openStore } from "./store.ts";
 
 const signedIn = {
   "X-Forwarded-User": "u-1",
@@ -18,10 +20,14 @@ const routes = new Hono<Env>()
   .get("/boom", () => {
     throw new Error("database password is hunter2");
   })
-  .get("/oauth2/sign_out", (c) => c.text("the app's own sign-out"));
+  .get("/oauth2/sign_out", (c) => c.text("the app's own sign-out"))
+  .post("/notes", (c) => {
+    c.get("store").set("note:1", { text: "kept" });
+    return c.json(c.get("store").get("note:1"));
+  });
 
 const signOut = { "localhost:18100": "/.mayfly/sign_out?rd=computer", "mayfly.tail1a2b.ts.net:38100": "/.mayfly/sign_out?rd=phone" };
-const app = buildApp(routes, signOut);
+const app = buildApp(routes, signOut, openStore(":memory:", kindsFrom({ "note:": { text: "string" } })));
 let logged: string[] = [];
 
 beforeEach(() => {
@@ -62,6 +68,12 @@ describe("the runtime around a generated app", () => {
       name: "ana",
       groups: ["owner", "finance"],
     });
+  });
+
+  it("hands the routes the app's store", async () => {
+    const response = await app.request("/notes", { method: "POST", headers: signedIn });
+
+    assert.deepEqual(await response.json(), { text: "kept" });
   });
 
   it("logs each request as one JSON line, without the query string", async () => {

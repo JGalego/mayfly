@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { appUrl } from "../core/app-url.ts";
 import { phoneDoorPort, phoneSidePort } from "../core/phone.ts";
 import { appObjects } from "./app-objects.ts";
-import { generateApp, listenFor, type Ask, type Attempt, type Generation } from "./generate.ts";
+import { generateApp, listenFor, outcomeOf, type Ask, type Attempt, type Generation } from "./generate.ts";
 import { ASK_PROMPT, fixFor, questionFor, withFiles } from "./prompt.ts";
 import type { Attachment, FileData } from "./attachments.ts";
 import { errorsIn } from "./log-errors.ts";
@@ -85,6 +85,8 @@ export interface AppView {
   readonly spent: Usage;
   /** The people it's shared with, by email. */
   readonly people: readonly string[];
+  /** It keeps records, which go when it's removed. */
+  readonly keepsData: boolean;
 }
 
 export interface Engine {
@@ -123,6 +125,7 @@ export interface Engine {
   /** The code of one version of an app, and what the model thought writing it. */
   written(name: string, version: string): Promise<Written>;
   list(): Promise<AppView[]>;
+  /** Removes an app, with its records, its images and its conversation. */
   remove(name: string): Promise<void>;
   /** Who signs in to the apps. Created on first use. */
   owner(): Promise<Owner>;
@@ -158,7 +161,7 @@ export interface Engine {
   turnOffPhone(): Promise<void>;
 }
 
-export function createEngine({ store, deployer, observer, identity, models, builder, files, phoneNetwork }: Ports): Engine {
+export function createEngine({ store, deployer, observer, identity, models, builder, data, files, phoneNetwork }: Ports): Engine {
   // Each change loads the state, often waits on Podman, then saves. One at a time, each loads what the last saved, so none
   // saves over another with an older copy. A model's answer is waited for outside, so only Podman's work holds others up.
   const changing = oneAtATime();
@@ -248,16 +251,21 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       const app = existingApp(state, name);
       const version = findVersion(app, id);
       if (version?.problem !== null) throw new Error(`\`${name}\` has no version \`${id}\` that passed`);
-      // It passed its trial when it was made, on the same runtime, so it is built again but not tried again.
       watch({ kind: "building" });
       const image = await builder.build(name, version.routes);
+      // It passed its trial when it was made, on the same runtime. Records written since may not fit it, so then it's tried on them.
+      if (app.keepsData === true && version.keepsData === true) {
+        watch({ kind: "trying" });
+        const trial = await builder.trial(image, name);
+        if (!trial.ok) throw new Error(trial.problem);
+      }
       // Versions go in backticks, like app names, so shells set them apart.
       const note = `Deployed version \`${id}\`: “${version.request}”`;
       const conversation: Turn[] = [
         { from: "person", text: said, at: started },
         { from: "mayfly", text: note, versions: [], took: Date.now() - started, at: Date.now() },
       ];
-      const next: App = { ...app, ...(app.head === null || app.head === id ? {} : { previous: app.head }), head: id, conversation: [...app.conversation, ...conversation] };
+      const next: App = { ...app, ...(app.head === null || app.head === id ? {} : { previous: app.head }), ...keeping(version), head: id, conversation: [...app.conversation, ...conversation] };
       const nextState = withApp(state, next);
       watch({ kind: "deploying" });
       await store.save(await signInAndRun(nextState, next, image));
@@ -279,7 +287,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     return recording(name, said, attachments, async () => {
       const base = startingPoint(app);
       const model = models(app.model);
-      const generation = await generate({ change: request, app: { name, routes: base?.routes ?? "" }, files: attached }, model, watch);
+      const generation = await generate({ change: request, app: { name, routes: base?.routes ?? "", keepsData: app.keepsData === true }, files: attached }, model, watch);
       return record(request, generation, { base: base?.id ?? null, by: { kind: "model", name: model.name }, model: app.model, started, runs: true, attachments, said }, watch);
     });
   }
@@ -300,6 +308,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     const next: App = {
       ...app,
       ...(running === undefined || app.head === null ? {} : { previous: app.head }),
+      ...(running === undefined ? {} : keeping(running)),
       versions: [...app.versions, ...versions],
       head: running?.id ?? app.head,
       conversation: [...app.conversation, { from: "person", text: made.said ?? request, at: made.started, ...withAttachments(made.attachments ?? []) }, reply],
@@ -573,7 +582,13 @@ export function createEngine({ store, deployer, observer, identity, models, buil
           watch({ kind: "building" });
           const image = await builder.build(newName, running.routes);
           watch({ kind: "deploying" });
-          await deployer.remove(appObjects(app, running.image, identity.settingsFor(app, signInPortOf(state))));
+          const objects = appObjects(app, running.image, identity.settingsFor(app, signInPortOf(state)));
+          if (app.keepsData === true) {
+            // Stopped first, so nothing writes to its records while they're copied to the new name.
+            await deployer.stop(objects);
+            await data.copy(name, newName);
+          }
+          await deployer.remove(objects);
           ready = await signInAndRun(next, renamed, image);
         } else ready = await syncSignIn(next);
         await builder.forget(name);
@@ -597,13 +612,14 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       return recording(name, message || "Manual edit", [], async () => {
         const started = Date.now();
         const state = withOwner(await store.load());
-        if (findVersion(existingApp(state, name), from) === undefined) throw new Error(`\`${name}\` has no version \`${from}\``);
+        const app = existingApp(state, name);
+        if (findVersion(app, from) === undefined) throw new Error(`\`${name}\` has no version \`${from}\``);
         watch({ kind: "building" });
         const image = await builder.build(name, routes);
         watch({ kind: "trying" });
-        const trial = await builder.trial(image);
+        const trial = await builder.trial(image, app.keepsData === true ? name : null);
         if (!trial.ok) watch({ kind: "failed", problem: trial.problem });
-        const outcome = trial.ok ? { problem: null, image } : { problem: trial.problem, image: null };
+        const outcome = outcomeOf(trial, image);
         const attempt: Attempt = { routes, summary: "", spent: NO_USAGE, at: Date.now(), ...outcome };
         const by: Author = { kind: "person", name: state.owner.email };
         return record(message || "Manual edit", { name, attempts: [attempt], calls: [] }, { base: from, by, model: null, started, runs: false }, watch);
@@ -794,6 +810,11 @@ function startingPoint(app: App): Version | undefined {
   return runningVersion(app) ?? app.versions.findLast((version) => version.routes !== "");
 }
 
+/** What an app keeps once a version runs: its records, from the first version that declares any, for good. */
+function keeping(version: Version): Pick<App, "keepsData"> {
+  return version.problem === null && version.keepsData === true ? { keepsData: true } : {};
+}
+
 /** A turn's attachments, when it has any. */
 function withAttachments(attachments: readonly Attachment[]): { readonly attachments?: readonly Attachment[] } {
   return attachments.length === 0 ? {} : { attachments };
@@ -873,7 +894,7 @@ function appView(app: App): AppView {
     lines: routes.split("\n").length - 1,
     thinkingWords: thinking.split(/\s+/).filter(Boolean).length,
   }));
-  return { name: app.name, url: appUrl(app.hostPort), model: app.model, starred: app.starred, head: app.head, versions, conversation: app.conversation, spent: app.spent, people: peopleOf(app) };
+  return { name: app.name, url: appUrl(app.hostPort), model: app.model, starred: app.starred, head: app.head, versions, conversation: app.conversation, spent: app.spent, people: peopleOf(app), keepsData: app.keepsData === true };
 }
 
 /** Runs each piece of work after the last has ended, failed or not. */

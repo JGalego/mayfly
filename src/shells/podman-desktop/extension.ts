@@ -9,6 +9,7 @@ import { KeyNeeded, listModels, openAiCompatibleModel } from "../../adapters/ope
 import { podmanBuilder } from "../../adapters/podman/podman-builder.ts";
 import { send, verify } from "../../adapters/smtp/smtp.ts";
 import { imageExists, podmanDeployer, podmanObserver, versions } from "../../adapters/podman/podman.ts";
+import { podmanData } from "../../adapters/podman/podman-data.ts";
 import { tailscaleNetwork } from "../../adapters/tailscale/tailscale.ts";
 import { createEngine, type Engine } from "../../engine/engine.ts";
 import type { ModelProvider, PhoneNetwork } from "../../engine/ports.ts";
@@ -37,6 +38,7 @@ export async function activate(context: api.ExtensionContext): Promise<void> {
     identity: dexIdentity(logo),
     models: (id) => configuredModel(modelFor(models.models(), id), keys),
     builder: podmanBuilder(RUNTIME_IMAGE),
+    data: podmanData(RUNTIME_IMAGE),
     files: fileStore(join(context.storagePath, "files")),
     phoneNetwork,
   });

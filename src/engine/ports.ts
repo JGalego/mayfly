@@ -19,7 +19,16 @@ export interface FileStore {
 export interface Deployer {
   /** Creates the objects, replacing any that already exist. */
   deploy(objects: readonly KubeObject[]): Promise<void>;
+  /** Stops and removes the objects' pods, and keeps their volumes, data and all. */
+  stop(objects: readonly KubeObject[]): Promise<void>;
+  /** Stops and removes the objects, with every volume their pods mount, data and all. */
   remove(objects: readonly KubeObject[]): Promise<void>;
+}
+
+/** The volumes apps keep their records on. */
+export interface AppData {
+  /** Copies an app's records to another name's volume, as renaming it needs. An app that never kept any copies none. */
+  copy(from: string, to: string): Promise<void>;
 }
 
 /** How one container is doing. */
@@ -103,7 +112,8 @@ export interface ModelProvider {
   complete(system: string, messages: readonly Message[], listener?: Listener): Promise<Completion>;
 }
 
-export type Trial = { readonly ok: true } | { readonly ok: false; readonly problem: string };
+/** How a trial went. A version that passed says whether it keeps data: whether it declares kinds of record. */
+export type Trial = { readonly ok: true; readonly keepsData: boolean } | { readonly ok: false; readonly problem: string };
 
 /** Whether the phone can reach this computer: its name on the private network, or what stands in the way. */
 export type PhoneNetworkStatus =
@@ -126,8 +136,11 @@ export interface PhoneNetwork {
 export interface Builder {
   /** Builds an app's image from its routes and returns the image's reference. */
   build(name: string, routes: string): Promise<string>;
-  /** Runs the image briefly, cut off from the network, and visits it as a signed-in person would. */
-  trial(image: string): Promise<Trial>;
+  /**
+   * Runs the image briefly, cut off from the network, on a throwaway copy of the named app's records, or none, and visits it as a
+   * signed-in person would. It fails when a stored record doesn't fit the kinds the code declares.
+   */
+  trial(image: string, data: string | null): Promise<Trial>;
   /** Removes every image built for an app. Any version can be built again from its code. */
   forget(name: string): Promise<void>;
 }
@@ -140,6 +153,7 @@ export interface Ports {
   /** The model with this id, or the default model for null or for an id that no longer exists. */
   readonly models: (id: string | null) => ModelProvider;
   readonly builder: Builder;
+  readonly data: AppData;
   readonly files: FileStore;
   readonly phoneNetwork: PhoneNetwork;
 }
