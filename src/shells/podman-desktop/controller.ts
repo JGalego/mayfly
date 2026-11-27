@@ -44,7 +44,7 @@ export interface ControllerPorts {
   readonly mail: MailPorts["mail"];
 }
 
-// One request at a time: each one reads and writes the whole state.
+// The work under way, one piece at a time, for the page to follow. The engine keeps changes to the state in order.
 type Session = ControllerPorts & { working: Progress | null; draftDue: boolean; activity: Activity[]; focused: boolean };
 
 /** Handles what the page asks for. The page is trusted with nothing: it names apps, never URLs, and never sees a secret. */

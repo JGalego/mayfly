@@ -9,6 +9,43 @@ import { EMPTY_STATE, type State } from "./state.ts";
 const COST = { input: 100, output: 20, thinking: 0 };
 const crashed: Trial = { ok: false, problem: "crashed" };
 
+describe("changes made at once", () => {
+  it("keep a password reset made while an app deploys, in the state and in sign-in", async () => {
+    const { engine, synced, holdDeploy } = setUp([reply("lunch")]);
+    const lunch = await engine.create("split lunch bills");
+    const release = holdDeploy();
+
+    const deploying = engine.deploy("lunch", lunch.head ?? "");
+    await settled();
+    const resetting = engine.newPassword();
+    release();
+    const [, owner] = await Promise.all([deploying, resetting]);
+
+    assert.equal((await engine.owner()).password, owner.password);
+    assert.equal(synced.at(-1)?.owner?.password, owner.password);
+  });
+
+  it("keep an app starred while another deploys", async () => {
+    const { engine, holdDeploy } = setUp([reply("lunch"), reply("notes")]);
+    const lunch = await engine.create("split lunch bills");
+    await engine.create("keep notes");
+    const release = holdDeploy();
+
+    const deploying = engine.deploy("lunch", lunch.head ?? "");
+    await settled();
+    const starring = engine.star("notes", true);
+    release();
+    await Promise.all([deploying, starring]);
+
+    assert.equal((await engine.list()).find((app) => app.name === "notes")?.starred, true);
+  });
+});
+
+/** Lets every promise that can go on do so, as when a slow call is under way. */
+async function settled(): Promise<void> {
+  for (let turn = 0; turn < 20; turn++) await Promise.resolve();
+}
+
 describe("the engine", () => {
   it("creates an app from a description and runs it behind sign-in at a loopback URL", async () => {
     const { engine, deployed } = setUp([reply("lunch")]);
@@ -701,8 +738,16 @@ function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: st
   };
   /** Why the next deploys fail, one reason each, as when something else holds a port. */
   const deployFailures: string[] = [];
+  /** Deploys that wait until a test lets them go on, as a slow Podman makes them. */
+  const holds: Promise<void>[] = [];
+  const holdDeploy = (): (() => void) => {
+    let release = (): void => {};
+    holds.push(new Promise((resolve) => (release = resolve)));
+    return release;
+  };
   const deployer: Deployer = {
     deploy: async (objects) => {
+      await holds.shift();
       const failure = deployFailures.shift();
       if (failure !== undefined) throw new Error(failure);
       log.push("deploy");
@@ -764,7 +809,7 @@ function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: st
     stop: async (port) => void served.delete(port),
   };
   const engine = createEngine({ store, deployer, observer, identity, models, builder, files, phoneNetwork });
-  return { engine, deployed, removed, synced, forgotten, served, log, asked, logged, kept, deployFailures, takenPorts };
+  return { engine, deployed, removed, synced, forgotten, served, log, asked, logged, kept, deployFailures, takenPorts, holdDeploy };
 }
 
 function names(objects: readonly KubeObject[] | undefined): string[] {

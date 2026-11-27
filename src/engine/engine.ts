@@ -157,6 +157,10 @@ export interface Engine {
 }
 
 export function createEngine({ store, deployer, observer, identity, models, builder, files, phoneNetwork }: Ports): Engine {
+  // Each change loads the state, often waits on Podman, then saves. One at a time, each loads what the last saved, so none
+  // saves over another with an older copy. A model's answer is waited for outside, so only Podman's work holds others up.
+  const changing = oneAtATime();
+
   async function generate(ask: Ask, model: ModelProvider, watch: Watcher): Promise<Generated> {
     const meter = metered(model);
     // Each attempt is one call, so a call's outcome is its attempt's. Work cut short leaves its calls' outcomes unknown.
@@ -170,7 +174,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       return { ...generation, calls: callsFor(generation.name, generation.attempts) };
     } catch (error) {
       // Cut short by the model's service or by Podman, the calls still cost what the model wrote.
-      await store.save(charge(await store.load(), callsFor("change" in ask ? ask.app.name : null)));
+      await changing(async () => store.save(charge(await store.load(), callsFor("change" in ask ? ask.app.name : null))));
       throw error;
     }
   }
@@ -192,20 +196,28 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     } catch (error) {
       if (error instanceof RecordedFailure) throw error;
       const reason = error instanceof Error ? error.message : String(error);
-      const state = await store.load();
-      const app = findApp(state, name);
-      if (app === undefined) throw error;
-      const turns: Turn[] = [
-        { from: "person", text: request, at: started, ...withAttachments(attachments) },
-        { from: "mayfly", text: reason, versions: [], took: Date.now() - started, at: Date.now(), failed: true },
-      ];
-      await store.save(withApp(state, { ...app, conversation: [...app.conversation, ...turns] }));
+      const kept = await changing(async () => {
+        const state = await store.load();
+        const app = findApp(state, name);
+        if (app === undefined) return false;
+        const turns: Turn[] = [
+          { from: "person", text: request, at: started, ...withAttachments(attachments) },
+          { from: "mayfly", text: reason, versions: [], took: Date.now() - started, at: Date.now(), failed: true },
+        ];
+        await store.save(withApp(state, { ...app, conversation: [...app.conversation, ...turns] }));
+        return true;
+      });
+      if (!kept) throw error;
       throw new RecordedFailure(reason, name, { cause: error });
     }
   }
 
   /** Keeps every attempt as a version and the exchange in the conversation, charges the calls, then runs the attempt that passed. */
-  async function record(request: string, { name, attempts, calls }: Generated, made: Made, watch: Watcher): Promise<AppView> {
+  function record(request: string, generated: Generated, made: Made, watch: Watcher): Promise<AppView> {
+    return changing(() => recorded(request, generated, made, watch));
+  }
+
+  async function recorded(request: string, { name, attempts, calls }: Generated, made: Made, watch: Watcher): Promise<AppView> {
     const state = withOwner(await store.load());
     const app = findApp(state, name) ?? { ...newApp(state, name, made.model), lastRequest: request };
     const versions = chain(attempts, request, made);
@@ -242,11 +254,13 @@ export function createEngine({ store, deployer, observer, identity, models, buil
   }
 
   /** Changes the owner, and tells the sign-in service when it is running for some app. */
-  async function updateOwner(change: (owner: Owner) => Owner): Promise<Owner> {
-    const state = withOwner(await store.load());
-    const next = { ...state, owner: change(state.owner) };
-    await store.save(anyRunning(next) ? await syncSignIn(next) : next);
-    return next.owner;
+  function updateOwner(change: (owner: Owner) => Owner): Promise<Owner> {
+    return changing(async () => {
+      const state = withOwner(await store.load());
+      const next = { ...state, owner: change(state.owner) };
+      await store.save(anyRunning(next) ? await syncSignIn(next) : next);
+      return next.owner;
+    });
   }
 
   function signInPortOf(state: State): number {
@@ -342,6 +356,46 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     return ready;
   }
 
+  async function modelChosen(name: string, model: string | null): Promise<AppView> {
+    const state = await store.load();
+    const app = existingApp(state, name);
+    const label = models(model).name;
+    const now = Date.now();
+    const conversation: Turn[] = [
+      { from: "person", text: `Use ${label} for this app`, at: now },
+      { from: "mayfly", text: `Model set to ${label}.`, versions: [], took: 0, at: now },
+    ];
+    const next: App = { ...app, model, conversation: [...app.conversation, ...conversation] };
+    await store.save(withApp(state, next));
+    return appView(next);
+  }
+
+
+  async function removed(name: string): Promise<void> {
+    const state = await store.load();
+    const app = existingApp(state, name);
+    const running = runningVersion(app);
+    if (running !== undefined) {
+      await deployer.remove(appObjects(app, running.image, identity.settingsFor(app, signInPortOf(state))));
+      if (state.phoneHost !== null) await phoneNetwork.stop(phoneSidePort(app.hostPort));
+    }
+    await builder.forget(name);
+    await store.save(await syncSignIn(withoutApp(state, name)));
+  }
+
+  /** Closes the phone's doors. The apps carry on at their localhost addresses. */
+  async function phoneTurnedOff(): Promise<void> {
+    const state = await store.load();
+    if (state.phoneHost === null) return;
+    // Stopped first: if that fails partway, it's still on, for another try.
+    for (const app of state.apps) if (app.head !== null) await phoneNetwork.stop(phoneSidePort(app.hostPort));
+    await phoneNetwork.stop(phoneSidePort(signInPortOf(state)));
+    const next = { ...state, phoneHost: null };
+    await store.save(next);
+    const ready = await runAll(next);
+    if (ready !== next) await store.save(ready);
+  }
+
   const engine: Engine = {
     async create(description, { model: chosen = null, watch = UNWATCHED, files: attached = [] } = {}) {
       const started = Date.now();
@@ -354,11 +408,14 @@ export function createEngine({ store, deployer, observer, identity, models, buil
 
     async change(name, request, watch = UNWATCHED, attached = []) {
       const started = Date.now();
-      const state = await store.load();
-      const app = existingApp(state, name);
       const attachments = await keep(attached);
       // Kept before anything can fail, so a request that does can be sent again, with its files.
-      await store.save(withApp(state, { ...app, lastRequest: request, lastAttachments: attachments }));
+      const app = await changing(async () => {
+        const state = await store.load();
+        const asked = { ...existingApp(state, name), lastRequest: request, lastAttachments: attachments };
+        await store.save(withApp(state, asked));
+        return asked;
+      });
       return recording(name, request, attachments, async () => {
         const base = startingPoint(app);
         const model = models(app.model);
@@ -399,7 +456,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     },
 
     async start(name, watch = UNWATCHED) {
-      return recording(name, "Start the app", [], async () => {
+      return recording(name, "Start the app", [], () => changing(async () => {
         const state = withOwner(await store.load());
         const app = existingApp(state, name);
         const running = runningVersion(app);
@@ -411,7 +468,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
         const ready = await signInAndRun(state, app, image);
         if (ready !== state) await store.save(ready);
         return appView(app);
-      });
+      }));
     },
 
     async ask(name, question, watch = UNWATCHED, attached = []) {
@@ -424,20 +481,22 @@ export function createEngine({ store, deployer, observer, identity, models, buil
         const { text } = await meter.model.complete(ASK_PROMPT, [{ role: "user", content: withFiles(questionFor({ name, routes: startingPoint(app)?.routes ?? "" }, question), attached) }], listenFor(watch));
         const calls = meter.spending().map(({ at, took, spent }): ModelCall => ({ at, took, app: name, provider: model.provider, model: model.name, spent, question: true }));
         // Loaded again, as anything else that changed while the model answered stays.
-        const state = await store.load();
-        const now = existingApp(state, name);
-        const turns: Turn[] = [
-          { from: "person", text: question, at: started, ...withAttachments(attachments) },
-          { from: "mayfly", text: text.trim(), versions: [], took: Date.now() - started, at: Date.now() },
-        ];
-        const next = charge(withApp(state, { ...now, conversation: [...now.conversation, ...turns] }), calls);
-        await store.save(next);
-        return appView(existingApp(next, name));
+        return changing(async () => {
+          const state = await store.load();
+          const now = existingApp(state, name);
+          const turns: Turn[] = [
+            { from: "person", text: question, at: started, ...withAttachments(attachments) },
+            { from: "mayfly", text: text.trim(), versions: [], took: Date.now() - started, at: Date.now() },
+          ];
+          const next = charge(withApp(state, { ...now, conversation: [...now.conversation, ...turns] }), calls);
+          await store.save(next);
+          return appView(existingApp(next, name));
+        });
       });
     },
 
     async rename(name, to, watch = UNWATCHED) {
-      return recording(name, `Rename to \`${to}\``, [], async () => {
+      return recording(name, `Rename to \`${to}\``, [], () => changing(async () => {
         const started = Date.now();
         const state = await store.load();
         const app = existingApp(state, name);
@@ -464,26 +523,18 @@ export function createEngine({ store, deployer, observer, identity, models, buil
         await builder.forget(name);
         await store.save(ready);
         return appView(renamed);
+      }));
+    },
+
+    star(name, starred) {
+      return changing(async () => {
+        const state = await store.load();
+        await store.save(withApp(state, { ...existingApp(state, name), starred }));
       });
     },
 
-    async star(name, starred) {
-      const state = await store.load();
-      await store.save(withApp(state, { ...existingApp(state, name), starred }));
-    },
-
-    async useModel(name, model) {
-      const state = await store.load();
-      const app = existingApp(state, name);
-      const label = models(model).name;
-      const now = Date.now();
-      const conversation: Turn[] = [
-        { from: "person", text: `Use ${label} for this app`, at: now },
-        { from: "mayfly", text: `Model set to ${label}.`, versions: [], took: 0, at: now },
-      ];
-      const next: App = { ...app, model, conversation: [...app.conversation, ...conversation] };
-      await store.save(withApp(state, next));
-      return appView(next);
+    useModel(name, model) {
+      return changing(() => modelChosen(name, model));
     },
 
     async save(name, from, routes, message, watch = UNWATCHED) {
@@ -504,7 +555,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     },
 
     async deploy(name, id, watch = UNWATCHED) {
-      return recording(name, `Deploy version \`${id}\``, [], async () => {
+      return recording(name, `Deploy version \`${id}\``, [], () => changing(async () => {
         const started = Date.now();
         const state = withOwner(await store.load());
         const app = existingApp(state, name);
@@ -524,7 +575,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
         watch({ kind: "deploying" });
         await store.save(await signInAndRun(nextState, next, image));
         return appView(next);
-      });
+      }));
     },
 
     async attachment(name, id) {
@@ -544,16 +595,8 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       return (await store.load()).apps.map(appView);
     },
 
-    async remove(name) {
-      const state = await store.load();
-      const app = existingApp(state, name);
-      const running = runningVersion(app);
-      if (running !== undefined) {
-        await deployer.remove(appObjects(app, running.image, identity.settingsFor(app, signInPortOf(state))));
-        if (state.phoneHost !== null) await phoneNetwork.stop(phoneSidePort(app.hostPort));
-      }
-      await builder.forget(name);
-      await store.save(await syncSignIn(withoutApp(state, name)));
+    remove(name) {
+      return changing(() => removed(name));
     },
 
     async phoneAccess() {
@@ -563,32 +606,29 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     async turnOnPhone() {
       const network = await phoneNetwork.status();
       if (network.state !== "ready") throw new Error(phoneNotReady(network));
-      const next = { ...(await store.load()), phoneHost: network.host };
-      // Saved first: if serving fails partway, it's on, and turning it off or on again puts everything right.
-      await store.save(next);
-      const ready = await runAll(next);
-      if (ready !== next) await store.save(ready);
-      return network.host;
+      return changing(async () => {
+        const next = { ...(await store.load()), phoneHost: network.host };
+        // Saved first: if serving fails partway, it's on, and turning it off or on again puts everything right.
+        await store.save(next);
+        const ready = await runAll(next);
+        if (ready !== next) await store.save(ready);
+        return network.host;
+      });
     },
 
-    async turnOffPhone() {
-      const state = await store.load();
-      if (state.phoneHost === null) return;
-      // Stopped first: if that fails partway, it's still on, for another try.
-      for (const app of state.apps) if (app.head !== null) await phoneNetwork.stop(phoneSidePort(app.hostPort));
-      await phoneNetwork.stop(phoneSidePort(signInPortOf(state)));
-      const next = { ...state, phoneHost: null };
-      await store.save(next);
-      const ready = await runAll(next);
-      if (ready !== next) await store.save(ready);
+    turnOffPhone() {
+      return changing(phoneTurnedOff);
     },
 
     async owner() {
       const state = await store.load();
       if (state.owner !== null) return state.owner;
-      const next = withOwner(state);
-      await store.save(next);
-      return next.owner;
+      return changing(async () => {
+        // Loaded again: another change may have made the owner meanwhile.
+        const next = withOwner(await store.load());
+        await store.save(next);
+        return next.owner;
+      });
     },
 
     async spent() {
@@ -619,29 +659,37 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       return person;
     },
 
-    async addPerson(email) {
-      const { state, person } = withPerson(withOwner(await store.load()), email);
-      await applyAccess(state, [], true);
-      return person;
+    addPerson(email) {
+      return changing(async () => {
+        const { state, person } = withPerson(withOwner(await store.load()), email);
+        await applyAccess(state, [], true);
+        return person;
+      });
     },
 
-    async newPersonPassword(email) {
-      const { state, person } = withNewPassword(await store.load(), email);
-      await applyAccess(state, sharedWith(state, person.email), true);
-      return person;
+    newPersonPassword(email) {
+      return changing(async () => {
+        const { state, person } = withNewPassword(await store.load(), email);
+        await applyAccess(state, sharedWith(state, person.email), true);
+        return person;
+      });
     },
 
-    async removePerson(email) {
-      const before = await store.load();
-      const shared = sharedWith(before, email);
-      await applyAccess(withoutPerson(before, email), shared, true);
+    removePerson(email) {
+      return changing(async () => {
+        const before = await store.load();
+        const shared = sharedWith(before, email);
+        await applyAccess(withoutPerson(before, email), shared, true);
+      });
     },
 
-    async share(name, email, shared) {
-      const before = await store.load();
-      const state = sharing(before, existingApp(before, name).name, email, shared);
-      await applyAccess(state, [name], false);
-      return appView(existingApp(state, name));
+    share(name, email, shared) {
+      return changing(async () => {
+        const before = await store.load();
+        const state = sharing(before, existingApp(before, name).name, email, shared);
+        await applyAccess(state, [name], false);
+        return appView(existingApp(state, name));
+      });
     },
 
     async health() {
@@ -774,4 +822,14 @@ function appView(app: App): AppView {
     thinkingWords: thinking.split(/\s+/).filter(Boolean).length,
   }));
   return { name: app.name, url: appUrl(app.hostPort), model: app.model, starred: app.starred, head: app.head, versions, conversation: app.conversation, spent: app.spent, people: peopleOf(app) };
+}
+
+/** Runs each piece of work after the last has ended, failed or not. */
+function oneAtATime(): <T>(work: () => Promise<T>) => Promise<T> {
+  let last: Promise<unknown> = Promise.resolve();
+  return (work) => {
+    const next = last.catch(() => {}).then(work);
+    last = next;
+    return next;
+  };
 }
