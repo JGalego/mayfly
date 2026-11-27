@@ -1,6 +1,6 @@
 # Design: make apps from your phone
 
-Status: built on `feat/phone-creation`, for 0.4.0. Questions 3 to 6 need an iPhone before it ships.
+Status: on `main`, for 0.4.0. Questions 3 to 6 need an iPhone before 0.4.0 is tagged.
 
 Phone access lets the phone open apps. The goal now is for the owner to make and change apps from the phone too: describe an app, attach a photo of a sketch, watch Mayfly work, and open the result. With no new account, nothing leaving the machine that doesn't already, and no more power on the phone than making apps needs.
 
