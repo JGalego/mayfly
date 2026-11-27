@@ -513,6 +513,21 @@ describe("the engine", () => {
     assert.notEqual(cookieSecretIn(deployed.at(-1)), before);
   });
 
+  it("keeps someone it couldn't stop every app letting in, so removing them can be tried again", async () => {
+    const { engine, deployFailures } = setUp([reply("lunch")]);
+    await engine.create("split lunch bills");
+    await engine.addPerson("ana@example.com");
+    await engine.share("lunch", "ana@example.com", true);
+    deployFailures.push("Podman refused");
+
+    await assert.rejects(engine.removePerson("ana@example.com"), /Podman refused/);
+    const kept = await engine.people();
+    await engine.removePerson("ana@example.com");
+
+    assert.deepEqual(kept, ["ana@example.com"]);
+    assert.deepEqual(await engine.people(), []);
+  });
+
   it("creates the owner once, with a long random password", async () => {
     const { engine } = setUp([]);
 

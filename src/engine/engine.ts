@@ -325,18 +325,20 @@ export function createEngine({ store, deployer, observer, identity, models, buil
 
   /**
    * Keeps a change to who may sign in or open what. Sign-in learns of it when people changed, and the named apps run again,
-   * since each app's auth proxy decides whom it lets in.
+   * since each app's auth proxy decides whom it lets in. Kept only once they have it: a change that fails partway stays
+   * to be made again, rather than saying it's done while an app still lets someone in.
    */
   async function applyAccess(state: State, apps: readonly string[], peopleChanged: boolean): Promise<void> {
-    await store.save(state);
-    if (!anyRunning(state)) return;
+    if (!anyRunning(state)) return store.save(state);
     const ready = peopleChanged ? await syncSignIn(state) : state;
     // Moving sign-in ran every app again already.
-    if (ready !== state) return void (await store.save(ready));
-    for (const app of state.apps) {
-      const running = runningVersion(app);
-      if (apps.includes(app.name) && running !== undefined) await runApp(ready, app, await builder.build(app.name, running.routes));
+    if (ready === state) {
+      for (const app of state.apps) {
+        const running = runningVersion(app);
+        if (apps.includes(app.name) && running !== undefined) await runApp(ready, app, await builder.build(app.name, running.routes));
+      }
     }
+    await store.save(ready);
   }
 
   /** Runs every app that has a version to run again, with or without its phone door as the state says. */
