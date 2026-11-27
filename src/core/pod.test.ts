@@ -10,11 +10,10 @@ const pod = buildPod({
 const proxy = containerNamed(pod, "auth-proxy");
 const app = containerNamed(pod, "app");
 
-const phoneSignIn = { loginUrl: "http://localhost:5556/dex/auth" };
 const withPhone = buildPod({
   manifest: { name: "expenses", image: "localhost/mayfly-expenses:1" },
   hostPort: 8137,
-  phone: { address: { host: "mayfly.tail1a2b.ts.net", scheme: "https" }, ...phoneSignIn },
+  phone: { host: "mayfly.tail1a2b.ts.net", loginUrl: "http://localhost:5556/dex/auth" },
 });
 const door = containerNamed(withPhone, "phone-door");
 
@@ -132,15 +131,8 @@ describe("the pod with phone access", () => {
     assert.ok(door.args?.includes("--login-url=https://mayfly.tail1a2b.ts.net:5556/dex/auth"));
   });
 
-  it("keeps the session in a Secure cookie over HTTPS, and a plain one in the HTTP mode", () => {
-    const overHttp = buildPod({
-      manifest: { name: "expenses", image: "localhost/mayfly-expenses:1" },
-      hostPort: 8137,
-      phone: { address: { host: "mayfly.tail1a2b.ts.net", scheme: "http" }, ...phoneSignIn },
-    });
-
+  it("keeps the phone's session in a Secure cookie, since the phone only uses HTTPS", () => {
     assert.ok(door.args?.includes("--cookie-secure=true"));
-    assert.ok(containerNamed(overHttp, "phone-door").args?.includes("--cookie-secure=false"));
   });
 
   it("admits the same people as the localhost door, from the same settings and secrets, to the same app", () => {

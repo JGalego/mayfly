@@ -36,12 +36,8 @@ export function buildAuthProxyContainer({ appName, hostPort }: AuthProxyInput): 
 }
 
 /** The same proxy for the phone, which the private network forwards to from the app's port on the phone's address. */
-export function buildPhoneDoorContainer({ appName, hostPort, address, loginUrl }: AuthProxyInput & PhoneSignIn): Container {
-  const origin = {
-    redirectUrl: onPhone(callbackUrl(hostPort), address),
-    loginUrl: onPhone(loginUrl, address),
-    secureCookie: address.scheme === "https",
-  };
+export function buildPhoneDoorContainer({ appName, hostPort, host, loginUrl }: AuthProxyInput & PhoneSignIn): Container {
+  const origin = { redirectUrl: onPhone(callbackUrl(hostPort), host), loginUrl: onPhone(loginUrl, host), secureCookie: true };
   return door("phone-door", appName, origin, { listen: PHONE_DOOR_PORT, publish: phonePort(hostPort) });
 }
 
