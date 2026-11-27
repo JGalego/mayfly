@@ -4,6 +4,7 @@ import { RecordedFailure, type AppView, type Engine } from "../../engine/engine.
 import type { ModelCall } from "../../engine/state.ts";
 import type { Step, Watcher } from "../../engine/step.ts";
 import { createController } from "./controller.ts";
+import type { Examination } from "./doctor.ts";
 import type { MailAccount, Outgoing } from "./mail-account.ts";
 import type { ToUi } from "./messages.ts";
 import type { Models, ModelSetting } from "./settings.ts";
@@ -204,12 +205,12 @@ describe("the Mayfly panel's controller", () => {
     assert.deepEqual(posted.at(-1), { type: "logs", pod: "mayfly-lunch-split", container: "app", lines: ["2026-11-26T15:04:05Z mayfly-lunch-split app"] });
   });
 
-  it("passes on the doctor's checks", async () => {
+  it("passes on what the doctor tells as it checks", async () => {
     const { handle, posted } = setUp({ apps: [] });
 
     await handle({ type: "doctor" });
 
-    assert.deepEqual(posted, [{ type: "doctor", ready: [{ name: "Podman", status: "pass", detail: "Podman 5.8.9 is running." }], models: [{ id: "openai", status: "pass", detail: "API key accepted. Model listed." }] }]);
+    assert.deepEqual(posted, [{ type: "doctor", ready: [{ name: "Podman", status: "pass", detail: "Podman 5.8.9 is running." }], models: [{ id: "openai", status: "pass", detail: "Ready." }] }]);
   });
 
   it("changes the owner's email, and copies a new password without sending it to the page", async () => {
@@ -831,7 +832,11 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
     notify: (note) => void notes.push(note),
     openExternal: async (url) => void opened.push(url),
     copy: async (text) => void copied.push(text),
-    doctor: async () => ({ ready: [{ name: "Podman", status: "pass", detail: "Podman 5.8.9 is running." }], models: [{ id: "openai", status: "pass", detail: "API key accepted. Model listed." }] }),
+    doctor: async (tell) => {
+      const examination: Examination = { ready: [{ name: "Podman", status: "pass", detail: "Podman 5.8.9 is running." }], models: [{ id: "openai", status: "pass", detail: "Ready." }] };
+      tell(examination);
+      return examination;
+    },
     settings: {
       models: () => models,
       saveModels: async (next) => void (models = next),

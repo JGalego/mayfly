@@ -37,8 +37,8 @@ export interface ControllerPorts {
     autostart(): boolean;
     saveAutostart(on: boolean): Promise<void>;
   };
-  /** Checks that Mayfly has everything it needs. */
-  readonly doctor: () => Promise<Examination>;
+  /** Checks that Mayfly has everything it needs, telling what it has found so far as it goes. */
+  readonly doctor: (tell: (sofar: Examination) => void) => Promise<Examination>;
   /** API keys, each kept for the endpoint it was given for. */
   readonly keys: { has(endpoint: string): Promise<boolean>; save(endpoint: string, key: string): Promise<void> };
   readonly mail: MailPorts["mail"];
@@ -138,7 +138,7 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
     case "activity":
       return session.post({ type: "activity", entries: session.activity });
     case "doctor":
-      return session.post({ type: "doctor", ...(await session.doctor()) });
+      return void (await session.doctor((sofar) => session.post({ type: "doctor", ...sofar })));
     case "logs":
       return session.post({ type: "logs", pod: request.pod, container: request.container, lines: await session.engine.logs(request.pod, request.container) });
     case "ask":

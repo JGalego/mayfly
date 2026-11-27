@@ -99,15 +99,18 @@ async function openPanel(context: api.ExtensionContext, engine: Engine, keys: Ke
     },
     openExternal: (url) => api.env.openExternal(api.Uri.parse(url)),
     copy: (text) => api.env.clipboard.writeText(text),
-    doctor: () =>
-      examine({
+    doctor: (tell) =>
+      examine(
+        {
         podman: versions,
         runtimeReady: () => imageExists(RUNTIME_IMAGE),
         signIn: async () => (await engine.health()).find((service) => service.kind === "sign-in")?.containers.map((container) => container.state) ?? [],
         models: () => Promise.all(models.models().models.map((setting) => probe(setting, keys))),
         phoneHost: () => engine.phoneAccess(),
         phoneNetwork: () => phoneNetwork.status(),
-      }),
+        },
+        tell,
+      ),
     settings: {
       ...models,
       // Peek behind the curtain was developer mode's first name; whoever turned it on keeps it on.
@@ -190,7 +193,7 @@ function settings(): api.Configuration {
 async function probe(setting: ModelSetting, keys: KeyStore): Promise<ModelProbe> {
   const baseUrl = endpointOf(setting);
   const apiKey = await keys.get(baseUrl);
-  return { id: setting.id, model: setting.model, hasKey: Boolean(apiKey), list: () => listModels({ baseUrl, ...(apiKey ? { apiKey } : {}) }) };
+  return { id: setting.id, model: setting.model, list: () => listModels({ baseUrl, ...(apiKey ? { apiKey } : {}) }) };
 }
 
 /** The models, kept in a file beside the state, and in memory so the page always has them at hand. */

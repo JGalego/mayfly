@@ -1630,6 +1630,10 @@ pre.problem {
   font-size: 0.65rem;
 }
 
+.model-check .spinner {
+  border-width: 2px;
+}
+
 .model-actions {
   display: flex;
   flex: none;
@@ -1764,6 +1768,11 @@ pre.problem {
 
 .fail > .finding-mark {
   background: var(--error);
+}
+
+.skip > .finding-mark {
+  background: var(--line);
+  color: var(--muted);
 }
 
 .finding-name {

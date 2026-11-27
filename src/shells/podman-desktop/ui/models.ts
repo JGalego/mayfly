@@ -2,7 +2,7 @@ import type { ModelCheck } from "../doctor.ts";
 import type { FromUi, ModelView, ToUi } from "../messages.ts";
 import { isProvider, PROVIDERS } from "../settings.ts";
 import { findingMark } from "./doctor-view.ts";
-import { h } from "./dom.ts";
+import { h, keepTime } from "./dom.ts";
 
 type State = Extract<ToUi, { type: "state" }>;
 
@@ -85,7 +85,7 @@ function modelCard(model: ModelView, isDefault: boolean, check: HTMLElement[], p
 
 function keyCheck(model: ModelView, checks: readonly ModelCheck[] | undefined): HTMLElement[] {
   const check = checks?.find(({ id }) => id === model.id);
-  if (check === undefined) return [h("p", "model-check quiet", "Checking provider…")];
+  if (check === undefined) return [h("p", "model-check quiet", keepTime(h("span", "finding-mark spinner")), "Checking…")];
   return [h("p", `model-check ${check.status}`, findingMark(check.status), check.detail)];
 }
 
