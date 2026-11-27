@@ -89,6 +89,20 @@ export interface ModelProvider {
 
 export type Trial = { readonly ok: true } | { readonly ok: false; readonly problem: string };
 
+/** Whether the phone can reach this computer: its name on the private network, or what stands in the way. */
+export type PhoneNetworkStatus =
+  | { readonly state: "ready"; readonly host: string }
+  | { readonly state: "missing" | "off" | "signed-out" | "no-https" };
+
+/** The private network the phone reaches apps through. It serves HTTPS on the computer's name there. */
+export interface PhoneNetwork {
+  status(): Promise<PhoneNetworkStatus>;
+  /** Serves HTTPS on this port of the computer's name, forwarding to a loopback port, across restarts until stopped. */
+  serve(port: number, to: number): Promise<void>;
+  /** Stops serving this port. A port that isn't served is already stopped. */
+  stop(port: number): Promise<void>;
+}
+
 export interface Builder {
   /** Builds an app's image from its routes and returns the image's reference. */
   build(name: string, routes: string): Promise<string>;
