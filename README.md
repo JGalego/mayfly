@@ -167,17 +167,9 @@ Asking for a change turns any light orange, until a new version is deployed or t
 
 Each app runs as one pod: oauth2-proxy in front, on 127.0.0.1, and the app behind it with no port on the host, so it only sees people who are signed in and allowed. With phone access on, a second proxy in the pod, the phone door, takes the requests Tailscale Serve forwards from the computer's Tailscale name over HTTPS. Both doors sign people in with the same Dex, which keeps them signed in across apps, and signing out of an app signs them out of Dex too.
 
-```mermaid
-flowchart LR
-  browser(["Browser"]) -->|"127.0.0.1 only"| proxy
-  phone(["Phone, with Tailscale"]) -.->|"HTTPS through Tailscale Serve"| door
-  subgraph pod["Pod: mayfly-app"]
-    proxy["oauth2-proxy<br/>sign-in · policy roles"] -->|"identity headers"| app["Generated app<br/>business logic only"]
-    door["oauth2-proxy<br/>phone door"] -.->|"identity headers"| app
-  end
-  proxy <-->|"OIDC"| idp["Dex, locally"]
-  door <-.->|"OIDC"| idp
-```
+![Mayfly on your computer: Podman Desktop, Podman, the app pods, Dex and Tailscale Serve](docs/architecture/architecture.png)
+
+Drawn from [`architecture.py`](docs/architecture/architecture.py) with `pixi run diagram`.
 
 ## Offerings
 
