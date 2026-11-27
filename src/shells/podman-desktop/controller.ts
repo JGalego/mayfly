@@ -13,7 +13,7 @@ const MAX_REQUEST = 2000;
 // Far more than any app Mayfly writes, and a bound on what the page can make the extension build.
 const MAX_ROUTES = 200_000;
 const MAX_MESSAGE = 200;
-const BUSY = "A request is in progress. Wait for it to finish.";
+const BUSY = "Wait for the request in progress to finish";
 // The model's draft changes many times a second. The page gets the latest at most this often.
 const DRAFT_MS = 150;
 // Enough to see the last few hours of work, and small enough to keep in memory.
@@ -82,7 +82,7 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       if (request.email !== undefined) return session.post({ type: "password", email: request.email, password: (await session.engine.person(request.email)).password });
       return session.post({ type: "password", password: (await session.engine.owner()).password });
     case "save-model":
-      return settle(saveModel(request.model, request.apiKey.trim(), session), session, "Saved.");
+      return settle(saveModel(request.model, request.apiKey.trim(), session), session, "Saved");
     case "remove-model":
       return settle(removeModel(request.id, session), session);
     case "default-model":
@@ -94,13 +94,13 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       return showState(session);
     case "owner-email":
       await session.engine.changeEmail(request.email);
-      await session.post({ type: "notice", text: "Sign-in email updated." });
+      await session.post({ type: "notice", text: "Sign-in email updated" });
       return showState(session);
     case "new-password":
       if (request.email !== undefined) return newPersonPassword(request.email, session);
       // Straight to the clipboard: the page gets a password only when the person asks to see it.
       await session.copy((await session.engine.newPassword()).password);
-      return session.post({ type: "notice", text: "Password reset. The new password is on your clipboard." });
+      return session.post({ type: "notice", text: "The new password is on your clipboard" });
     case "add-person":
       return addPerson(request.email, session);
     case "remove-person":
@@ -111,7 +111,7 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       return saveMail(request.account, request.password, session);
     case "remove-mail":
       await session.mail.remove();
-      await session.post({ type: "notice", text: "Mayfly drafts emails in your mail app again." });
+      await session.post({ type: "notice", text: "Mayfly drafts emails in your mail app again" });
       return showState(session);
     case "share":
       return share(request.app, request.email, request.shared, session);
@@ -246,9 +246,9 @@ async function saveByHand(app: string, from: string, routes: string, message: st
 
 function problemWithEdit(routes: string, message: string, session: Session): string | undefined {
   if (session.working !== null) return BUSY;
-  if (routes.trim() === "") return "routes.ts is empty.";
-  if (routes.length > MAX_ROUTES) return `routes.ts must be ${MAX_ROUTES} characters or fewer.`;
-  if (message.length > MAX_MESSAGE) return `Version notes are limited to ${MAX_MESSAGE} characters.`;
+  if (routes.trim() === "") return "routes.ts is empty";
+  if (routes.length > MAX_ROUTES) return `Keep routes.ts to ${MAX_ROUTES} characters or fewer`;
+  if (message.length > MAX_MESSAGE) return `Keep the version note to ${MAX_MESSAGE} characters or fewer`;
   return undefined;
 }
 
@@ -308,15 +308,15 @@ function postProgress(session: Session): void {
 
 function problemWithWork(work: Work, session: Session): string | undefined {
   if (session.working !== null) return BUSY;
-  if (work.request === "") return "Enter a request.";
-  if (work.request.length > MAX_REQUEST) return `Requests are limited to ${MAX_REQUEST} characters.`;
+  if (work.request === "") return "Enter a request";
+  if (work.request.length > MAX_REQUEST) return `Keep requests to ${MAX_REQUEST} characters or fewer`;
   return undefined;
 }
 
 /** Opens a link from a reply in the browser. A model wrote it, so only a web page: nothing that runs or reads a file. */
 async function openLink(url: string, session: Session): Promise<void> {
   const protocol = URL.canParse(url) ? new URL(url).protocol : "";
-  if (protocol !== "https:" && protocol !== "http:") return void (await session.post({ type: "error", text: "Mayfly opens only links to web pages." }));
+  if (protocol !== "https:" && protocol !== "http:") return void (await session.post({ type: "error", text: "Mayfly opens only links to web pages" }));
   await session.openExternal(url);
 }
 
@@ -379,11 +379,11 @@ async function setPhone(on: boolean, session: Session): Promise<void> {
   if (on) {
     const host = await session.engine.turnOnPhone();
     note(session, "info", `Phone access on at ${host}`);
-    await session.post({ type: "notice", text: `Phone access is on. With Tailscale, your phone opens apps at \`${host}\`.` });
+    await session.post({ type: "notice", text: `Your phone opens apps at \`${host}\` with Tailscale` });
   } else {
     await session.engine.turnOffPhone();
     note(session, "info", "Phone access off");
-    await session.post({ type: "notice", text: "Phone access is off." });
+    await session.post({ type: "notice", text: "Phone access is off" });
   }
   await showState(session);
 }
@@ -401,7 +401,7 @@ async function removePerson(email: string, session: Session): Promise<void> {
   if (session.working !== null) return void (await session.post({ type: "error", text: BUSY }));
   await session.engine.removePerson(email);
   note(session, "info", `Removed ${email}`);
-  await session.post({ type: "notice", text: `Removed \`${email}\`. No app lets them in now.` });
+  await session.post({ type: "notice", text: `Removed \`${email}\` from every app` });
   await showState(session);
 }
 
@@ -417,7 +417,7 @@ async function newPersonPassword(email: string, session: Session): Promise<void>
 async function share(app: string, email: string, shared: boolean, session: Session): Promise<void> {
   if (session.working !== null) return void (await session.post({ type: "error", text: BUSY }));
   const host = await session.engine.phoneAccess();
-  if (shared && host === null) throw new Error("Turn on phone access in Settings first: other people open your apps through Tailscale.");
+  if (shared && host === null) throw new Error("Turn on phone access in Settings so others can reach your apps");
   await session.engine.share(app, email, shared);
   note(session, "info", shared ? `Shared ${app} with ${email}` : `Stopped sharing ${app} with ${email}`);
   await showState(session);
@@ -433,14 +433,14 @@ async function email(about: MailAbout, session: Session): Promise<void> {
     throw new Error(`Couldn't send the email to \`${mail.to}\`: ${error instanceof Error ? error.message : String(error)}`);
   });
   note(session, "info", `Emailed ${mail.to}`);
-  await session.post({ type: "notice", text: `Sent to \`${mail.to}\`.` });
+  await session.post({ type: "notice", text: `Sent to \`${mail.to}\`` });
 }
 
 async function saveMail(account: MailAccountView, password: string, session: Session): Promise<void> {
   const problem = await saveMailAccount(account, password, session);
   if (problem !== undefined) return void (await session.post({ type: "error", text: problem }));
   const saved = await mailAccountView(session);
-  await session.post({ type: "notice", text: `Mayfly sends email from \`${saved?.from}\` now.` });
+  await session.post({ type: "notice", text: `Mayfly sends email from \`${saved?.from}\` now` });
   await showState(session);
 }
 
@@ -451,10 +451,10 @@ async function mailFor(about: MailAbout, session: Session): Promise<Mail> {
   }
   const host = await session.engine.phoneAccess();
   const app = (await session.engine.list()).find((candidate) => candidate.name === about.app);
-  if (host === null || app === undefined) throw new Error(`\`${about.app}\` can't be reached from another device now. Turn on phone access in Settings first.`);
+  if (host === null || app === undefined) throw new Error(`Turn on phone access in Settings so others can reach \`${about.app}\``);
   // The page names the address, so the app has to be shared with it: the owner's account sends to no one else.
   const to = about.email.trim().toLowerCase();
-  if (!app.people.includes(to)) throw new Error(`\`${app.name}\` isn't shared with \`${about.email}\`.`);
+  if (!app.people.includes(to)) throw new Error(`\`${app.name}\` isn't shared with \`${about.email}\``);
   return sharedMail(to, app.name, onPhone(app.url, host));
 }
 

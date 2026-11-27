@@ -34,7 +34,7 @@ describe("a model's name", () => {
   it("can't be another model's, whatever its case, so /model always finds the one meant", async () => {
     const store = ports();
 
-    assert.equal(await saveModel({ ...GROQ, name: "openai · GPT-6.2-sol" }, "", store), "Another model is called `OpenAI · gpt-6.2-sol`. Give this one another name.");
+    assert.equal(await saveModel({ ...GROQ, name: "openai · GPT-6.2-sol" }, "", store), "Another model is already called `OpenAI · gpt-6.2-sol`");
     assert.deepEqual(store.saved().models.find((model) => model.id === "groq"), GROQ);
   });
 
@@ -45,7 +45,7 @@ describe("a model's name", () => {
   });
 
   it("is short", async () => {
-    assert.equal(await saveModel({ ...GROQ, name: "x".repeat(41) }, "", ports()), "Keep the name under 40 characters.");
+    assert.equal(await saveModel({ ...GROQ, name: "x".repeat(41) }, "", ports()), "Keep the name under 40 characters");
   });
 
   it("comes from the page as text, or not at all", () => {

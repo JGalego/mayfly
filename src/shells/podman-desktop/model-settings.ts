@@ -28,7 +28,7 @@ export async function saveModel(setting: ModelSetting, apiKey: string, { setting
 /** Forgets a model. Apps it wrote carry on with the default one. */
 export async function removeModel(id: string, { settings }: ModelPorts): Promise<string | undefined> {
   const current = settings.models();
-  if (id === current.default) return "Make another model the default before removing this one.";
+  if (id === current.default) return "Make another model the default before removing this one";
   await settings.saveModels({ ...current, models: current.models.filter((model) => model.id !== id) });
   return undefined;
 }
@@ -58,10 +58,10 @@ function cleanedUp({ name, ...setting }: ModelSetting): ModelSetting {
 }
 
 function problemWith({ provider, baseUrl, model, name }: ModelSetting): string | undefined {
-  if (provider === "openai-compatible" && !isWebUrl(baseUrl)) return "Give the endpoint as a URL, such as http://localhost:11434/v1.";
-  if (model === "") return "Name the model to use.";
-  if (model.length > MAX_MODEL_NAME) return `Keep the model's name under ${MAX_MODEL_NAME} characters.`;
-  if (name !== undefined && name.length > MAX_NAME) return `Keep the name under ${MAX_NAME} characters.`;
+  if (provider === "openai-compatible" && !isWebUrl(baseUrl)) return "Give the endpoint as a URL like `http://localhost:11434/v1`";
+  if (model === "") return "Name the model to use";
+  if (model.length > MAX_MODEL_NAME) return `Keep the model's name under ${MAX_MODEL_NAME} characters`;
+  if (name !== undefined && name.length > MAX_NAME) return `Keep the name under ${MAX_NAME} characters`;
   return undefined;
 }
 
@@ -69,7 +69,7 @@ function problemWith({ provider, baseUrl, model, name }: ModelSetting): string |
 function nameTaken(setting: ModelSetting, models: readonly ModelSetting[]): string | undefined {
   const wanted = nameOf(setting).toLowerCase();
   const other = models.find((model) => model.id !== setting.id && nameOf(model).toLowerCase() === wanted);
-  return other === undefined ? undefined : `Another model is called \`${nameOf(other)}\`. Give this one another name.`;
+  return other === undefined ? undefined : `Another model is already called \`${nameOf(other)}\``;
 }
 
 function isWebUrl(text: string): boolean {

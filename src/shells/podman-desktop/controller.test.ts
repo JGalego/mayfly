@@ -280,11 +280,11 @@ describe("the Mayfly panel's controller", () => {
   });
 
   it("says why phone access can't be turned on yet", async () => {
-    const { handle, posted } = setUp({ apps: [lunch], phoneFails: "Sign in to Tailscale, then try again." });
+    const { handle, posted } = setUp({ apps: [lunch], phoneFails: "Sign in to Tailscale and try again" });
 
     await handle({ type: "phone", on: true });
 
-    assert.ok(posted.some((message) => message.type === "error" && message.text === "Sign in to Tailscale, then try again."));
+    assert.ok(posted.some((message) => message.type === "error" && message.text === "Sign in to Tailscale and try again"));
     assert.equal(stateOf(posted.at(-1))?.phoneHost, null);
   });
 
@@ -347,7 +347,7 @@ describe("the Mayfly panel's controller", () => {
   });
 
   it("takes the page to a new app whose work was kept though it didn't start, where its conversation says why", async () => {
-    const { handle, posted } = setUp({ apps: [], createFails: new RecordedFailure("Port 5556 on this computer is in use by another program.", "lunch-split") });
+    const { handle, posted } = setUp({ apps: [], createFails: new RecordedFailure("Stop the program using port 5556 and try again", "lunch-split") });
 
     await handle({ type: "send", app: null, request: "split lunch bills" });
 
@@ -574,7 +574,7 @@ describe("the Mayfly panel's controller", () => {
     await handle({ type: "email", about: "shared", email: "anyone@example.com", app: "lunch-split" });
 
     assert.deepEqual(opened, []);
-    assert.ok(posted.some((message) => message.type === "error" && message.text === "`lunch-split` isn't shared with `anyone@example.com`."));
+    assert.ok(posted.some((message) => message.type === "error" && message.text === "`lunch-split` isn't shared with `anyone@example.com`"));
   });
 
   it("sets up the account Mayfly sends email from once it signs in to the server with it, and never shows the password again", async () => {
@@ -585,7 +585,7 @@ describe("the Mayfly panel's controller", () => {
     const account = { host: "smtp.example.com", port: 465, username: "me@example.com", password: "app password", from: "me@example.com" };
     assert.deepEqual(mail.verified, [account]);
     assert.deepEqual(mail.account(), account);
-    assert.deepEqual(posted.at(-2), { type: "notice", text: "Mayfly sends email from `me@example.com` now." });
+    assert.deepEqual(posted.at(-2), { type: "notice", text: "Mayfly sends email from `me@example.com` now" });
     assert.deepEqual(stateOf(posted.at(-1))?.mail, { host: "smtp.example.com", port: 465, username: "me@example.com", from: "me@example.com" });
     assert.ok(!JSON.stringify(posted).includes("app password"));
   });
@@ -641,7 +641,7 @@ describe("the Mayfly panel's controller", () => {
     assert.partialDeepStrictEqual(message, { from: "me@example.com", to: "ana@example.com", subject: "Your sign-in for my Mayfly apps" });
     assert.match(message?.text ?? "", /Password: ana-six-word-pass/);
     assert.match(message?.html ?? "", />ana-six-word-pass</);
-    assert.deepEqual(posted.at(-1), { type: "notice", text: "Sent to `ana@example.com`." });
+    assert.deepEqual(posted.at(-1), { type: "notice", text: "Sent to `ana@example.com`" });
   });
 
   it("says why an email didn't go", async () => {
