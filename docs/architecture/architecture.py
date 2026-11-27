@@ -11,12 +11,12 @@ from diagrams.onprem.identity import Dex
 
 HERE = Path(__file__).parent
 
-GRAPH = {"fontname": "Helvetica", "pad": "0.8", "nodesep": "0.7", "ranksep": "1.1", "splines": "spline"}
-NODE = {"fontname": "Helvetica", "fontsize": "13"}
-EDGE = {"fontname": "Helvetica", "fontsize": "11", "color": "#6b7280", "fontcolor": "#374151"}
-TAILNET = {"color": "#4b5563", "style": "dashed"}
+GRAPH = {"fontname": "Helvetica", "pad": "1.1", "nodesep": "0.9", "ranksep": "1.4", "splines": "spline"}
+NODE = {"fontname": "Helvetica", "fontsize": "18"}
+EDGE = {"fontname": "Helvetica", "fontsize": "16", "color": "#6b7280", "fontcolor": "#374151"}
+TAILNET = {"style": "dashed"}
 # Labels under icons are wider than the icons, and Graphviz sizes a box by the icons alone: the margin keeps the labels inside.
-BOX = {"fontname": "Helvetica", "fontsize": "13", "margin": "30"}
+BOX = {"fontname": "Helvetica", "fontsize": "18", "margin": "44"}
 
 
 def logo(name: str) -> str:
@@ -24,8 +24,16 @@ def logo(name: str) -> str:
 
 
 def label(name: str, what: str = "") -> str:
-    """A node's name in bold, and what it does under it. The newline makes room: diagrams counts them to size a node."""
-    return f"<<b>{name}</b>" + (f"<br/>\n{what}" if what else "") + ">"
+    """
+    A node's name in bold, and what it does under it. diagrams makes a node taller for each newline in its label, which an
+    HTML label otherwise ignores: one more than the lines keeps large text clear of the icon.
+    """
+    return f"<<b>{name}</b>" + (f"<br/>\n{what}" if what else "") + "\n>"
+
+
+def link(label: str = "", **style: str) -> Edge:
+    """An edge, its label as large as the diagram's: diagrams gives each edge a font size of its own."""
+    return Edge(label=label, **EDGE, **style)
 
 
 with Diagram("", filename=str(HERE / "architecture"), outformat="png", show=False, direction="LR", graph_attr=GRAPH, node_attr=NODE, edge_attr=EDGE):
@@ -45,16 +53,16 @@ with Diagram("", filename=str(HERE / "architecture"), outformat="png", show=Fals
             with Cluster("One pod per app", graph_attr=BOX):
                 # Two containers of the same image, one for each way in: drawn as one, so no lines cross.
                 doors = Oauth2Proxy(label("oauth2-proxy", "a door per way in"))
-                app = Custom(label("Generated app", "Hono, on the runtime"), logo("hono"))
+                app = Custom(label("Generated app", "Hono on Node.js"), logo("hono"))
 
             with Cluster("Sign-in", graph_attr=BOX):
                 dex = Dex(label("Dex"))
                 sessions = Custom(label("Sessions", "on a volume"), logo("sqlite"))
 
-    mayfly >> Edge(label="what you ask,\nthe app's code") >> model
-    mayfly >> Edge(label="routes.ts") >> podman
-    browser >> Edge(label="127.0.0.1") >> doors
-    phone >> Edge(label="tailnet", **TAILNET) >> serve >> Edge(**TAILNET) >> doors
-    doors >> Edge(label="identity headers") >> app
-    doors >> Edge(label="OIDC") >> dex
-    dex >> sessions
+    mayfly >> link("what you ask,\nthe app's code") >> model
+    mayfly >> link("routes.ts") >> podman
+    browser >> link("127.0.0.1") >> doors
+    phone >> link("tailnet", **TAILNET) >> serve >> link(**TAILNET) >> doors
+    doors >> link("identity headers") >> app
+    doors >> link("OIDC") >> dex
+    dex >> link() >> sessions
