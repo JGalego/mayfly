@@ -119,8 +119,9 @@ body {
   margin: 0.5rem;
 }
 
-/* Below 16px, iOS zooms the page into the field. */
-#composer textarea {
+/* Below 16px, iOS zooms the page into the field. The copy behind it, which sets a command apart, keeps in step. */
+#composer textarea,
+.request-backdrop {
   font-size: 16px;
 }
 

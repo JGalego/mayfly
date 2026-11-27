@@ -24,7 +24,7 @@
     <main id="home">
       <ol id="making" class="phone-turns"></ol>
       <ul id="phone-apps" aria-label="Your apps"></ul>
-      <p id="no-apps" class="quiet empty" hidden>No apps yet. Describe one below, and attach a photo of a sketch if you have one.</p>
+      <p id="no-apps" class="quiet empty" hidden>Describe an app below with a photo of a sketch if you have one</p>
     </main>
     <main id="chat" hidden>
       <ol id="turns"></ol>
@@ -36,7 +36,10 @@
 
     <form id="composer">
       <ul id="pending-files" class="pending-files" aria-label="Attached files" hidden></ul>
-      <textarea id="request" rows="2" maxlength="2000" aria-label="Your request" placeholder="Describe an app to make"></textarea>
+      <div class="request-field">
+        <div id="request-backdrop" class="request-backdrop" aria-hidden="true"></div>
+        <textarea id="request" rows="2" maxlength="2000" aria-label="Your request" placeholder="Describe an app to make"></textarea>
+      </div>
       <div class="composer-actions">
         <input id="file-input" type="file" multiple accept="image/*,.txt,.md,.csv,.tsv,.json" hidden>
         <button id="attach" class="quiet-button" type="button" aria-label="Attach photos or text files" data-icon="paperclip"></button>

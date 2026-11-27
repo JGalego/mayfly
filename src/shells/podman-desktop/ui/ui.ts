@@ -11,7 +11,8 @@ import { threadFind } from "./thread-find.ts";
 import { imageUrl, uploads } from "./uploads.ts";
 import { chooseTab, keyboardTabs } from "./tabs.ts";
 import { commandMenu } from "./command-menu.ts";
-import { leadingCommand, parse, suggestions, type Command } from "./commands.ts";
+import { markCommands } from "./command-mark.ts";
+import { parse, suggestions, type Command } from "./commands.ts";
 import { nameChip, withChips } from "./chips.ts";
 import { filesOf, pendingView, spinner, turn, turnItem, type Speaking } from "./turns.ts";
 import { doctorView } from "./doctor-view.ts";
@@ -73,7 +74,7 @@ addIcons(document);
 
 const podmanDesktop = acquirePodmanDesktopApi();
 const request = element<HTMLTextAreaElement>("request");
-const requestBackdrop = element("request-backdrop");
+const markCommand = markCommands(request, element("request-backdrop"));
 const composerModel = element<HTMLSelectElement>("composer-model");
 const developer = element<HTMLInputElement>("developer");
 
@@ -239,8 +240,6 @@ element("composer").addEventListener("submit", (event) => {
   event.preventDefault();
   send();
 });
-request.addEventListener("input", markCommand);
-request.addEventListener("scroll", followScroll);
 request.addEventListener("keydown", (event) => {
   if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
   event.preventDefault();
@@ -784,9 +783,9 @@ function renderPhoneCreation({ phoneHost, phoneCreation, phones }: State): void 
   box.checked = phoneCreation;
   box.disabled = phoneHost === null;
   const note = element("phone-creation-note");
-  if (phoneHost === null) note.replaceChildren("Needs phone access on.");
-  else if (!phoneCreation) note.replaceChildren("A page on your phone for making and changing apps, paired with this computer.");
-  else note.replaceChildren("Your phone makes and changes apps at ", nameChip(phonePageUrl(phoneHost)), ". It can't see settings, people or passwords, or remove anything. Turning this off forgets every paired phone.");
+  if (phoneHost === null) note.replaceChildren("Needs phone access");
+  else if (!phoneCreation) note.replaceChildren("A page for making and changing apps from a phone you pair");
+  else note.replaceChildren("Paired phones make and change apps at ", nameChip(phonePageUrl(phoneHost)), " but can't see settings or remove anything");
   element("phone-pairing").hidden = !phoneCreation;
   element("paired-phones").replaceChildren(...phones.map(pairedPhone));
   // The code is spent once a phone pairs with it.
@@ -1034,17 +1033,6 @@ function openLink(url: string): void {
 function setRequest(text: string): void {
   request.value = text;
   markCommand();
-}
-
-// A textarea can't style part of its text, so a command at its start is set apart on a copy behind it.
-function markCommand(): void {
-  const typed = leadingCommand(request.value);
-  requestBackdrop.replaceChildren(...(typed === undefined ? [] : [h("span", "typed-command", typed.command)]));
-  followScroll();
-}
-
-function followScroll(): void {
-  requestBackdrop.style.setProperty("--scrolled", `${-request.scrollTop}px`);
 }
 
 function versionChip(id: string): HTMLElement {

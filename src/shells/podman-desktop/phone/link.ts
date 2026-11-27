@@ -25,7 +25,7 @@ export interface Link {
 export async function pair(code: string, { fetch, storage }: LinkPorts): Promise<void> {
   const response = await fetch("/pair", { method: "POST", body: JSON.stringify({ code }) });
   const { token, error } = (await response.json().catch(() => ({}))) as { token?: string; error?: string };
-  if (!response.ok || token === undefined) throw new Error(error ?? "Mayfly couldn't pair this phone. Show a new code on the computer.");
+  if (!response.ok || token === undefined) throw new Error(error ?? "Show a new code on the computer and scan it again");
   storage.setItem(TOKEN, token);
 }
 
@@ -75,16 +75,16 @@ export function openLink(ports: LinkPorts, hear: (message: ToPhone) => void, sta
   return {
     async send(message) {
       const response = await ports.fetch("/messages", { method: "POST", headers: { authorization: authorization(), "content-type": "application/json" }, body: JSON.stringify(message) });
-      if (!response.ok) throw new Error(REFUSALS[response.status] ?? "Mayfly didn't get that. Try again.");
+      if (!response.ok) throw new Error(REFUSALS[response.status] ?? "Mayfly didn't get that so send it again");
     },
     wake: () => wakeUp(),
   };
 }
 
 const REFUSALS: Readonly<Record<number, string>> = {
-  401: "This phone isn't paired anymore. Scan the code in Mayfly's Settings on the computer.",
-  403: "Do that in Mayfly on the computer.",
-  413: "Those photos and files are too big to send together. Send fewer at a time.",
+  401: "Pair this phone again from Settings on the computer",
+  403: "Do that in Mayfly on the computer",
+  413: "Send fewer photos and files at a time",
 };
 
 /** Splits text that arrives in pieces into whole lines, keeping the start of a line until the rest arrives. */

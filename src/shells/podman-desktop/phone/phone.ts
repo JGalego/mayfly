@@ -2,6 +2,7 @@
 import type { ServiceHealth } from "../../../engine/engine.ts";
 import type { FromUi, Progress, Upload } from "../messages.ts";
 import type { PhoneApp, ToPhone } from "../phone-page.ts";
+import { markCommands } from "../ui/command-mark.ts";
 import { parse } from "../ui/commands.ts";
 import { h } from "../ui/dom.ts";
 import { addIcons } from "../ui/icons.ts";
@@ -42,6 +43,7 @@ let shown: string | null = null;
 let creating = false;
 let link: Link | undefined;
 
+const markCommand = markCommands(element("request"), element("request-backdrop"));
 const attached = uploads({ input: element("file-input"), button: element("attach"), list: element("pending-files"), composer: element("composer") }, (why) => notify(why, true), fitPhoto);
 
 addIcons(document.body);
@@ -65,7 +67,7 @@ async function start(): Promise<void> {
       return unpaired(messageOf(error));
     }
   }
-  if (!isPaired(ports)) return unpaired("Pair this phone first: in Mayfly on the computer, open Settings, turn on Make apps from my phone, and scan the code with the phone's camera.");
+  if (!isPaired(ports)) return unpaired("Turn on Make apps from my phone in Mayfly's Settings and scan its code");
   link = openLink(ports, hear, status);
   // A phone puts a page to sleep without closing its stream, so it connects again on waking.
   document.addEventListener("visibilitychange", () => {
@@ -109,10 +111,10 @@ function hear(message: ToPhone): void {
 }
 
 function status(now: LinkStatus): void {
-  if (now === "unpaired") return unpaired("This phone isn't paired anymore. To pair it again, scan the code in Mayfly's Settings on the computer.");
+  if (now === "unpaired") return unpaired("Pair this phone again from Settings on the computer");
   const line = element("link-status");
   line.hidden = now === "online";
-  line.textContent = now === "connecting" ? "Connecting to Mayfly…" : "Can't reach Mayfly. Is the computer awake, with Podman Desktop open?";
+  line.textContent = now === "connecting" ? "Connecting to Mayfly…" : "Mayfly needs the computer awake with Podman Desktop open";
   element("send").toggleAttribute("disabled", now !== "online");
   if (now === "online") void send({ type: "health" });
 }
@@ -141,7 +143,7 @@ function render(): void {
   if (app !== undefined) open.href = app.url;
   element("home").hidden = app !== undefined;
   element("chat").hidden = app === undefined;
-  element<HTMLTextAreaElement>("request").placeholder = app === undefined ? "Describe an app to make" : "Ask for a change, or /ask a question";
+  element<HTMLTextAreaElement>("request").placeholder = app === undefined ? "Describe an app to make" : "Ask for a change or /ask a question";
   if (app === undefined) renderHome();
   else renderChat(app);
 }
@@ -188,6 +190,7 @@ async function submit(): Promise<void> {
     creating = message.type === "send" && message.app === null;
     await send(message);
     box.value = "";
+    markCommand();
   } catch (error) {
     creating = false;
     attached.put(files);
@@ -200,10 +203,10 @@ function messageFor(text: string, files: readonly Upload[]): FromUi | undefined 
   const typed = parse(text);
   const withFiles = files.length === 0 ? {} : { files };
   if (typed.kind === "request") return text === "" && files.length === 0 ? undefined : { type: "send", app: shown, request: text, ...withFiles };
-  if (typed.kind === "unknown") return void notify(`Mayfly doesn't know /${typed.name}.`, true);
+  if (typed.kind === "unknown") return void notify(`There's no /${typed.name} command`, true);
   const { name } = typed.command;
-  if (!ON_THE_PHONE.has(name)) return void notify(`Use /${name} in Mayfly on the computer.`, true);
-  if (shown === null) return void notify(`Open an app first, then use /${name}.`, true);
+  if (!ON_THE_PHONE.has(name)) return void notify(`Use /${name} in Mayfly on the computer`, true);
+  if (shown === null) return void notify(`Open an app to use /${name}`, true);
   if (name === "ask") return { type: "ask", app: shown, question: typed.argument, ...withFiles };
   return { type: name as "fix" | "retry" | "undo" | "start", app: shown };
 }

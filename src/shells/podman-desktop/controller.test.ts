@@ -286,7 +286,7 @@ describe("the Mayfly panel's controller", () => {
       await handle({ type: "phone", on: true });
       await handle({ type: "phone-creation", on: true });
 
-      assert.deepEqual(refused, { type: "error", text: "Turn on phone access first." });
+      assert.deepEqual(refused, { type: "error", text: "Turn on phone access first" });
       assert.deepEqual(calls, ["turn on phone", "serve the phone page"]);
       assert.equal(stateOf(posted.at(-1))?.phoneCreation, true);
     });
@@ -329,7 +329,7 @@ describe("the Mayfly panel's controller", () => {
 
       await handle({ type: "pair-phone" });
 
-      assert.deepEqual(posted.at(-1), { type: "error", text: "Turn on Make apps from my phone first." });
+      assert.deepEqual(posted.at(-1), { type: "error", text: "Turn on Make apps from my phone first" });
     });
 
     it("lists the paired phones, and forgets one", async () => {

@@ -411,7 +411,7 @@ async function setPhoneCreation(on: boolean, session: Session): Promise<void> {
     return showState(session);
   }
   const host = await session.engine.phoneAccess();
-  if (host === null) return void (await session.post({ type: "error", text: "Turn on phone access first." }));
+  if (host === null) return void (await session.post({ type: "error", text: "Turn on phone access first" }));
   await session.phonePage.start();
   await session.settings.savePhoneCreation(true);
   note(session, "info", "Making apps from the phone on");
@@ -428,7 +428,7 @@ async function stopPhoneCreation(session: Session): Promise<void> {
 
 async function offerPairing(session: Session): Promise<void> {
   const host = await session.engine.phoneAccess();
-  if (host === null || !session.settings.phoneCreation()) return void (await session.post({ type: "error", text: "Turn on Make apps from my phone first." }));
+  if (host === null || !session.settings.phoneCreation()) return void (await session.post({ type: "error", text: "Turn on Make apps from my phone first" }));
   const { code, expires } = await session.engine.offerPairing();
   // In the fragment, which browsers never send, so the code reaches only the page.
   await session.post({ type: "pairing", url: `${phonePageUrl(host)}#pair=${code}`, expires });
