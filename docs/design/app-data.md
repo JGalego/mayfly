@@ -2,7 +2,7 @@
 
 Status: on `main`, for 0.5.0. It changes the contract, and takes "Server-side persistence" off the README's non-goals.
 
-Built so far: the store, the check in every trial, undo and deploy on the data, backups with restore and export, rename and remove. Still to build: offering the backup when an undo doesn't fit.
+Built: the store, the check in every trial, undo and deploy on the data with a backup offered when an undo doesn't fit, backups with restore and export, rename and remove.
 
 Apps keep data in the browser today. That breaks as soon as an app has more than one browser: two people sharing a tracker each see their own list, an entry made on the phone isn't there on the computer, and clearing the browser deletes it. The goal is data that lives with the app, where the model declares what it keeps and Mayfly makes sure no change can lose it.
 

@@ -173,6 +173,8 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       return runAlone({ app: request.app, request: "/start", kind: "start" }, session, (watch) => session.engine.start(request.app, watch));
     case "deploy":
       return deploy(request.app, request.version, session);
+    case "undo-with-backup":
+      return runAlone({ app: request.app, request: `Undo with backup \`${request.id}\``, kind: "deploy" }, session, (watch) => session.engine.undoWithBackup(request.app, request.id, watch));
     case "restore":
       return runAlone({ app: request.app, request: `Restore backup \`${request.id}\``, kind: "restore" }, session, (watch) => session.engine.restore(request.app, request.id, watch));
     case "export-data":
@@ -607,6 +609,7 @@ function readRequest(message: unknown): FromUi | undefined {
     }
     case "attachment":
     case "restore":
+    case "undo-with-backup":
       return typeof app === "string" && typeof id === "string" ? { type, app, id } : undefined;
     case "export-data":
       return typeof app === "string" ? { type, app } : undefined;

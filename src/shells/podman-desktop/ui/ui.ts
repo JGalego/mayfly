@@ -10,7 +10,7 @@ import { findBar } from "./find-bar.ts";
 import { threadFind } from "./thread-find.ts";
 import { imageUrl, uploads } from "./uploads.ts";
 import { chooseTab, keyboardTabs } from "./tabs.ts";
-import { dataView, type DataActions } from "./data-view.ts";
+import { armedBackup, dataView, undoOffer, type DataActions } from "./data-view.ts";
 import { commandMenu } from "./command-menu.ts";
 import { markCommands } from "./command-mark.ts";
 import { parse, suggestions, type Command } from "./commands.ts";
@@ -926,8 +926,8 @@ function renderChat(state: State, app: AppView | undefined): void {
   const showing = showingFor(state);
   const said = app?.conversation ?? [];
   // The turns are built again only when what they show changes: not on each step of the work, which only the last turns show.
-  const key = [app?.name, said.length, said.at(-1)?.at, state.developer, foldsChanged, written.size, app?.versions.length, thumbnails.size].join("|");
-  if (builtTurns?.key !== key) builtTurns = { key, items: said.map((turn) => turnItem(turn, SPEAKING, app === undefined ? [] : [...filesOf(app.name, turn, SPEAKING), ...madeOf(turn, app, showing)])) };
+  const key = [app?.name, said.length, said.at(-1)?.at, state.developer, foldsChanged, written.size, app?.versions.length, thumbnails.size, armedBackup()].join("|");
+  if (builtTurns?.key !== key) builtTurns = { key, items: said.map((turn, index) => turnItem(turn, SPEAKING, app === undefined ? [] : [...filesOf(app.name, turn, SPEAKING), ...madeOf(turn, app, showing), ...(index === said.length - 1 ? offerOf(turn, app) : [])])) };
   const asked = working === null ? [] : [turnItem({ from: "person", text: working.request, at: working.since }, SPEAKING)];
   const pending = working === null ? failure : [...asked, turn("mayfly", pendingView(working, showing, SPEAKING), SPEAKING)];
   const thread = element("thread");
@@ -969,6 +969,13 @@ function madeOf(said: Turn, app: AppView, showing: Showing): Node[] {
   const [first, last] = [versions[0], versions.at(-1)];
   const changed = showing.developer && first?.parent != null && last?.problem === null;
   return changed ? [whatChanged(app.name, first.parent, last.id, showing), made] : [made];
+}
+
+/** What a failed undo offers while it's the last thing said: going back with a backup the version before fits, if it's still kept. */
+function offerOf(said: Turn, app: AppView): Node[] {
+  const backup = said.from === "mayfly" ? said.withBackup : undefined;
+  if (backup === undefined || app.head === null || !app.backups.some((kept) => kept.id === backup)) return [];
+  return [undoOffer(backup, app.head, () => startWork({ type: "undo-with-backup", app: app.name, id: backup }), render)];
 }
 
 function showingFor({ developer }: State): Showing {

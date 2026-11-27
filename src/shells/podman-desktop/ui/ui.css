@@ -1918,6 +1918,18 @@ pre.problem {
   gap: 0.75rem;
 }
 
+.undo-offer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.undo-offer p {
+  margin: 0;
+}
+
 .backup-list {
   display: flex;
   flex-direction: column;

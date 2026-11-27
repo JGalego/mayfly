@@ -182,6 +182,15 @@ describe("the Mayfly panel's controller", () => {
     assert.equal(stateOf(posted.at(-1))?.working, null);
   });
 
+  it("undoes with a backup, showing the work while it runs", async () => {
+    const { handle, posted, calls } = setUp({ apps: [lunch] });
+
+    await handle({ type: "undo-with-backup", app: "lunch-split", id: "0a1b2c3d" });
+
+    assert.deepEqual(calls, ["undo lunch-split with 0a1b2c3d"]);
+    assert.equal(stateOf(posted[0])?.working?.request, "Undo with backup `0a1b2c3d`");
+  });
+
   it("saves an app's data where the person picks, and says nothing when they cancel", async () => {
     const { handle, posted, saved } = setUp({ apps: [lunch] });
 
@@ -858,6 +867,10 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
     },
     deploy: async (name, version) => {
       calls.push(`deploy ${name} ${version}`);
+      return lunch;
+    },
+    undoWithBackup: async (name, id) => {
+      calls.push(`undo ${name} with ${id}`);
       return lunch;
     },
     restore: async (name, id) => {

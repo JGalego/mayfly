@@ -106,8 +106,13 @@ export interface Engine {
   fix(name: string, watch?: Watcher): Promise<AppView>;
   /** Sends the last request the app's model was given to it again, as a change. */
   retry(name: string, watch?: Watcher): Promise<AppView>;
-  /** Runs the version that ran before the one running now again. Undoing twice puts back the one undone. */
+  /**
+   * Runs the version that ran before the one running now again. Undoing twice puts back the one undone. When the records don't fit
+   * it, the conversation offers the backup from before the one running now.
+   */
   undo(name: string, watch?: Watcher): Promise<AppView>;
+  /** Undoes with a backup's records in place of the app's, once the version before fits them. The records it replaces become a backup too. */
+  undoWithBackup(name: string, backup: string, watch?: Watcher): Promise<AppView>;
   /** The apps with a version to run that Podman is not running, as after the Podman machine stopped. */
   stopped(): Promise<string[]>;
   /** The apps Podman is running. */
@@ -228,9 +233,10 @@ export function createEngine({ store, deployer, observer, identity, models, buil
         const state = await store.load();
         const app = findApp(state, name);
         if (app === undefined) return false;
+        const offer = error instanceof DoesNotFit && error.offer !== undefined ? { withBackup: error.offer } : {};
         const turns: Turn[] = [
           { from: "person", text: request, at: started, ...withAttachments(attachments) },
-          { from: "mayfly", text: reason, versions: [], took: Date.now() - started, at: Date.now(), failed: true },
+          { from: "mayfly", text: reason, versions: [], took: Date.now() - started, at: Date.now(), failed: true, ...offer },
         ];
         await store.save(withApp(state, { ...app, conversation: [...app.conversation, ...turns] }));
         return true;
@@ -267,29 +273,37 @@ export function createEngine({ store, deployer, observer, identity, models, buil
   }
 
   /** Runs a version that passed. The conversation keeps what the person said: which version, or the command that chose it. */
-  async function deployed(name: string, id: string, said: string, watch: Watcher): Promise<AppView> {
+  async function deployed(name: string, id: string, said: string, watch: Watcher, { backup, offer }: Records = {}): Promise<AppView> {
     return recording(name, said, [], () => changing(async () => {
       const started = Date.now();
       const state = withOwner(await store.load());
       const app = existingApp(state, name);
       const version = findVersion(app, id);
       if (version?.problem !== null) throw new Error(`\`${name}\` has no version \`${id}\` that passed`);
+      if (backup !== undefined && !(app.backups ?? []).some((kept) => kept.id === backup)) throw new Error(`\`${name}\` has no backup \`${backup}\``);
       watch({ kind: "building" });
       const image = await builder.build(name, version.routes);
       // It passed its trial when it was made, on the same runtime. Records written since may not fit it, so then it's tried on them.
       if (app.keepsData === true && version.keepsData === true) {
         watch({ kind: "trying" });
-        const trial = await builder.trial(image, dataVolumeName(name));
-        if (!trial.ok) throw new Error(trial.problem);
+        const trial = await builder.trial(image, backup === undefined ? dataVolumeName(name) : backupVolumeName(backup));
+        if (!trial.ok) throw new DoesNotFit(trial.problem, offer);
       }
-      const backups = await backedUp(app, { version: id });
+      const kept = backup === undefined ? { ...app, ...(await backedUp(app, { version: id })) } : await putBack(state, app, backup, runningVersion(app)?.image ?? image);
       // Versions go in backticks, like app names, so shells set them apart.
-      const note = `Deployed version \`${id}\`: “${version.request}”`;
+      const note = backup === undefined ? `Deployed version \`${id}\`: “${version.request}”` : `Deployed version \`${id}\` with backup \`${backup}\`: “${version.request}”`;
       const conversation: Turn[] = [
         { from: "person", text: said, at: started },
         { from: "mayfly", text: note, versions: [], took: Date.now() - started, at: Date.now() },
       ];
-      const next: App = { ...app, ...(app.head === null || app.head === id ? {} : { previous: app.head }), ...keeping(version), ...backups, head: id, conversation: [...app.conversation, ...conversation] };
+      const next: App = {
+        ...kept,
+        ...(app.head === null || app.head === id ? {} : { previous: app.head }),
+        ...keeping(version),
+        backups: await lastBackups(kept.backups ?? []),
+        head: id,
+        conversation: [...app.conversation, ...conversation],
+      };
       const nextState = withApp(state, next);
       watch({ kind: "deploying" });
       await store.save(await signInAndRun(nextState, next, image));
@@ -449,6 +463,20 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     return backups.slice(-BACKUPS);
   }
 
+  /**
+   * Puts a backup's records in place of the app's, stopping the app first so nothing writes to them meanwhile. The records it
+   * replaces become a backup, which the state keeps before they go. Returns the app with that backup.
+   */
+  async function putBack(state: State, app: App, backup: string, image: string): Promise<App> {
+    await deployer.stop(appObjects(app, image, identity.settingsFor(app, signInPortOf(state))));
+    const replaced = await backUp(app.name, { restore: backup });
+    const saved: App = { ...app, backups: [...(app.backups ?? []), replaced] };
+    await store.save(withApp(state, saved));
+    await data.remove(dataVolumeName(app.name));
+    await data.copy(backupVolumeName(backup), dataVolumeName(app.name));
+    return saved;
+  }
+
   /** Puts back a backup's records, once the running version fits them. The conversation keeps it. */
   async function restored(name: string, id: string, said: string, watch: Watcher): Promise<AppView> {
     const started = Date.now();
@@ -465,13 +493,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       if (!trial.ok) throw new Error(trial.problem);
     }
     watch({ kind: "deploying" });
-    // Stopped first, so nothing writes to its records while they're replaced. They're kept, and the state says so, before they go.
-    await deployer.stop(appObjects(app, running.image, identity.settingsFor(app, signInPortOf(state))));
-    const replaced = await backUp(name, { restore: id });
-    const saved: App = { ...app, backups: [...(app.backups ?? []), replaced] };
-    await store.save(withApp(state, saved));
-    await data.remove(dataVolumeName(name));
-    await data.copy(backupVolumeName(id), dataVolumeName(name));
+    const saved = await putBack(state, app, id, running.image);
     const turns: Turn[] = [
       { from: "person", text: said, at: started },
       { from: "mayfly", text: `Restored backup \`${id}\``, versions: [], took: Date.now() - started, at: Date.now() },
@@ -592,9 +614,17 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     },
 
     async undo(name, watch = UNWATCHED) {
+      const { previous, head, backups = [] } = existingApp(await store.load(), name);
+      if (previous === undefined) throw new Error(`\`${name}\` has no previous deployment`);
+      // The records from before the version it goes back from fitted the version before then, so they're offered if today's don't.
+      const offer = backups.findLast(({ before }) => "version" in before && before.version === head)?.id;
+      return deployed(name, previous, "/undo", watch, offer === undefined ? {} : { offer });
+    },
+
+    async undoWithBackup(name, backup, watch = UNWATCHED) {
       const { previous } = existingApp(await store.load(), name);
       if (previous === undefined) throw new Error(`\`${name}\` has no previous deployment`);
-      return deployed(name, previous, "/undo", watch);
+      return deployed(name, previous, `Undo with backup \`${backup}\``, watch, { backup });
     },
 
     async stopped() {
@@ -905,6 +935,22 @@ function sharedWith(state: State, email: string): string[] {
 /** Whether any app has a version deployed. */
 function anyRunning(state: State): boolean {
   return state.apps.some((app) => app.head !== null);
+}
+
+/** Records a version doesn't fit, and the backup to offer instead, if there's one. */
+class DoesNotFit extends Error {
+  readonly offer: string | undefined;
+
+  constructor(problem: string, offer: string | undefined) {
+    super(problem);
+    this.offer = offer;
+  }
+}
+
+/** Where a deploy's records come from: a backup's in place of the app's, or the app's, with a backup to offer if they don't fit. */
+interface Records {
+  readonly backup?: string;
+  readonly offer?: string;
 }
 
 /** A generation, and the calls to the model it took. */

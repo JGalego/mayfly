@@ -100,6 +100,8 @@ export type FromUi =
   | { readonly type: "updated" }
   | { readonly type: "rename"; readonly app: string; readonly name: string }
   | { readonly type: "deploy"; readonly app: string; readonly version: string }
+  /** Undoes with a backup's records, which the conversation offers when the app's own don't fit the version before. */
+  | { readonly type: "undo-with-backup"; readonly app: string; readonly id: string }
   /** Puts back the records of one of an app's backups. */
   | { readonly type: "restore"; readonly app: string; readonly id: string }
   /** Asks where to save an app's records, as JSON. */

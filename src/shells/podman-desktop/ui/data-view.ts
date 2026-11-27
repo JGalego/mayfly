@@ -33,14 +33,32 @@ function backupCard(backup: Backup, idle: boolean, actions: DataActions): HTMLEl
   const restore = h("button", waiting ? "quiet-button armed" : "quiet-button", waiting ? "Confirm restore" : "Restore");
   restore.type = "button";
   restore.disabled = !idle;
-  restore.addEventListener("click", () => {
-    disarm();
-    if (waiting) actions.restore(backup.id);
-    else armed = { id: backup.id, timer: window.setTimeout(() => (disarm(), actions.redraw()), CONFIRM_MS) };
-    actions.redraw();
-  });
+  restore.addEventListener("click", () => (waiting ? (disarm(), actions.restore(backup.id)) : arm(backup.id, actions.redraw)));
   const facts = h("div", "backup-facts", h("span", "", nameChip(backup.id), " ", when(backup.at)), h("span", "quiet", ...before(backup)));
   return h("li", "backup-card", facts, restore);
+}
+
+/**
+ * Under an undo the app's records didn't fit: going back with the backup from before the version it went back from, which they
+ * fitted. It asks first, as the changes since are lost.
+ */
+export function undoOffer(backup: string, head: string, undo: () => void, redraw: () => void): HTMLElement {
+  const waiting = armed?.id === backup;
+  const go = h("button", waiting ? "quiet-button armed" : "quiet-button", ...(waiting ? ["Confirm undo"] : ["Undo with backup ", nameChip(backup)]));
+  go.type = "button";
+  go.addEventListener("click", () => (waiting ? (disarm(), undo()) : arm(backup, redraw)));
+  return h("div", "undo-offer", h("p", "quiet", "It puts back the data from before version ", nameChip(head), " and loses the changes since"), go);
+}
+
+/** The backup whose button was clicked once and waits for the second click, for whoever draws it to know. */
+export function armedBackup(): string | undefined {
+  return armed?.id;
+}
+
+function arm(id: string, redraw: () => void): void {
+  disarm();
+  armed = { id, timer: window.setTimeout(() => (disarm(), redraw()), CONFIRM_MS) };
+  redraw();
 }
 
 function before({ before: next }: Backup): (Node | string)[] {

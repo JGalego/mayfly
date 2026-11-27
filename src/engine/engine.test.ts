@@ -721,6 +721,45 @@ describe("an app's backups", () => {
     assert.equal((await engine.list())[0]?.conversation.at(-1)?.text, "crashed");
   });
 
+  it("offers the backup from before the version an undo goes back from, when the records don't fit the version before", async () => {
+    const { engine } = setUp([reply("notes"), reply("notes")], [keeps, keeps, crashed]);
+    await engine.create("keep notes");
+    const { backups: [backup] } = await engine.change("notes", "add tags");
+
+    await assert.rejects(engine.undo("notes"), RecordedFailure);
+
+    assert.partialDeepStrictEqual((await engine.list())[0]?.conversation.at(-1), { text: "crashed", failed: true, withBackup: backup!.id });
+  });
+
+  it("offers nothing when a deploy doesn't fit, which goes back from nothing", async () => {
+    const { engine } = setUp([reply("notes"), reply("notes")], [keeps, keeps, crashed]);
+    const first = await engine.create("keep notes");
+    await engine.change("notes", "add tags");
+
+    await assert.rejects(engine.deploy("notes", first.head!), RecordedFailure);
+
+    const failed = (await engine.list())[0]?.conversation.at(-1);
+    assert.equal(failed?.from === "mayfly" && failed.withBackup, undefined);
+  });
+
+  it("undoes with a backup: tries the version before on its records, keeps the records it replaces, and runs that version on them", async () => {
+    const { engine, log, triedOn, volumes } = setUp([reply("notes"), reply("notes")], [keeps, keeps, keeps]);
+    const first = await engine.create("keep notes");
+    volumes.set("mayfly-notes-data", "then");
+    const { backups: [backup] } = await engine.change("notes", "add tags");
+    volumes.set("mayfly-notes-data", "now");
+    log.length = 0;
+
+    const undone = await engine.undoWithBackup("notes", backup!.id);
+
+    const replaced = undone.backups.at(-1)!;
+    assert.equal(undone.head, first.head);
+    assert.equal(triedOn.at(-1), `mayfly-backup-${backup!.id}`);
+    assert.deepEqual(log.slice(0, 4), ["stop app", `copy mayfly-notes-data to mayfly-backup-${replaced.id}`, "remove mayfly-notes-data", `copy mayfly-backup-${backup!.id} to mayfly-notes-data`]);
+    assert.deepEqual([volumes.get("mayfly-notes-data"), volumes.get(`mayfly-backup-${replaced.id}`)], ["then", "now"]);
+    assert.deepEqual(undone.conversation.slice(-2).map((turn) => turn.text), [`Undo with backup \`${backup!.id}\``, `Deployed version \`${first.head}\` with backup \`${backup!.id}\`: “keep notes”`]);
+  });
+
   it("refuses a backup it doesn't have", async () => {
     const { engine } = setUp([reply("notes")], [keeps]);
     await engine.create("keep notes");

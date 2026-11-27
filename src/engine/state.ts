@@ -66,6 +66,8 @@ export type Turn =
       readonly at: number;
       /** What was asked did not go through, and the text says why. */
       readonly failed?: true;
+      /** A backup an undo that failed can go back with: the records from before the version it went back from, which fit the one before. */
+      readonly withBackup?: string;
     };
 
 /** An app, everything it has been, and what it keeps across deploys: its port and its secrets. */
