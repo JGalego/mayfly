@@ -42,7 +42,15 @@ export function phoneNotReady(status: Exclude<PhoneNetworkStatus, { readonly sta
 }
 
 /** Work that failed, and that the app's conversation already says failed and why. */
-export class RecordedFailure extends Error {}
+export class RecordedFailure extends Error {
+  /** The app whose conversation says it, which a new app's failed work leaves behind. */
+  readonly app: string;
+
+  constructor(message: string, app: string, options?: ErrorOptions) {
+    super(message, options);
+    this.app = app;
+  }
+}
 
 /** A version as a shell shows it: how long its code and the model's thinking are, but not them, which the shell asks for when it needs them. */
 export type VersionView = Omit<Version, "routes" | "image" | "thinking"> & { readonly lines: number; readonly thinkingWords: number };
@@ -164,6 +172,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     try {
       return await work();
     } catch (error) {
+      if (error instanceof RecordedFailure) throw error;
       const reason = error instanceof Error ? error.message : String(error);
       const state = await store.load();
       const app = findApp(state, name);
@@ -173,7 +182,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
         { from: "mayfly", text: reason, versions: [], took: Date.now() - started, at: Date.now(), failed: true },
       ];
       await store.save(withApp(state, { ...app, conversation: [...app.conversation, ...turns] }));
-      throw new RecordedFailure(reason, { cause: error });
+      throw new RecordedFailure(reason, name, { cause: error });
     }
   }
 
@@ -185,7 +194,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     const last = versions.at(-1);
     const passed = last?.problem === null ? last : undefined;
     const running = made.runs ? passed : undefined;
-    const reply: Turn = { from: "mayfly", text: replyFor(app, versions, made.runs), versions: versions.map((version) => version.id), took: Date.now() - made.started, at: Date.now() };
+    const reply: Extract<Turn, { from: "mayfly" }> = { from: "mayfly", text: replyFor(app, versions, made.runs), versions: versions.map((version) => version.id), took: Date.now() - made.started, at: Date.now() };
     const next: App = {
       ...app,
       ...(running === undefined || app.head === null ? {} : { previous: app.head }),
@@ -194,12 +203,22 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       conversation: [...app.conversation, { from: "person", text: request, at: made.started, ...withAttachments(made.attachments ?? []) }, reply],
     };
     const nextState = charge(withApp(state, next), calls);
+    // Kept before it runs: whatever happens then, the model's work and what it cost stay.
+    await store.save(nextState);
     if (running !== undefined) {
       watch({ kind: "deploying" });
-      await syncSignIn(nextState);
-      await runApp(nextState, next, running.image);
+      try {
+        await syncSignIn(nextState);
+        await runApp(nextState, next, running.image);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        // The version stays the one to run, so Start runs it, and Undo still goes back to the one before.
+        const text = [running.summary, `It passed its trial, but didn't start: ${reason} Choose Start to run it once that's fixed.`].filter(Boolean).join("\n\n");
+        const kept: App = { ...next, conversation: [...next.conversation.slice(0, -1), { ...reply, text, failed: true }] };
+        await store.save(withApp(nextState, kept));
+        throw new RecordedFailure(reason, name, { cause: error });
+      }
     }
-    await store.save(nextState);
     return appView(existingApp(nextState, name));
   }
 

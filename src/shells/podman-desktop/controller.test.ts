@@ -332,8 +332,17 @@ describe("the Mayfly panel's controller", () => {
     assert.equal(stateOf(posted.at(-1))?.working, null);
   });
 
+  it("takes the page to a new app whose work was kept though it didn't start, where its conversation says why", async () => {
+    const { handle, posted } = setUp({ apps: [], createFails: new RecordedFailure("Port 5556 on this computer is in use by another program.", "lunch-split") });
+
+    await handle({ type: "send", app: null, request: "split lunch bills" });
+
+    assert.ok(posted.some((m) => m.type === "created" && m.name === "lunch-split"));
+    assert.ok(posted.some((m) => m.type === "error" && m.recorded === true));
+  });
+
   it("tells the page when a failure is already in the app's conversation, so it is not said twice", async () => {
-    const kept = setUp({ apps: [lunch], changeFails: new RecordedFailure("The model's service is down.") });
+    const kept = setUp({ apps: [lunch], changeFails: new RecordedFailure("The model's service is down.", "lunch-split") });
     const lost = setUp({ apps: [lunch], changeFails: new Error("Podman is not running.") });
 
     await kept.handle({ type: "send", app: "lunch-split", request: "add totals" });
@@ -512,7 +521,7 @@ interface Options {
   steps?: Step[];
   developer?: boolean;
   keyFor?: string[];
-  createFails?: string;
+  createFails?: string | Error;
   /** What a change fails with, if it does. */
   changeFails?: Error;
   waitForCreate?: boolean;
@@ -541,7 +550,7 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
       calls.push(`create ${description} with ${model}`);
       steps.forEach((step) => watch(step));
       if (waitForCreate) await created;
-      if (createFails) throw new Error(createFails);
+      if (createFails !== undefined) throw typeof createFails === "string" ? new Error(createFails) : createFails;
       apps.push(made);
       return made;
     },

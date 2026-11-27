@@ -469,6 +469,40 @@ function textOf(content: Message["content"]): string {
 }
 
 // A reply, or an error the model's service fails with instead.
+describe("work that passed but couldn't run", () => {
+  const TAKEN = "Port 18100 on this computer is in use by another program. Stop that program, then try again.";
+
+  it("keeps a new app whole, says why it didn't start, and runs it on Start once that's fixed", async () => {
+    const { engine, deployed, deployFailures } = setUp([reply("lunch")]);
+    deployFailures.push(TAKEN);
+
+    await assert.rejects(engine.create("split lunch bills"), (error: unknown) => error instanceof RecordedFailure && error.app === "lunch");
+    const [kept] = await engine.list();
+    assert.equal(kept?.versions.length, 1);
+    assert.equal(kept?.head, kept?.versions[0]?.id);
+    assert.deepEqual(kept?.conversation.map((turn) => turn.from), ["person", "mayfly"]);
+    assert.match(kept?.conversation.at(-1)?.text ?? "", /didn't start: Port 18100 .*Choose Start/s);
+    const said = kept?.conversation.at(-1);
+    assert.ok(said?.from === "mayfly" && said.failed === true);
+    assert.deepEqual((await engine.ledger()).map((call) => call.app), ["lunch"]);
+
+    await engine.start("lunch");
+    assert.equal(deployed.length, 1);
+  });
+
+  it("keeps a change that passed but couldn't run, with the version before it to go back to", async () => {
+    const { engine, deployFailures } = setUp([reply("lunch", "", "v1"), reply("lunch", "", "v2")]);
+    const before = await engine.create("split lunch bills");
+    deployFailures.push(TAKEN);
+
+    await assert.rejects(engine.change("lunch", "add totals"), RecordedFailure);
+    const [kept] = await engine.list();
+    assert.equal(kept?.versions.length, 2);
+    assert.notEqual(kept?.head, before.head);
+    assert.match(kept?.conversation.at(-1)?.text ?? "", /didn't start/);
+  });
+});
+
 describe("phone access", () => {
   it("is off until turned on", async () => {
     const { engine } = setUp([]);
@@ -563,8 +597,15 @@ function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: st
     load: async () => state,
     save: async (next) => void (state = next),
   };
+  /** Why the next deploys fail, one reason each, as when something else holds a port. */
+  const deployFailures: string[] = [];
   const deployer: Deployer = {
-    deploy: async (objects) => void (log.push("deploy"), deployed.push(objects)),
+    deploy: async (objects) => {
+      const failure = deployFailures.shift();
+      if (failure !== undefined) throw new Error(failure);
+      log.push("deploy");
+      deployed.push(objects);
+    },
     remove: async (objects) => void (log.push("remove"), removed.push(objects)),
   };
   const identity: IdentitySource = {
@@ -612,7 +653,7 @@ function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: st
     stop: async (port) => void served.delete(port),
   };
   const engine = createEngine({ store, deployer, observer, identity, models, builder, files, phoneNetwork });
-  return { engine, deployed, removed, synced, forgotten, served, log, asked, logged, kept };
+  return { engine, deployed, removed, synced, forgotten, served, log, asked, logged, kept, deployFailures };
 }
 
 function names(objects: readonly KubeObject[] | undefined): string[] {

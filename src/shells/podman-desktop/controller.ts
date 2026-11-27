@@ -147,7 +147,14 @@ async function send(work: Work, session: Session): Promise<void> {
   const model = work.model ?? session.settings.models().default;
   const job = (watch: Watcher): Promise<AppView> => (work.app === null ? engine.create(work.request, { model, watch, files }) : engine.change(work.app, work.request, watch, files));
   // Without the files, which the progress would otherwise carry to the page on every step.
-  const app = await run({ app: work.app, request: work.request, kind }, session, job);
+  const app = await run({ app: work.app, request: work.request, kind }, session, job).catch(async (error: unknown) => {
+    // A new app whose work was kept though it didn't start: the page goes to it, where the conversation says why.
+    if (work.app === null && error instanceof RecordedFailure) {
+      await showState(session);
+      await session.post({ type: "created", name: error.app });
+    }
+    throw error;
+  });
   if (work.app !== null) return;
   await session.post({ type: "created", name: app.name });
   if (app.head !== null) await session.openExternal(app.url);
