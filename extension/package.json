@@ -2,7 +2,7 @@
   "name": "mayfly",
   "displayName": "Mayfly",
   "description": "Preview: describe a small web app, and Mayfly builds it and runs it in Podman, behind sign-in.",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "icon": "icon.png",
   "publisher": "jgalego",
   "license": "AGPL-3.0-only",
