@@ -26,7 +26,7 @@ import { endpointOf, FIRST_MODELS, isProvider, labelOf, modelFor, nameOf, provid
 
 // The published, signed runtime this version builds apps on: a list of its amd64 and arm64 images, from which Podman
 // pulls the machine's own. The README shows how to verify it.
-const RUNTIME_IMAGE = "ghcr.io/jgalego/mayfly-runtime@sha256:b2110a88d5956cde9608da1f05636e02f0573daae30ea609d8419e221f01cffd";
+const RUNTIME_IMAGE = "ghcr.io/jgalego/mayfly-runtime@sha256:cd936e7202111a8ca8a15e26ef14e6432a1ebabd073be45311ac8d0e6832f650";
 
 type Panel = ReturnType<typeof api.window.createWebviewPanel>;
 
