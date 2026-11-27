@@ -47,7 +47,7 @@ export function offerEmail(mail: MailAbout): void {
       : ["Mayfly drafts an email in your mail app with their password, for you to send."]),
   );
   dialog.returnValue = "";
-  dialog.addEventListener("close", () => dialog.returnValue === "email" && post({ type: "email", ...mail }), { once: true });
+  dialog.addEventListener("close", () => dialog.returnValue === "email" && post({ ...mail, type: "email" }), { once: true });
   dialog.showModal();
 }
 
