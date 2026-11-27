@@ -26,7 +26,8 @@ export function commandMenu(field: HTMLTextAreaElement, menu: HTMLElement, sugge
     field.value = picked.fill;
     field.setSelectionRange(field.value.length, field.value.length);
     field.focus();
-    update();
+    // As if typed, so whatever listens to the field hears it too.
+    field.dispatchEvent(new Event("input"));
   };
   const close = (): void => {
     shown = [];

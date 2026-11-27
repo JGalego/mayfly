@@ -37,6 +37,13 @@ export interface Suggestion {
 const COMMAND = /^\/(\S*)\s*([\s\S]*)$/;
 const MODEL_ARGUMENT = /^\/model\s+(.*)$/i;
 
+/** The command a text starts with, as typed, and what follows it: for setting a command apart wherever it's shown. */
+export function leadingCommand(text: string): { readonly command: string; readonly rest: string } | undefined {
+  const command = /^\/[a-z]+(?=\s|$)/i.exec(text)?.[0];
+  if (command === undefined || !COMMANDS.some((known) => `/${known.name}` === command.toLowerCase())) return undefined;
+  return { command, rest: text.slice(command.length) };
+}
+
 export function parse(text: string): Typed {
   const match = COMMAND.exec(text);
   if (match === null) return { kind: "request", text };

@@ -12,7 +12,7 @@ import { fileLook, imageUrl, sentImage, uploads } from "./uploads.ts";
 import { kindOf } from "../../../engine/attachments.ts";
 import { chooseTab, keyboardTabs } from "./tabs.ts";
 import { commandMenu } from "./command-menu.ts";
-import { parse, suggestions, type Command } from "./commands.ts";
+import { leadingCommand, parse, suggestions, type Command } from "./commands.ts";
 import { nameChip, withChips } from "./chips.ts";
 import { markdownView } from "./markdown-view.ts";
 import { doctorView } from "./doctor-view.ts";
@@ -70,6 +70,7 @@ addIcons(document);
 
 const podmanDesktop = acquirePodmanDesktopApi();
 const request = element<HTMLTextAreaElement>("request");
+const requestBackdrop = element("request-backdrop");
 const composerModel = element<HTMLSelectElement>("composer-model");
 const developer = element<HTMLInputElement>("developer");
 
@@ -232,6 +233,8 @@ element("composer").addEventListener("submit", (event) => {
   event.preventDefault();
   send();
 });
+request.addEventListener("input", markCommand);
+request.addEventListener("scroll", followScroll);
 request.addEventListener("keydown", (event) => {
   if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
   event.preventDefault();
@@ -343,7 +346,7 @@ function go(next: View): void {
   const arriving = next.kind === "settings" && view.kind !== "settings";
   drafts.set(draftKey(view), request.value);
   view = next;
-  request.value = drafts.get(draftKey(view)) ?? "";
+  setRequest(drafts.get(draftKey(view)) ?? "");
   hideBanner();
   render();
   if (view.kind === "settings") {
@@ -367,7 +370,7 @@ function send(): void {
   if (state === undefined || state.working !== null) return;
   const files = attached.take();
   lastSent = { app: view.kind === "app" ? view.name : null, request: text, ...(view.kind === "new" && newAppModel !== undefined ? { model: newAppModel } : {}), ...(files.length === 0 ? {} : { files }) };
-  request.value = "";
+  setRequest("");
   failed = undefined;
   hideBanner();
   post({ type: "send", ...lastSent });
@@ -379,7 +382,7 @@ function exampleItem(text: string): HTMLLIElement {
   control.className = "example";
   control.textContent = text;
   control.addEventListener("click", () => {
-    request.value = text;
+    setRequest(text);
     request.focus();
   });
   const item = document.createElement("li");
@@ -586,7 +589,7 @@ function runCommand(command: Command, argument: string): void {
   if (command.takes !== undefined && argument === "") return showError(`Type ${command.takes} after /${command.name}`);
   if (command.name === "model") return useModelNamed(argument);
   if (command.name === "remove") {
-    request.value = "";
+    setRequest("");
     return removeApp();
   }
   // Every command left acts on the app on screen.
@@ -595,7 +598,7 @@ function runCommand(command: Command, argument: string): void {
   const typed = request.value.trim();
   if (command.name === "rename") return askToRename(app, argument, typed);
   if (state?.working !== null) return;
-  request.value = "";
+  setRequest("");
   if (command.name !== "ask") return startWork({ type: command.name, app }, typed);
   // Files in the composer go with a question, as with a request.
   const files = attached.take();
@@ -611,7 +614,7 @@ function askToRename(app: string, to: string, typed: string): void {
     "close",
     () => {
       if (dialog.returnValue !== "rename") return;
-      request.value = "";
+      setRequest("");
       startWork({ type: "rename", app, name: to }, typed);
     },
     { once: true },
@@ -641,7 +644,7 @@ function startWork(message: Extract<FromUi, { readonly app: string }>, typed = "
 function useModelNamed(label: string): void {
   const model = state?.models.find((known) => known.label.toLowerCase() === label.toLowerCase());
   if (model === undefined) return showError(`There's no model called ${label}`);
-  request.value = "";
+  setRequest("");
   composerModel.value = model.id;
   pickModel();
 }
@@ -1000,10 +1003,32 @@ function turnItem(said: Turn, extras: readonly Node[] = []): HTMLLIElement {
   const { from, text, at } = said;
   // Mayfly's replies, and its model's, can be Markdown. What a person typed shows as they typed it.
   const failure = said.from === "mayfly" && said.failed === true;
-  const words = from === "mayfly" ? h("div", failure ? "md failure" : "md", ...markdownView(text, openLink)) : h("p", "", ...withChips(text));
+  const words = from === "mayfly" ? h("div", failure ? "md failure" : "md", ...markdownView(text, openLink)) : h("p", "", ...typedWords(text));
   // When it was said, for anyone who wants to know.
   if (at !== 0) words.title = new Date(at).toLocaleString();
   return turn(from, h("div", "", words, ...extras));
+}
+
+function setRequest(text: string): void {
+  request.value = text;
+  markCommand();
+}
+
+// A textarea can't style part of its text, so a command at its start is set apart on a copy behind it.
+function markCommand(): void {
+  const typed = leadingCommand(request.value);
+  requestBackdrop.replaceChildren(...(typed === undefined ? [] : [h("span", "typed-command", typed.command)]));
+  followScroll();
+}
+
+function followScroll(): void {
+  requestBackdrop.style.setProperty("--scrolled", `${-request.scrollTop}px`);
+}
+
+// A command stands out in the conversation, as it did in the composer.
+function typedWords(text: string): (Node | string)[] {
+  const typed = leadingCommand(text);
+  return typed === undefined ? withChips(text) : [h("span", "typed-command", typed.command), ...withChips(typed.rest)];
 }
 
 function turn(from: Turn["from"], body: HTMLElement): HTMLLIElement {
@@ -1052,7 +1077,7 @@ function showError(text: string, recorded = false): void {
   lastSent = undefined;
   const conversation = view.kind === "app" ? view.name : null;
   if (sent === undefined || sent.app !== conversation || view.kind === "settings") return showBanner(text, "error");
-  if (request.value === "") request.value = sent.request;
+  if (request.value === "") setRequest(sent.request);
   if (sent.files !== undefined) attached.put(sent.files);
   if (recorded) return;
   failed = { app: conversation, text };
