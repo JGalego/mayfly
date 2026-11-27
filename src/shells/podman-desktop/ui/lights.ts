@@ -14,7 +14,7 @@ export interface Light {
  * A green ring is starting, before its health check first passes, and a red ring runs but fails its health check.
  * Unknown means Podman has not been asked yet.
  */
-export function lightFor(app: AppView, health: readonly ServiceHealth[] | undefined, working: string | null | undefined): Light {
+export function lightFor(app: Pick<AppView, "name" | "head">, health: readonly ServiceHealth[] | undefined, working: string | null | undefined): Light {
   if (working === app.name) return { colour: "orange", meaning: "Work in progress" };
   if (app.head === null) return { colour: "grey", meaning: "Not deployed" };
   if (health === undefined) return { colour: "unknown", meaning: "Checking Podman" };

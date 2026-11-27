@@ -18,7 +18,7 @@ const IMAGES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif"]);
 // Text files, by their name's ending, as browsers often give them no type.
 const TEXTS = new Set([".txt", ".md", ".csv", ".tsv", ".json"]);
 const MAX_FILES = 4;
-const MAX_IMAGE = 5 * 1024 * 1024;
+export const MAX_IMAGE = 5 * 1024 * 1024;
 const MAX_TEXT = 100 * 1024;
 
 /** Whether a file is an image the model can see, text it can read, or neither. */

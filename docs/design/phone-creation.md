@@ -91,6 +91,6 @@ Each step is its own commit on this branch, behind the setting, so `main` stays 
 1. ~~**Engine, tests first.**~~ Done: pairing in the engine, with one-time codes kept in memory, device tokens kept as hashes in the state, and forgetting a phone. The phone's list of messages and its smaller state, in the shell.
 2. ~~**One controller.**~~ Done: the extension makes one controller, which posts to every open page. Work in progress now outlives closing Mayfly's tab.
 3. ~~**The phone server.**~~ Done: `node:http` on loopback, with pairing, the token check, the message list and the events stream, and Serve's mapping on 38099. A forgotten phone's stream ends at the next state. Settings turns it on.
-4. **The phone page.** The app list and the conversation for a phone, the manifest and icon, pairing, and photos scaled down.
+4. ~~**The phone page.**~~ Done, and seen in Chrome at a phone's size: the apps with their lights, conversations with progress, the composer with photos scaled down, pairing from the link, the manifest, and a service worker that opens the page when Mayfly doesn't answer. Questions 3 to 6 still need an iPhone before 0.4.0.
 5. **Settings.** **Make apps from my phone**, the pairing QR code, paired phones with **Forget**, and a setup check.
 6. **README.** How to pair and what the phone can do, in both READMEs, and the page in the architecture diagram.

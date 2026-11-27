@@ -13,6 +13,9 @@ const STAGES: Record<StageKind, (attempt: number) => readonly [icon: string, lab
   deploying: () => ["🚀", "Deploying behind sign-in"],
 };
 
+/** What each kind of work is called while it's under way. */
+export const TITLES: Record<Exclude<Progress["kind"], "remove">, string> = { create: "Creating app", change: "Updating app", ask: "Answering", deploy: "Deploying", save: "Testing edit", rename: "Renaming", start: "Starting" };
+
 /** What the page knows about showing things: whether to show code, which sections are open, and the code it has fetched. */
 export interface Showing {
   readonly developer: boolean;

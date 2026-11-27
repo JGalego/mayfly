@@ -1,0 +1,14 @@
+{
+  "name": "Mayfly",
+  "short_name": "Mayfly",
+  "description": "Make and change apps on your computer from your phone.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#8e51ff",
+  "background_color": "#222222",
+  "icons": [
+    { "src": "icon.png", "sizes": "128x128", "type": "image/png" },
+    { "src": "logo.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
