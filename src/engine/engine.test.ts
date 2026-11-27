@@ -528,6 +528,20 @@ describe("the engine", () => {
     assert.deepEqual(await engine.people(), []);
   });
 
+  it("removes the files attached in an app's conversation with it, but not one another app has too", async () => {
+    const { engine, kept } = setUp([reply("lunch"), reply("notes"), reply("lunch"), reply("notes")]);
+    await engine.create("split lunch bills");
+    await engine.create("keep notes");
+    const mockup = { name: "mockup.png", type: "image/png", data: new Uint8Array([1, 2, 3]) };
+    const bills = { name: "bills.csv", type: "text/csv", data: new TextEncoder().encode("who,amount") };
+    await engine.change("lunch", "use these", undefined, [mockup, bills]);
+    await engine.change("notes", "use this", undefined, [mockup]);
+
+    await engine.remove("lunch");
+
+    assert.equal(kept.size, 1);
+  });
+
   it("creates the owner once, with a long random password", async () => {
     const { engine } = setUp([]);
 
@@ -832,6 +846,7 @@ function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: st
       return id;
     },
     get: async (id) => kept.get(id) ?? Promise.reject(new Error(`no file ${id}`)),
+    remove: async (id) => void kept.delete(id),
   };
   // What the private network serves for the phone: each port, and the loopback port it forwards to.
   const served = new Map<number, number>();

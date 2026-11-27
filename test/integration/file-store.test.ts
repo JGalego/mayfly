@@ -25,4 +25,15 @@ describe("the file store", () => {
 
     await assert.rejects(files.get("../state.json"), /no file/);
   });
+
+  it("removes a file, and takes one already gone as removed", async () => {
+    const folder = await mkdtemp(join(tmpdir(), "mayfly-files-"));
+    const files = fileStore(folder);
+    const id = await files.put(new Uint8Array([1, 2, 3]));
+
+    await files.remove(id);
+    await files.remove(id);
+
+    assert.deepEqual(await readdir(folder), []);
+  });
 });

@@ -382,7 +382,11 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       if (state.phoneHost !== null) await phoneNetwork.stop(phoneSidePort(app.hostPort));
     }
     await builder.forget(name);
-    await store.save(await syncSignIn(withoutApp(state, name)));
+    const rest = withoutApp(state, name);
+    await store.save(await syncSignIn(rest));
+    // Its conversation goes, and the files people attached in it with it. A file another app has too stays for that one.
+    const kept = new Set(rest.apps.flatMap(filesOf));
+    for (const id of filesOf(app)) if (!kept.has(id)) await files.remove(id);
   }
 
   /** Closes the phone's doors. The apps carry on at their localhost addresses. */
@@ -848,4 +852,10 @@ function oneAtATime(): <T>(work: () => Promise<T>) => Promise<T> {
     last = next;
     return next;
   };
+}
+
+/** The files attached in an app's conversation, and to the request it remembers, by id. */
+function filesOf(app: App): string[] {
+  const attached = [...app.conversation.flatMap((turn) => (turn.from === "person" ? (turn.attachments ?? []) : [])), ...(app.lastAttachments ?? [])];
+  return [...new Set(attached.map((file) => file.id))];
 }
