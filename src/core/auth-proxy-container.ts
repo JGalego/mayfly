@@ -4,7 +4,7 @@ import { APP_PORT, ROLES_CLAIM } from "./contract.ts";
 import { HARDENED, LOOPBACK } from "./hardening.ts";
 import type { Container, EnvVar } from "./kube.ts";
 import { authConfigName, mayflyName } from "./names.ts";
-import { onPhone, phonePort, type PhoneSignIn } from "./phone.ts";
+import { onPhone, phoneDoorPort, type PhoneSignIn } from "./phone.ts";
 
 // Pinned: every app runs the proxy the contract was tested against.
 const IMAGE = "quay.io/oauth2-proxy/oauth2-proxy:v7.15.6";
@@ -35,10 +35,10 @@ export function buildAuthProxyContainer({ appName, hostPort }: AuthProxyInput): 
   return door("auth-proxy", appName, origin, { listen: PORT, publish: hostPort });
 }
 
-/** The same proxy for the phone, which the private network forwards to from the app's port on the phone's address. */
+/** The same proxy for the phone, which the private network forwards to from the phone's side of the app's port. */
 export function buildPhoneDoorContainer({ appName, hostPort, host, loginUrl }: AuthProxyInput & PhoneSignIn): Container {
   const origin = { redirectUrl: onPhone(callbackUrl(hostPort), host), loginUrl: onPhone(loginUrl, host), secureCookie: true };
-  return door("phone-door", appName, origin, { listen: PHONE_DOOR_PORT, publish: phonePort(hostPort) });
+  return door("phone-door", appName, origin, { listen: PHONE_DOOR_PORT, publish: phoneDoorPort(hostPort) });
 }
 
 function door(name: string, appName: string, origin: Origin, ports: { readonly listen: number; readonly publish: number }): Container {

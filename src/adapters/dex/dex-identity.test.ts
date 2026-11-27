@@ -14,7 +14,7 @@ describe("each app's sign-in client", () => {
   it("sends the phone back to the app's phone door too, while phone access is on", () => {
     assert.deepEqual(clientFor(app, "mayfly.tail1a2b.ts.net").redirectUris, [
       "http://localhost:18100/oauth2/callback",
-      "https://mayfly.tail1a2b.ts.net:18100/oauth2/callback",
+      "https://mayfly.tail1a2b.ts.net:38100/oauth2/callback",
     ]);
   });
 });

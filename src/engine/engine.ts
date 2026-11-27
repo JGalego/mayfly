@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { appUrl } from "../core/app-url.ts";
-import { phonePort } from "../core/phone.ts";
+import { phoneDoorPort, phoneSidePort } from "../core/phone.ts";
 import { appObjects } from "./app-objects.ts";
 import { generateApp, listenFor, type Ask, type Attempt, type Generation } from "./generate.ts";
 import { ASK_PROMPT, fixFor, questionFor, withFiles } from "./prompt.ts";
@@ -236,17 +236,17 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     const port = identity.signInPort;
     if (!anyRunning(state)) {
       await identity.stop();
-      if (state.phoneHost !== null) await phoneNetwork.stop(port);
+      if (state.phoneHost !== null) await phoneNetwork.stop(phoneSidePort(port));
       return;
     }
     await identity.sync(state);
-    if (state.phoneHost !== null) await phoneNetwork.serve(port, port);
+    if (state.phoneHost !== null) await phoneNetwork.serve(phoneSidePort(port), port);
   }
 
   /** Runs an app's image, and while phone access is on, through its phone door too. */
   async function runApp(state: State, app: App, image: string): Promise<void> {
     await deployer.deploy(appObjects(app, image, identity.settingsFor(app), state.phoneHost));
-    if (state.phoneHost !== null) await phoneNetwork.serve(app.hostPort, phonePort(app.hostPort));
+    if (state.phoneHost !== null) await phoneNetwork.serve(phoneSidePort(app.hostPort), phoneDoorPort(app.hostPort));
   }
 
   /** Runs every app that has a version to run again, with or without its phone door as the state says, and sign-in with them. */
@@ -464,7 +464,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       const running = runningVersion(app);
       if (running !== undefined) {
         await deployer.remove(appObjects(app, running.image, identity.settingsFor(app)));
-        if (state.phoneHost !== null) await phoneNetwork.stop(app.hostPort);
+        if (state.phoneHost !== null) await phoneNetwork.stop(phoneSidePort(app.hostPort));
       }
       await builder.forget(name);
       const next = withoutApp(state, name);
@@ -490,8 +490,8 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       const state = await store.load();
       if (state.phoneHost === null) return;
       // Stopped first: if that fails partway, it's still on, for another try.
-      for (const app of state.apps) if (app.head !== null) await phoneNetwork.stop(app.hostPort);
-      await phoneNetwork.stop(identity.signInPort);
+      for (const app of state.apps) if (app.head !== null) await phoneNetwork.stop(phoneSidePort(app.hostPort));
+      await phoneNetwork.stop(phoneSidePort(identity.signInPort));
       const next = { ...state, phoneHost: null };
       await store.save(next);
       await runAll(next);

@@ -539,7 +539,7 @@ describe("phone access", () => {
 
     assert.equal(host, "mayfly.tail1a2b.ts.net");
     assert.equal(await engine.phoneAccess(), host);
-    assert.deepEqual(served, new Map([[5556, 5556], [18100, 28100]]));
+    assert.deepEqual(served, new Map([[25556, 5556], [38100, 28100]]));
     assert.deepEqual(containersOf(deployed.at(-1)), ["auth-proxy", "phone-door", "app"]);
     assert.equal(synced.at(-1)?.phoneHost, host);
   });
@@ -550,7 +550,7 @@ describe("phone access", () => {
 
     await engine.create("split lunch bills");
 
-    assert.deepEqual(served, new Map([[5556, 5556], [18100, 28100]]));
+    assert.deepEqual(served, new Map([[25556, 5556], [38100, 28100]]));
     assert.deepEqual(containersOf(deployed.at(-1)), ["auth-proxy", "phone-door", "app"]);
   });
 

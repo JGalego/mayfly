@@ -12,7 +12,7 @@ An opt-in setting, off by default, that gives each app a second front door for t
 flowchart LR
   browser(["Browser on the computer"]) -->|"http://localhost:18100"| local
   browser -->|"http://localhost:5556"| dex
-  phone(["Phone<br/>Tailscale app"]) -->|"https://mayfly.tail1a2b.ts.net:18100"| serve
+  phone(["Phone<br/>Tailscale app"]) -->|"https://mayfly.tail1a2b.ts.net:38100"| serve
   subgraph host["The computer running Mayfly"]
     serve["Tailscale Serve<br/>tailnet only"] -->|"127.0.0.1:28100"| door
     serve -->|"127.0.0.1:5556"| dex["Dex<br/>one issuer"]
@@ -23,16 +23,16 @@ flowchart LR
   end
 ```
 
-The phone uses the same port number as the computer. Serve maps the tailnet name's port to the phone door's port, the app's port plus 10000: `tailscale serve --bg --https=18100 http://127.0.0.1:28100`. With `--bg`, it keeps serving across restarts until Mayfly turns it off with `tailscale serve --https=18100 off`. Dex's port 5556 is served the same way, to Dex itself.
+The phone uses its own port numbers, the computer's plus 20000, so Serve never listens on a number Podman publishes. Under WSL's mirrored networking the two would collide whatever their addresses. Serve forwards the phone's port to the phone door, on the app's port plus 10000: `tailscale serve --bg --https=38100 http://127.0.0.1:28100`. With `--bg`, it keeps serving across restarts until Mayfly turns it off with `tailscale serve --https=38100 off`. Sign-in is served the same way, from 25556 to Dex on 5556.
 
 ## The two doors
 
 | | Localhost door (today, unchanged) | Phone door (new) |
 |---|---|---|
-| Address | `http://localhost:18100/` | `https://<machine>.<tailnet>.ts.net:18100/` |
+| Address | `http://localhost:18100/` | `https://<machine>.<tailnet>.ts.net:38100/` |
 | Listens on | `127.0.0.1:18100` | `127.0.0.1:28100`, reached only through Serve |
-| Sign-in page | `http://localhost:5556/dex` | the tailnet name, port 5556, through Serve |
-| Redirect URL | `http://localhost:18100/oauth2/callback` | the same path on the tailnet name |
+| Sign-in page | `http://localhost:5556/dex` | the tailnet name, port 25556, through Serve |
+| Redirect URL | `http://localhost:18100/oauth2/callback` | the same path on the tailnet name, port 38100 |
 | Cookie | not Secure | Secure |
 | Dex issuer, checked in tokens | `http://localhost:5556/dex` | the same |
 
@@ -90,7 +90,7 @@ A later mode could serve any private network: the phone door listens on the netw
 ## Questions for the spike
 
 1. ~~Does Serve accept any HTTPS and HTTP port?~~ Answered on Windows: it accepted HTTP on 5556, 18197 to 18199 and 65000, and HTTPS on 18198. Serve routes by hostname: the full name and the short name `mayfly` work, and the bare tailnet IP gets a 404. Phone addresses must use the full name, which is also the only one the certificate covers.
-2. Can Serve listen on the tailnet address's port 18100 while Podman holds `127.0.0.1:18100`? Answered on Windows: yes, whichever binds first. Serve on port 5556 worked while the Podman machine held `127.0.0.1:5556`. A Windows process could bind `127.0.0.1:18197` after Serve held that port, and Serve still reached its target. One catch: with WSL's mirrored networking, a process inside WSL shares port numbers with Windows across addresses. So a WSL process on `127.0.0.1:18199` and Serve on 18199 block each other. That affects testing from WSL, not the Podman machine. Linux and macOS are still to check.
+2. Can Serve listen on the tailnet address's port 18100 while Podman holds `127.0.0.1:18100`? Answered on Windows: yes, whichever binds first. Serve on port 5556 worked while the Podman machine held `127.0.0.1:5556`. A Windows process could bind `127.0.0.1:18197` after Serve held that port, and Serve still reached its target. One catch: with WSL's mirrored networking, a process inside WSL shares port numbers with Windows across addresses. So a WSL process on `127.0.0.1:18199` and Serve on 18199 block each other. The spike's Podman machine wasn't under mirrored networking, but a Podman machine is a WSL distro, and later one that was hit this: a connection Tailscale kept on the tailnet address's port 5556 stopped Dex from binding `127.0.0.1:5556`. So the phone now uses its own port numbers, 20000 above the computer's. Linux and macOS are still to check.
 3. ~~Does one Dex sign in through both doors end to end?~~ Answered: yes. A throwaway rig ran the core's phone door and Mayfly's Dex on WSL's Podman, behind Windows' Serve. An iPhone on the tailnet opened `https://<machine>.<tailnet>.ts.net:18199/`, signed in on Dex's page on the tailnet name, and reached the app. Dex's pages and static files worked there, and the proxy logged the iPhone's sign-in and requests. A browser on the computer did the same through the tailnet name.
 4. ~~Does the HTTP mode need only MagicDNS?~~ Dropped with the HTTP mode.
 5. ~~Which fields of `tailscale status --json` give the tailnet name and say whether HTTPS is enabled?~~ Answered on Windows: `Self.DNSName` is the machine's tailnet name with a trailing dot, and `CertDomains` lists it once HTTPS certificates are enabled. `Self.HostName` is the OS hostname, not the tailnet name. Tailscale warns the format may change.

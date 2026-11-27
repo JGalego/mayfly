@@ -126,9 +126,9 @@ describe("the pod with phone access", () => {
     assert.ok(door.args?.includes("--http-address=0.0.0.0:4181"));
   });
 
-  it("signs the phone in on the phone's address, at the app's own port and the sign-in page's", () => {
-    assert.ok(door.args?.includes("--redirect-url=https://mayfly.tail1a2b.ts.net:8137/oauth2/callback"));
-    assert.ok(door.args?.includes("--login-url=https://mayfly.tail1a2b.ts.net:5556/dex/auth"));
+  it("signs the phone in on the phone's address, on the phone's side of the app's port and the sign-in page's", () => {
+    assert.ok(door.args?.includes("--redirect-url=https://mayfly.tail1a2b.ts.net:28137/oauth2/callback"));
+    assert.ok(door.args?.includes("--login-url=https://mayfly.tail1a2b.ts.net:25556/dex/auth"));
   });
 
   it("keeps the phone's session in a Secure cookie, since the phone only uses HTTPS", () => {
