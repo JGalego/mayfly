@@ -11,7 +11,7 @@ from diagrams.onprem.identity import Dex
 
 HERE = Path(__file__).parent
 
-GRAPH = {"fontname": "Helvetica", "pad": "0.4", "nodesep": "0.7", "ranksep": "1.1", "splines": "spline"}
+GRAPH = {"fontname": "Helvetica", "pad": "0.8", "nodesep": "0.7", "ranksep": "1.1", "splines": "spline"}
 NODE = {"fontname": "Helvetica", "fontsize": "13"}
 EDGE = {"fontname": "Helvetica", "fontsize": "11", "color": "#6b7280", "fontcolor": "#374151"}
 TAILNET = {"color": "#4b5563", "style": "dashed"}
@@ -23,28 +23,33 @@ def logo(name: str) -> str:
     return str(HERE / "logos" / f"{name}.png")
 
 
+def label(name: str, what: str = "") -> str:
+    """A node's name in bold, and what it does under it. The newline makes room: diagrams counts them to size a node."""
+    return f"<<b>{name}</b>" + (f"<br/>\n{what}" if what else "") + ">"
+
+
 with Diagram("", filename=str(HERE / "architecture"), outformat="png", show=False, direction="LR", graph_attr=GRAPH, node_attr=NODE, edge_attr=EDGE):
-    phone = Mobile("Your phone, and\npeople you share with")
-    model = Custom("Model provider\nOpenAI-compatible", logo("openai"))
+    phone = Mobile(label("Your phone", "and people you share with"))
+    model = Custom(label("Model provider", "OpenAI-compatible"), logo("openai"))
 
     with Cluster("Your computer", graph_attr=BOX):
-        browser = Client("Your browser")
-        serve = Custom("Tailscale Serve\nHTTPS on your tailnet", logo("tailscale"))
+        browser = Client(label("Your browser"))
+        serve = Custom(label("Tailscale Serve", "HTTPS on your tailnet"), logo("tailscale"))
 
         with Cluster("Podman Desktop", graph_attr=BOX):
-            mayfly = Custom("Mayfly extension", logo("mayfly"))
+            mayfly = Custom(label("Mayfly extension"), logo("mayfly"))
 
         with Cluster("Podman", graph_attr=BOX):
-            podman = Custom("Podman\nbuilds and runs", logo("podman"))
+            podman = Custom(label("Podman", "builds and runs"), logo("podman"))
 
             with Cluster("One pod per app", graph_attr=BOX):
                 # Two containers of the same image, one for each way in: drawn as one, so no lines cross.
-                doors = Oauth2Proxy("oauth2-proxy\na door per way in")
-                app = Custom("Generated app\nHono, on the runtime", logo("hono"))
+                doors = Oauth2Proxy(label("oauth2-proxy", "a door per way in"))
+                app = Custom(label("Generated app", "Hono, on the runtime"), logo("hono"))
 
             with Cluster("Sign-in", graph_attr=BOX):
-                dex = Dex("Dex")
-                sessions = Custom("Sessions\non a volume", logo("sqlite"))
+                dex = Dex(label("Dex"))
+                sessions = Custom(label("Sessions", "on a volume"), logo("sqlite"))
 
     mayfly >> Edge(label="what you ask,\nthe app's code") >> model
     mayfly >> Edge(label="routes.ts") >> podman
