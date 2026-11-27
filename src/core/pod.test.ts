@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { buildProxyConfigMap } from "./auth-proxy-container.ts";
 import { buildPod } from "./pod.ts";
 import type { Container, Pod } from "./kube.ts";
 
@@ -59,16 +60,13 @@ describe("the pod Mayfly runs for an app", () => {
     assert.equal(proxy.livenessProbe, undefined);
   });
 
-  it("forwards signed-in requests to the app over the pod's loopback", () => {
-    assert.ok(proxy.args?.includes("--upstream=http://127.0.0.1:8080/"));
+  it("reads its settings file, read-only, from the app's proxy ConfigMap", () => {
+    assert.ok(proxy.args?.includes("--alpha-config=/etc/oauth2-proxy/auth-proxy.yaml"));
+    assert.deepEqual(proxy.volumeMounts, [{ name: "proxy-config", mountPath: "/etc/oauth2-proxy", readOnly: true }]);
+    assert.deepEqual(pod.spec.volumes, [{ name: "proxy-config", configMap: { name: "mayfly-expenses-proxy" } }]);
   });
 
-  it("passes the signed-in user's identity to the app in headers", () => {
-    assert.ok(proxy.args?.includes("--pass-user-headers=true"));
-  });
-
-  it("signs people in over OIDC and sends them back to this app's port", () => {
-    assert.ok(proxy.args?.includes("--provider=oidc"));
+  it("sends people back to this app's port once they sign in", () => {
     assert.ok(proxy.args?.includes("--redirect-url=http://localhost:8137/.mayfly/callback"));
   });
 
@@ -78,14 +76,6 @@ describe("the pod Mayfly runs for an app", () => {
 
   it("lets the proxy send people on to the identity provider to end its session, and nowhere else", () => {
     assert.deepEqual(proxy.args?.filter((arg) => arg.startsWith("--whitelist-domain")), ["--whitelist-domain=localhost:5556"]);
-  });
-
-  it("reads roles from the groups claim", () => {
-    assert.ok(proxy.args?.includes("--oidc-groups-claim=groups"));
-  });
-
-  it("asks for consent once, not at every sign-in", () => {
-    assert.ok(proxy.args?.includes("--approval-prompt=auto"));
   });
 
   it("takes the identity provider settings and allowed roles from the app's ConfigMap", () => {
@@ -137,12 +127,16 @@ describe("the pod with phone access", () => {
 
   it("publishes the phone door on loopback only, 10000 above the app's port, for the private network to forward to", () => {
     assert.deepEqual(door.ports, [{ containerPort: 4181, hostPort: 18137, hostIP: "127.0.0.1" }]);
-    assert.ok(door.args?.includes("--http-address=0.0.0.0:4181"));
   });
 
-  it("signs the phone in on the phone's address, on the phone's side of the app's port and the sign-in page's", () => {
+  it("gives the phone door a settings file of its own, from the same ConfigMap", () => {
+    assert.ok(door.args?.includes("--alpha-config=/etc/oauth2-proxy/phone-door.yaml"));
+    assert.deepEqual(door.volumeMounts, proxy.volumeMounts);
+    assert.deepEqual(withPhone.spec.volumes, pod.spec.volumes);
+  });
+
+  it("sends the phone back to the phone's side of the app's port once it signs in", () => {
     assert.ok(door.args?.includes("--redirect-url=https://mayfly.tail1a2b.ts.net:28137/.mayfly/callback"));
-    assert.ok(door.args?.includes("--login-url=https://mayfly.tail1a2b.ts.net:25556/dex/auth"));
   });
 
   it("signs the phone out on the phone's address too, apart from the computer", () => {
@@ -157,9 +151,28 @@ describe("the pod with phone access", () => {
   it("admits the same people as the localhost door, from the same settings and secrets, to the same app", () => {
     assert.deepEqual(door.envFrom, proxy.envFrom);
     assert.deepEqual(secretRefs(door), secretRefs(proxy));
-    for (const arg of ["--upstream=http://127.0.0.1:8080/", "--oidc-groups-claim=groups", "--cookie-name=mayfly-expenses", "--pass-user-headers=true", "--proxy-prefix=/.mayfly"]) {
+    for (const arg of ["--cookie-name=mayfly-expenses", "--proxy-prefix=/.mayfly", "--email-domain=*"]) {
       assert.ok(door.args?.includes(arg), arg);
     }
+  });
+});
+
+describe("the proxy's ConfigMap", () => {
+  it("holds a settings file for each door the pod has", () => {
+    const computerOnly = buildProxyConfigMap("expenses");
+    const both = buildProxyConfigMap("expenses", { host: "mayfly.tail1a2b.ts.net", loginUrl: "http://localhost:5556/dex/auth" });
+
+    assert.equal(computerOnly.metadata.name, "mayfly-expenses-proxy");
+    assert.deepEqual(Object.keys(computerOnly.data), ["auth-proxy.yaml"]);
+    assert.deepEqual(Object.keys(both.data), ["auth-proxy.yaml", "phone-door.yaml"]);
+    assert.equal(both.data["auth-proxy.yaml"], computerOnly.data["auth-proxy.yaml"]);
+  });
+
+  it("sends each door to sign in where its browser reaches the identity provider", () => {
+    const both = buildProxyConfigMap("expenses", { host: "mayfly.tail1a2b.ts.net", loginUrl: "http://localhost:5556/dex/auth" });
+
+    assert.match(both.data["auth-proxy.yaml"] ?? "", /bindAddress: 0\.0\.0\.0:4180\n[\s\S]*loginURL: '\$\{OAUTH2_PROXY_LOGIN_URL\}'/);
+    assert.match(both.data["phone-door.yaml"] ?? "", /bindAddress: 0\.0\.0\.0:4181\n[\s\S]*loginURL: 'https:\/\/mayfly\.tail1a2b\.ts\.net:25556\/dex\/auth'/);
   });
 });
 

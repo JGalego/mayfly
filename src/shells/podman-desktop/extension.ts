@@ -49,7 +49,22 @@ export async function activate(context: api.ExtensionContext): Promise<void> {
   };
   context.subscriptions.push(api.commands.registerCommand("mayfly.open", show));
   await show();
-  if (settings().get<boolean>("autostart") === true) whenPodmanAnswers(context, () => void handle({ type: "start-stopped" }));
+  whenPodmanAnswers(context, () => void startApps(context, (message) => handle(message)));
+}
+
+/** Runs the running apps again if Mayfly updated since they last ran, then starts the stopped ones if the person wants. */
+async function startApps(context: api.ExtensionContext, handle: Handler): Promise<void> {
+  await runAgainIfUpdated(context, handle);
+  if (settings().get<boolean>("autostart") === true) await handle({ type: "start-stopped" });
+}
+
+// Running apps keep the objects they started with, so a fix to how Mayfly runs apps reaches them only once they run again.
+async function runAgainIfUpdated(context: api.ExtensionContext, handle: Handler): Promise<void> {
+  const ranWith = join(context.storagePath, "apps-ran-with.json");
+  const { version } = (await readJson(api.Uri.joinPath(context.extensionUri, "package.json").fsPath)) as { version: string };
+  if (((await readJson(ranWith)) as { version?: string } | undefined)?.version === version) return;
+  await handle({ type: "updated" });
+  await writeJson(ranWith, { version });
 }
 
 type Handler = ReturnType<typeof createController>;

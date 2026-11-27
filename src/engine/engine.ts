@@ -104,6 +104,8 @@ export interface Engine {
   undo(name: string, watch?: Watcher): Promise<AppView>;
   /** The apps with a version to run that Podman is not running, as after the Podman machine stopped. */
   stopped(): Promise<string[]>;
+  /** The apps Podman is running. */
+  running(): Promise<string[]>;
   /** Runs the running version again, and the sign-in service, as after Podman stopped them. Nothing about the app changes. */
   start(name: string, watch?: Watcher): Promise<AppView>;
   /** Has the app's model answer a question about it from its code, changing nothing. The exchange joins the conversation. */
@@ -405,6 +407,11 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     async stopped() {
       const services = await engine.health();
       return services.filter((service) => service.kind === "app" && !runs(service)).map((service) => service.name);
+    },
+
+    async running() {
+      const services = await engine.health();
+      return services.filter((service) => service.kind === "app" && runs(service)).map((service) => service.name);
     },
 
     async start(name, watch = UNWATCHED) {

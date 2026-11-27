@@ -76,7 +76,7 @@ Applications like [Dyad](https://www.dyad.sh/) and [Lovable](https://lovable.dev
 
 A generated app is one TypeScript file, `routes.ts`, using [Hono](https://hono.dev/) on Node 24. The runtime listens on `$PORT`, serves `/healthz` and writes JSON logs to stdout. The app serves HTML at `/` with a link to `/oauth2/sign_out`. It has no server-side storage; data that must survive a restart can live in the browser.
 
-[oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/) handles sign-in, checks the OIDC `groups` claim against the app's allowed roles and forwards identity in headers. [Dex](https://dexidp.io/) provides local OIDC. The app's port is not published; the proxy listens on loopback.
+[oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/) handles sign-in, checks the OIDC `groups` claim against the app's allowed roles and forwards identity in headers. It keeps the browser's cookies from the app, since browsers send every app on a host the cookies of all the others. [Dex](https://dexidp.io/) provides local OIDC. The app's port is not published; the proxy listens on loopback.
 
 Mayfly deploys an OCI image and Kubernetes objects with `podman kube play`. Containers run as non-root with a read-only root filesystem, no Linux capabilities and CPU and memory limits. The proxy's ConfigMap sets the identity provider and allowed roles; credentials live in a Secret.
 

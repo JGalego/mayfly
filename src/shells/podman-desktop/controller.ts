@@ -124,6 +124,8 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       return setPhone(request.on, session);
     case "start-stopped":
       return startStopped(session);
+    case "updated":
+      return startRunningAgain(session);
     case "focus":
       session.focused = request.on;
       return;
@@ -347,7 +349,16 @@ async function sendCode(app: string, version: string, session: Session): Promise
 
 /** Starts each app Podman is not running, one at a time, as when Podman Desktop starts. It gives way to anything asked for meanwhile. */
 async function startStopped(session: Session): Promise<void> {
-  for (const app of await session.engine.stopped()) {
+  await startEach(await session.engine.stopped(), session);
+}
+
+// Starting an app builds its objects afresh, so each picks up what the new version changed in how apps run.
+async function startRunningAgain(session: Session): Promise<void> {
+  await startEach(await session.engine.running(), session);
+}
+
+async function startEach(apps: readonly string[], session: Session): Promise<void> {
+  for (const app of apps) {
     if (session.working !== null) return;
     await run({ app, request: "Start the app", kind: "start" }, session, (watch) => session.engine.start(app, watch)).catch(async (error: unknown) => {
       const text = `Mayfly could not start ${app}: ${error instanceof Error ? error.message : String(error)}`;
@@ -520,6 +531,7 @@ function readRequest(message: unknown): FromUi | undefined {
     case "phone":
       return typeof on === "boolean" ? { type, on } : undefined;
     case "start-stopped":
+    case "updated":
       return { type };
     case "save":
       return typeof app === "string" && typeof from === "string" && typeof routes === "string" && typeof words === "string" ? { type, app, from, routes, message: words } : undefined;

@@ -17,7 +17,7 @@ describe("the engine", () => {
 
     assert.equal(app.name, "lunch");
     assert.equal(app.url, "http://localhost:18100/");
-    assert.deepEqual(names(deployed[0]), ["ConfigMap/mayfly-lunch-auth", "Secret/mayfly-lunch-auth", "Pod/mayfly-lunch"]);
+    assert.deepEqual(names(deployed[0]), ["ConfigMap/mayfly-lunch-auth", "ConfigMap/mayfly-lunch-proxy", "Secret/mayfly-lunch-auth", "Pod/mayfly-lunch"]);
   });
 
   it("lets only the owner into a new app", async () => {
@@ -115,7 +115,7 @@ describe("the engine", () => {
 
     assert.equal(back.head, first.head);
     assert.equal(back.url, first.url);
-    assert.equal(names(deployed.at(-2)).length, 3);
+    assert.equal(names(deployed.at(-2)).length, 4);
     assert.equal(branched.versions.at(-1)?.parent, first.head);
     assert.equal(branched.versions.length, 3);
     assert.deepEqual(back.conversation.slice(-2).map((turn) => turn.text.split(":")[0]), [`Deploy version \`${first.head}\``, `Deployed version \`${first.head}\``]);
@@ -244,6 +244,15 @@ describe("the engine", () => {
     await engine.create("an app that never ran");
 
     assert.deepEqual(await engine.stopped(), ["gone"]);
+  });
+
+  it("names the apps Podman is running", async () => {
+    const { engine } = setUp([reply("lunch"), reply("gone"), reply("never"), reply("never"), reply("never")], [{ ok: true }, { ok: true }, crashed, crashed, crashed]);
+    await engine.create("split lunch bills");
+    await engine.create("an app Podman has lost");
+    await engine.create("an app that never ran");
+
+    assert.deepEqual(await engine.running(), ["lunch"]);
   });
 
   it("refuses to start an app that has never run", async () => {

@@ -1,6 +1,6 @@
 import { buildAppContainer } from "./app-container.ts";
 import { appUrl } from "./app-url.ts";
-import { buildAuthProxyContainer, buildPhoneDoorContainer } from "./auth-proxy-container.ts";
+import { buildAuthProxyContainer, buildPhoneDoorContainer, proxyConfigVolume } from "./auth-proxy-container.ts";
 import type { Pod } from "./kube.ts";
 import type { Manifest } from "./manifest.ts";
 import { mayflyName } from "./names.ts";
@@ -27,6 +27,7 @@ export function buildPod({ manifest, hostPort, endSessionUrl, phone }: PodInput)
     metadata: { name: mayflyName(appName) },
     spec: {
       containers: [buildAuthProxyContainer({ appName, hostPort, endSessionUrl }), ...phoneDoor, buildAppContainer(manifest, signOutTargets(doors(hostPort, endSessionUrl, phone)))],
+      volumes: [proxyConfigVolume(appName)],
     },
   };
 }
