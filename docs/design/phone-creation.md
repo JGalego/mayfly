@@ -78,10 +78,10 @@ Found along the way: by the same RFC, an app may see Dex's single sign-on cookie
 
 1. ~~Can an app's container reach a server the extension runs on loopback?~~ Answered on WSL's Podman, under mirrored networking: no. With a server up on `127.0.0.1:18099`, containers on bridge networks got "connection refused" from `host.containers.internal`, the host's own addresses and its tailnet address. They didn't reach Serve's ports on the tailnet name either. Still to check on a Podman machine, macOS and Linux.
 2. ~~Does the page's port close when Podman Desktop stops, updates or reloads the extension?~~ Answered from Podman Desktop's source: `deactivateExtension` awaits the extension's `deactivate`, then disposes `context.subscriptions` (`packages/main/src/plugin/extension/extension-loader.ts`). Closing the server in a subscription frees the port.
-3. Do JSON lines reach iOS Safari through Serve as they're written, and does the stream pick up again after the phone sleeps?
+3. Do JSON lines reach iOS Safari through Serve as they're written, and does the stream pick up again after the phone sleeps? Half answered on Windows: Serve passed each line on as it was written, a second apart, whether the response said `application/x-ndjson` or `text/event-stream`. The iPhone is still to check.
 4. Does a pairing made in Safari carry over to the Home Screen app? If not, does Add to Home Screen keep the pairing link's fragment?
 5. Does a file input open the camera from the Home Screen app, and what type and size are the photos?
-6. What does the phone show when Podman Desktop is closed? Can a service worker show the page's own message instead?
+6. What does the phone show when Podman Desktop is closed? Can a service worker show the page's own message instead? Half answered on Windows: with nothing on the loopback port, Serve answers `502 Bad Gateway` with an empty body, so without a service worker the phone gets a blank page. The service worker is still to check on the iPhone.
 7. Can an app read Dex's single sign-on cookie through its own `/dex/` path?
 
 ## Plan
