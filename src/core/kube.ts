@@ -83,6 +83,8 @@ export interface ClaimVolume {
 export interface VolumeMount {
   readonly name: string;
   readonly mountPath: string;
+  /** One file of the volume, mounted in place of the file at mountPath. */
+  readonly subPath?: string;
   readonly readOnly: boolean;
 }
 

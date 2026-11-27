@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import type { KubeObject, PersistentVolumeClaim, Pod, Secret } from "../../core/kube.ts";
+import type { ConfigMap, KubeObject, PersistentVolumeClaim, Pod, Secret } from "../../core/kube.ts";
 import { buildDex } from "./dex.ts";
 
 const KEY = "k".repeat(32);
@@ -28,6 +28,21 @@ describe("Dex as Mayfly runs it", () => {
       ssoSharedWithDefault: "all",
     });
     assert.deepEqual(podOf(objects).spec.containers[0]?.env, [{ name: "DEX_SESSIONS_ENABLED", value: "true" }]);
+  });
+
+  it("signs people in on its own password page, changed so an eye shows the password", async () => {
+    const objects = await buildDex({ users: [], clients: [] });
+    const pages = objects.find((o): o is ConfigMap => o.kind === "ConfigMap" && o.metadata.name === "mayfly-dex-pages");
+    const dex = podOf(objects).spec.containers[0];
+
+    assert.match(pages?.data["password.html"] ?? "", /id="show-password"/);
+    assert.equal((configOf(objects).frontend as { dir?: string }).dir, "/srv/dex/web");
+    assert.deepEqual(dex?.volumeMounts?.find((mount) => mount.name === "pages"), {
+      name: "pages",
+      mountPath: "/srv/dex/web/templates/password.html",
+      subPath: "password.html",
+      readOnly: true,
+    });
   });
 
   it("has no sessions without a key", async () => {

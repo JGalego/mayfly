@@ -3,6 +3,7 @@ import type { IdpSettings } from "../../core/auth-config-map.ts";
 import { HARDENED, LOOPBACK } from "../../core/hardening.ts";
 import type { ConfigMap, KubeObject, PersistentVolumeClaim, Pod, Secret, Volume, VolumeMount } from "../../core/kube.ts";
 import { execProbe } from "../../core/probe.ts";
+import { PASSWORD_PAGE } from "./password-page.ts";
 
 // Pinned: v2.45 is the first release that gives static users groups.
 const IMAGE = "ghcr.io/dexidp/dex:v2.46.1";
@@ -10,6 +11,7 @@ const NAME = "mayfly-dex";
 export const DEX_POD = NAME;
 const CONFIG = `${NAME}-config`;
 const BRAND = `${NAME}-brand`;
+const PAGES = `${NAME}-pages`;
 const DATA = `${NAME}-data`;
 export const DEX_VOLUME = DATA;
 // Where Dex keeps its sessions and signing keys, on a volume that outlives the pod Mayfly replaces on every change.
@@ -55,7 +57,7 @@ export interface DexInput {
 
 /** The local identity provider: a pod published on loopback, configured from a Secret, its sign-in page named for Mayfly. */
 export async function buildDex({ users, clients, logo, port = PREFERRED_SIGN_IN_PORT, sessionKey }: DexInput): Promise<KubeObject[]> {
-  const frontend = logo === undefined ? { issuer: "Mayfly" } : { issuer: "Mayfly", dir: WEB, logoURL: LOGO };
+  const frontend = logo === undefined ? { issuer: "Mayfly", dir: WEB } : { issuer: "Mayfly", dir: WEB, logoURL: LOGO };
   const config = {
     issuer: issuerOn(port),
     frontend,
@@ -68,12 +70,17 @@ export async function buildDex({ users, clients, logo, port = PREFERRED_SIGN_IN_
     staticClients: clients.map(staticClient),
   };
   const brand: ConfigMap[] = logo === undefined ? [] : [{ apiVersion: "v1", kind: "ConfigMap", metadata: { name: BRAND }, data: { "logo.svg": logo } }];
-  return [configSecret(config), ...brand, dataClaim(), dexPod(brand.length > 0, port, sessionKey !== undefined)];
+  return [configSecret(config), pages(), ...brand, dataClaim(), dexPod(brand.length > 0, port, sessionKey !== undefined)];
 }
 
 /** One sign-in serves every app, on each device, until it ends. "Remember me" starts ticked: these are the owner's own devices. */
 function sessionsWith(cookieEncryptionKey: string) {
   return { absoluteLifetime: SESSION_LIFETIME, validIfNotUsedFor: SESSION_IDLE, rememberMeCheckedByDefault: true, cookieEncryptionKey, ssoSharedWithDefault: "all" };
+}
+
+/** Pages of Dex's own, changed for Mayfly, which replace Dex's one by one. */
+function pages(): ConfigMap {
+  return { apiVersion: "v1", kind: "ConfigMap", metadata: { name: PAGES }, data: { "password.html": PASSWORD_PAGE } };
 }
 
 function dataClaim(): PersistentVolumeClaim {
@@ -126,10 +133,13 @@ function issuerOn(port: number): string {
 function dexPod(branded: boolean, port: number, sessions: boolean): Pod {
   const volumes: Volume[] = [
     { name: "config", secret: { secretName: CONFIG } },
+    { name: "pages", configMap: { name: PAGES } },
     { name: "data", persistentVolumeClaim: { claimName: DATA } },
   ];
   const mounts: VolumeMount[] = [
     { name: "config", mountPath: "/etc/dex", readOnly: true },
+    // Dex reads every template in its folder, so each changed page replaces only its own file.
+    { name: "pages", mountPath: `${WEB}/templates/password.html`, subPath: "password.html", readOnly: true },
     { name: "data", mountPath: DATA_DIR, readOnly: false },
   ];
   if (branded) {
