@@ -102,7 +102,7 @@ function liveNote({ kind, code }: Stage): string {
 
 function details(stage: Stage, showing: Showing, folds?: Folds): Node[] {
   const shown = showing.developer && folds !== undefined ? behindTheCurtain(stage, showing, folds) : [];
-  if (stage.problem !== undefined) shown.push(showing.developer ? h("pre", "problem", stage.problem) : h("p", "quiet", "Attempt failed."));
+  if (stage.problem !== undefined) shown.push(showing.developer ? h("pre", "problem", stage.problem) : h("p", "quiet", "Attempt failed"));
   return shown;
 }
 

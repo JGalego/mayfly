@@ -80,10 +80,10 @@ function cleaned(view: MailAccountView, password: string, saved: MailAccount | u
 }
 
 function problemWith({ host, port, username, password, from }: MailAccount): string | undefined {
-  if (!HOST.test(host) || host.length > MAX_FIELD) return "Give the server's name, such as smtp.gmail.com.";
-  if (!Number.isInteger(port) || port < 1 || port > 65535) return "Give the server's port, such as 465 or 587.";
-  if (username === "" || username.length > MAX_FIELD) return "Give the username you sign in to the server with.";
-  if (password === "") return "Enter the account's password.";
-  if (!EMAIL.test(from) || from.length > MAX_FIELD) return "Give the address emails come from, such as you@example.com.";
+  if (!HOST.test(host) || host.length > MAX_FIELD) return "Give the server's name";
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return "Give the server's port";
+  if (username === "" || username.length > MAX_FIELD) return "Give your username for the server";
+  if (password === "") return "Enter the account's password";
+  if (!EMAIL.test(from) || from.length > MAX_FIELD) return "Give the address emails come from";
   return undefined;
 }

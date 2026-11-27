@@ -20,7 +20,7 @@ import type { ModelPorts } from "./model-settings.ts";
 import { openPages } from "./pages.ts";
 import { phoneCreation, type PhoneCreation } from "./phone-creation.ts";
 import { pageFiles, startPhoneServer } from "./phone-server.ts";
-import { endpointOf, FIRST_MODELS, isProvider, labelOf, modelFor, providerOf, type Models, type ModelSetting } from "./settings.ts";
+import { endpointOf, FIRST_MODELS, isProvider, labelOf, modelFor, nameOf, providerOf, type Models, type ModelSetting } from "./settings.ts";
 
 // The published, signed runtime this version builds apps on: a list of its amd64 and arm64 images, from which Podman
 // pulls the machine's own. The README shows how to verify it.
@@ -151,15 +151,18 @@ async function controllerPorts(context: api.ExtensionContext, { engine, keys, mo
     },
     openExternal: (url) => api.env.openExternal(api.Uri.parse(url)),
     copy: (text) => api.env.clipboard.writeText(text),
-    doctor: () =>
-      examine({
+    doctor: (tell) =>
+      examine(
+        {
         podman: versions,
         runtimeReady: () => imageExists(RUNTIME_IMAGE),
         signIn: async () => (await engine.health()).find((service) => service.kind === "sign-in")?.containers.map((container) => container.state) ?? [],
         models: () => Promise.all(models.models().models.map((setting) => probe(setting, keys))),
         phoneHost: () => engine.phoneAccess(),
         phoneNetwork: () => phoneNetwork.status(),
-      }),
+        },
+        tell,
+      ),
     settings: {
       ...models,
       // Peek behind the curtain was developer mode's first name; whoever turned it on keeps it on.
@@ -200,9 +203,9 @@ function keyStore(secrets: api.SecretStorage): KeyStore {
 
 // The key is read on each call, so a newly saved one works without restarting anything.
 function configuredModel(setting: ModelSetting, keys: KeyStore): ModelProvider {
-  const name = labelOf(setting);
   return {
-    name,
+    name: labelOf(setting),
+    called: nameOf(setting),
     provider: providerOf(setting),
     // Without a key when none is saved, as local providers often need none. One that does says so, and the person hears where to add it.
     async complete(system, messages, listener) {
@@ -211,7 +214,7 @@ function configuredModel(setting: ModelSetting, keys: KeyStore): ModelProvider {
       try {
         return await openAiCompatibleModel({ baseUrl, ...(apiKey ? { apiKey } : {}), model: setting.model }).complete(system, messages, listener);
       } catch (error) {
-        if (error instanceof KeyNeeded) throw new Error(`\`${name}\` needs an API key. Add it in Settings → Models.`);
+        if (error instanceof KeyNeeded) throw new Error(`\`${nameOf(setting)}\` needs an API key in Settings → Models`);
         throw error;
       }
     },
@@ -244,7 +247,7 @@ function settings(): api.Configuration {
 async function probe(setting: ModelSetting, keys: KeyStore): Promise<ModelProbe> {
   const baseUrl = endpointOf(setting);
   const apiKey = await keys.get(baseUrl);
-  return { id: setting.id, model: setting.model, hasKey: Boolean(apiKey), list: () => listModels({ baseUrl, ...(apiKey ? { apiKey } : {}) }) };
+  return { id: setting.id, model: setting.model, list: () => listModels({ baseUrl, ...(apiKey ? { apiKey } : {}) }) };
 }
 
 /** The models, kept in a file beside the state, and in memory so the page always has them at hand. */

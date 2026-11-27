@@ -11,6 +11,7 @@ Avoid AI slop, fluff and filler. Saying more with less is an art and a mark of t
 ## Interface
 
 - Data shown in a dialog, a banner or the conversation is set apart as a chip: app names, version ids, emails, addresses, ports. Backticks in text, `nameChip` in the page.
+- Messages in the page are one-liners: a single short sentence with no commas and no full stop, such as `Turn Tailscale on`. No explanations the person didn't ask for.
 
 ## Safety
 

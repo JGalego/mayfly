@@ -52,7 +52,7 @@ export class PortTaken extends Error {
   readonly port: number;
 
   constructor(port: number) {
-    super(`Port ${port} on this computer is in use by another program. Stop that program, then try again.`);
+    super(`Stop the program using port ${port} and try again`);
     this.port = port;
   }
 }
@@ -95,6 +95,8 @@ export interface Listener {
 export interface ModelProvider {
   /** The model as people know it, such as "OpenAI · gpt-6.2-sol". Every version it writes keeps it. */
   readonly name: string;
+  /** What the person calls it, when they named it, which the conversation shows. */
+  readonly called?: string;
   /** Who provides it, such as "OpenAI" or "localhost:11434". */
   readonly provider: string;
   /** The model's reply to a conversation, under a system prompt, and what it cost. */

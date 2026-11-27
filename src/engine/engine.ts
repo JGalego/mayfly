@@ -21,26 +21,26 @@ const FIRST_PORT = 18100;
 const LOG_LINES = 1000;
 const CONTAINER = /^[a-z0-9-]+$/;
 // What Mayfly says when the model said nothing after the code.
-const MADE = "App deployed.";
-const CHANGED = "Update deployed.";
-const SAVED = "Saved. Trial passed. Deploy to run this version.";
+const MADE = "App deployed";
+const CHANGED = "Update deployed";
+const SAVED = "Saved and ready to deploy";
 // How many ports past a taken one sign-in tries before it gives up.
 const SIGN_IN_TRIES = 20;
 /** What to do before phone access can be turned on, for each way Tailscale isn't ready. */
 export function phoneNotReady(status: Exclude<PhoneNetworkStatus, { readonly state: "ready" }>): string {
   switch (status.state) {
     case "missing":
-      return "Install Tailscale from tailscale.com/download and sign in, then try again.";
+      return "Install Tailscale from tailscale.com/download and sign in";
     case "off":
-      return "Tailscale is off. Turn it on, then try again.";
+      return "Turn Tailscale on and try again";
     case "signed-out":
-      return "Sign in to Tailscale, then try again.";
+      return "Sign in to Tailscale and try again";
     case "no-https":
-      return "Your tailnet doesn't give this computer HTTPS certificates yet. In Tailscale's admin console, open DNS and choose Enable HTTPS, then try again.";
+      return "Choose Enable HTTPS under DNS in Tailscale's admin console and try again";
     case "other-user":
-      return `Tailscale is in use by another Windows user (${status.user}). Run Podman Desktop as that user, or sign Tailscale in as this one.`;
+      return `Run Podman Desktop as ${status.user} who runs Tailscale`;
     case "failed":
-      return `Mayfly couldn't tell how Tailscale is. ${status.reason}`;
+      return `Mayfly can't read Tailscale's status: ${status.reason}`;
   }
 }
 
@@ -106,8 +106,10 @@ export interface Engine {
   stopped(): Promise<string[]>;
   /** The apps Podman is running. */
   running(): Promise<string[]>;
-  /** Runs the running version again, and the sign-in service, as after Podman stopped them. Nothing about the app changes. */
+  /** Runs the running version again, and the sign-in service, as after Podman stopped them, because the person asked: the conversation keeps `/start`. */
   start(name: string, watch?: Watcher): Promise<AppView>;
+  /** The same, for Mayfly's own reasons: after an update, or when Podman Desktop opens. Nothing about the app changes. */
+  runAgain(name: string, watch?: Watcher): Promise<AppView>;
   /** Has the app's model answer a question about it from its code, changing nothing. The exchange joins the conversation. */
   ask(name: string, question: string, watch?: Watcher, files?: readonly FileData[]): Promise<AppView>;
   /** A file the person attached in the app's conversation: its name, type and contents. No other file. */
@@ -227,6 +229,76 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     }
   }
 
+  /** Runs the running version again. What the person said to start it joins the conversation, and Mayfly's own runs leave it as it was. */
+  async function startedAgain(name: string, watch: Watcher, said: string | undefined): Promise<AppView> {
+    const started = Date.now();
+    const state = withOwner(await store.load());
+    const app = existingApp(state, name);
+    const running = runningVersion(app);
+    if (running === undefined) throw new Error(`\`${name}\` has no deployed version to start`);
+    // Built again, as when deploying, in case its image is gone; it passed its trial when it was made.
+    watch({ kind: "building" });
+    const image = await builder.build(name, running.routes);
+    watch({ kind: "deploying" });
+    const ready = await signInAndRun(state, app, image);
+    if (said === undefined) {
+      if (ready !== state) await store.save(ready);
+      return appView(app);
+    }
+    const now = existingApp(ready, name);
+    const turns: Turn[] = [
+      { from: "person", text: said, at: started },
+      { from: "mayfly", text: `Started \`${name}\``, versions: [], took: Date.now() - started, at: Date.now() },
+    ];
+    const next: App = { ...now, conversation: [...now.conversation, ...turns] };
+    await store.save(withApp(ready, next));
+    return appView(next);
+  }
+
+  /** Runs a version that passed. The conversation keeps what the person said: which version, or the command that chose it. */
+  async function deployed(name: string, id: string, said: string, watch: Watcher): Promise<AppView> {
+    return recording(name, said, [], () => changing(async () => {
+      const started = Date.now();
+      const state = withOwner(await store.load());
+      const app = existingApp(state, name);
+      const version = findVersion(app, id);
+      if (version?.problem !== null) throw new Error(`\`${name}\` has no version \`${id}\` that passed`);
+      // It passed its trial when it was made, on the same runtime, so it is built again but not tried again.
+      watch({ kind: "building" });
+      const image = await builder.build(name, version.routes);
+      // Versions go in backticks, like app names, so shells set them apart.
+      const note = `Deployed version \`${id}\`: “${version.request}”`;
+      const conversation: Turn[] = [
+        { from: "person", text: said, at: started },
+        { from: "mayfly", text: note, versions: [], took: Date.now() - started, at: Date.now() },
+      ];
+      const next: App = { ...app, ...(app.head === null || app.head === id ? {} : { previous: app.head }), head: id, conversation: [...app.conversation, ...conversation] };
+      const nextState = withApp(state, next);
+      watch({ kind: "deploying" });
+      await store.save(await signInAndRun(nextState, next, image));
+      return appView(next);
+    }));
+  }
+
+  /** Has the app's model make a change. The conversation keeps what the person said, which for a command is the command and not what the model is asked. */
+  async function changed(name: string, request: string, said: string, watch: Watcher, attached: readonly FileData[]): Promise<AppView> {
+    const started = Date.now();
+    const attachments = await keep(attached);
+    // Kept before anything can fail, so a request that does can be sent again, with its files.
+    const app = await changing(async () => {
+      const state = await store.load();
+      const asked = { ...existingApp(state, name), lastRequest: request, lastAttachments: attachments };
+      await store.save(withApp(state, asked));
+      return asked;
+    });
+    return recording(name, said, attachments, async () => {
+      const base = startingPoint(app);
+      const model = models(app.model);
+      const generation = await generate({ change: request, app: { name, routes: base?.routes ?? "" }, files: attached }, model, watch);
+      return record(request, generation, { base: base?.id ?? null, by: { kind: "model", name: model.name }, model: app.model, started, runs: true, attachments, said }, watch);
+    });
+  }
+
   /** Keeps every attempt as a version and the exchange in the conversation, charges the calls, then runs the attempt that passed. */
   function record(request: string, generated: Generated, made: Made, watch: Watcher): Promise<AppView> {
     return changing(() => recorded(request, generated, made, watch));
@@ -245,7 +317,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       ...(running === undefined || app.head === null ? {} : { previous: app.head }),
       versions: [...app.versions, ...versions],
       head: running?.id ?? app.head,
-      conversation: [...app.conversation, { from: "person", text: request, at: made.started, ...withAttachments(made.attachments ?? []) }, reply],
+      conversation: [...app.conversation, { from: "person", text: made.said ?? request, at: made.started, ...withAttachments(made.attachments ?? []) }, reply],
     };
     const nextState = charge(withApp(state, next), calls);
     // Kept before it runs: whatever happens then, the model's work and what it cost stay.
@@ -259,7 +331,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       } catch (error) {
         const reason = error instanceof Error ? error.message : String(error);
         // The version stays the one to run, so Start runs it, and Undo still goes back to the one before.
-        const text = [running.summary, `It passed its trial, but didn't start: ${reason} Choose Start to run it once that's fixed.`].filter(Boolean).join("\n\n");
+        const text = [running.summary, `It passed its trial but didn't start: ${reason}`].filter(Boolean).join("\n\n");
         const kept: App = { ...next, conversation: [...next.conversation.slice(0, -1), { ...reply, text, failed: true }] };
         await store.save(withApp(ready, kept));
         throw new RecordedFailure(reason, name, { cause: error });
@@ -321,7 +393,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       await runApps(moved);
       return moved;
     }
-    throw new Error(`Ports \`${taken}\` to \`${taken + SIGN_IN_TRIES}\` are all in use, so sign-in can't start. Free one of them, then try again.`);
+    throw new Error(`Free one of ports \`${taken}\` to \`${taken + SIGN_IN_TRIES}\` so sign-in can start`);
   }
 
   /** Runs sign-in and one app, and returns the state, which says where sign-in ended up. */
@@ -376,11 +448,11 @@ export function createEngine({ store, deployer, observer, identity, models, buil
   async function modelChosen(name: string, model: string | null): Promise<AppView> {
     const state = await store.load();
     const app = existingApp(state, name);
-    const label = models(model).name;
+    const { name: label, called = label } = models(model);
     const now = Date.now();
     const conversation: Turn[] = [
-      { from: "person", text: `Use ${label} for this app`, at: now },
-      { from: "mayfly", text: `Model set to ${label}.`, versions: [], took: 0, at: now },
+      { from: "person", text: `/model ${called}`, at: now },
+      { from: "mayfly", text: `Model set to ${called}`, versions: [], took: 0, at: now },
     ];
     const next: App = { ...app, model, conversation: [...app.conversation, ...conversation] };
     await store.save(withApp(state, next));
@@ -428,42 +500,28 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     },
 
     async change(name, request, watch = UNWATCHED, attached = []) {
-      const started = Date.now();
-      const attachments = await keep(attached);
-      // Kept before anything can fail, so a request that does can be sent again, with its files.
-      const app = await changing(async () => {
-        const state = await store.load();
-        const asked = { ...existingApp(state, name), lastRequest: request, lastAttachments: attachments };
-        await store.save(withApp(state, asked));
-        return asked;
-      });
-      return recording(name, request, attachments, async () => {
-        const base = startingPoint(app);
-        const model = models(app.model);
-        const generation = await generate({ change: request, app: { name, routes: base?.routes ?? "" }, files: attached }, model, watch);
-        return record(request, generation, { base: base?.id ?? null, by: { kind: "model", name: model.name }, model: app.model, started, runs: true, attachments }, watch);
-      });
+      return changed(name, request, request, watch, attached);
     },
 
     async fix(name, watch = UNWATCHED) {
       existingApp(await store.load(), name);
       const errors = errorsIn(await observer.logs(mayflyName(name), "app", LOG_LINES));
-      if (errors.length === 0) throw new Error(`\`${name}\` logged no errors to fix.`);
-      return engine.change(name, fixFor(errors), watch);
+      if (errors.length === 0) throw new Error(`\`${name}\` logged no errors to fix`);
+      return changed(name, fixFor(errors), "/fix", watch, []);
     },
 
     async retry(name, watch = UNWATCHED) {
       const app = existingApp(await store.load(), name);
       // Apps kept before the last request was remembered have their model's last version's.
       const request = app.lastRequest ?? app.versions.findLast((version) => version.by.kind === "model")?.request;
-      if (request === undefined) throw new Error(`\`${name}\` has no request to retry.`);
-      return engine.change(name, request, watch, await loaded(app.lastAttachments ?? []));
+      if (request === undefined) throw new Error(`\`${name}\` has no request to retry`);
+      return changed(name, request, "/retry", watch, await loaded(app.lastAttachments ?? []));
     },
 
     async undo(name, watch = UNWATCHED) {
       const { previous } = existingApp(await store.load(), name);
-      if (previous === undefined) throw new Error(`\`${name}\` has no previous deployment.`);
-      return engine.deploy(name, previous, watch);
+      if (previous === undefined) throw new Error(`\`${name}\` has no previous deployment`);
+      return deployed(name, previous, "/undo", watch);
     },
 
     async stopped() {
@@ -477,24 +535,16 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     },
 
     async start(name, watch = UNWATCHED) {
-      return recording(name, "Start the app", [], () => changing(async () => {
-        const state = withOwner(await store.load());
-        const app = existingApp(state, name);
-        const running = runningVersion(app);
-        if (running === undefined) throw new Error(`\`${name}\` has no deployed version to start.`);
-        // Built again, as when deploying, in case its image is gone; it passed its trial when it was made.
-        watch({ kind: "building" });
-        const image = await builder.build(name, running.routes);
-        watch({ kind: "deploying" });
-        const ready = await signInAndRun(state, app, image);
-        if (ready !== state) await store.save(ready);
-        return appView(app);
-      }));
+      return recording(name, "/start", [], () => changing(() => startedAgain(name, watch, "/start")));
+    },
+
+    async runAgain(name, watch = UNWATCHED) {
+      return changing(() => startedAgain(name, watch, undefined));
     },
 
     async ask(name, question, watch = UNWATCHED, attached = []) {
       const attachments = await keep(attached);
-      return recording(name, question, attachments, async () => {
+      return recording(name, `/ask ${question}`, attachments, async () => {
         const started = Date.now();
         const app = existingApp(await store.load(), name);
         const model = models(app.model);
@@ -506,7 +556,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
           const state = await store.load();
           const now = existingApp(state, name);
           const turns: Turn[] = [
-            { from: "person", text: question, at: started, ...withAttachments(attachments) },
+            { from: "person", text: `/ask ${question}`, at: started, ...withAttachments(attachments) },
             { from: "mayfly", text: text.trim(), versions: [], took: Date.now() - started, at: Date.now() },
           ];
           const next = charge(withApp(state, { ...now, conversation: [...now.conversation, ...turns] }), calls);
@@ -517,14 +567,14 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     },
 
     async rename(name, to, watch = UNWATCHED) {
-      return recording(name, `Rename to \`${to}\``, [], () => changing(async () => {
+      return recording(name, `/rename ${to}`, [], () => changing(async () => {
         const started = Date.now();
         const state = await store.load();
         const app = existingApp(state, name);
         const newName = usableName(state, name, to);
         // Names go in backticks, which shells show as names rather than words.
-        const note = `Renamed \`${name}\` to \`${newName}\`. The address is unchanged. Sign in again to use the app.`;
-        const conversation: Turn[] = [...app.conversation, { from: "person", text: `Rename to \`${newName}\``, at: started }, { from: "mayfly", text: note, versions: [], took: Date.now() - started, at: Date.now() }];
+        const note = `Renamed \`${name}\` to \`${newName}\` so sign in again to use it`;
+        const conversation: Turn[] = [...app.conversation, { from: "person", text: `/rename ${newName}`, at: started }, { from: "mayfly", text: note, versions: [], took: Date.now() - started, at: Date.now() }];
         const renamed: App = { ...app, name: newName, conversation };
         const next: State = {
           ...state,
@@ -576,27 +626,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     },
 
     async deploy(name, id, watch = UNWATCHED) {
-      return recording(name, `Deploy version \`${id}\``, [], () => changing(async () => {
-        const started = Date.now();
-        const state = withOwner(await store.load());
-        const app = existingApp(state, name);
-        const version = findVersion(app, id);
-        if (version?.problem !== null) throw new Error(`\`${name}\` has no version \`${id}\` that passed`);
-        // It passed its trial when it was made, on the same runtime, so it is built again but not tried again.
-        watch({ kind: "building" });
-        const image = await builder.build(name, version.routes);
-        // Versions go in backticks, like app names, so shells set them apart.
-        const note = `Deployed version \`${id}\`: “${version.request}”.`;
-        const conversation: Turn[] = [
-          { from: "person", text: `Deploy version \`${id}\``, at: started },
-          { from: "mayfly", text: note, versions: [], took: Date.now() - started, at: Date.now() },
-        ];
-        const next: App = { ...app, ...(app.head === null || app.head === id ? {} : { previous: app.head }), head: id, conversation: [...app.conversation, ...conversation] };
-        const nextState = withApp(state, next);
-        watch({ kind: "deploying" });
-        await store.save(await signInAndRun(nextState, next, image));
-        return appView(next);
-      }));
+      return deployed(name, id, `Deploy version \`${id}\``, watch);
     },
 
     async attachment(name, id) {
@@ -691,11 +721,11 @@ export function createEngine({ store, deployer, observer, identity, models, buil
 
     async changeEmail(email) {
       const address = email.trim();
-      if (!EMAIL.test(address)) throw new Error("Enter a valid email address.");
+      if (!EMAIL.test(address)) throw new Error("Enter a valid email address");
       return updateOwner((owner, state) => {
         // Sign-in would hold two passwords for one email, and keep the person's.
         const person = findPerson(state, address);
-        if (person !== undefined) throw new Error(`\`${person.email}\` is someone you share apps with. Use another email.`);
+        if (person !== undefined) throw new Error(`\`${person.email}\` is someone you share apps with`);
         return { ...owner, email: address, username: address.split("@")[0] ?? address };
       });
     },
@@ -719,7 +749,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
 
     async person(email) {
       const person = findPerson(await store.load(), email);
-      if (person === undefined) throw new Error(`No one called \`${email}\` is here.`);
+      if (person === undefined) throw new Error(`No one called \`${email}\` is here`);
       return person;
     },
 
@@ -799,6 +829,8 @@ interface Made {
   readonly runs: boolean;
   /** The files the person attached to the request. */
   readonly attachments?: readonly Attachment[];
+  /** What the person said, when it isn't the request itself: the command that asked for it, such as `/fix`. */
+  readonly said?: string;
 }
 
 /** Where a change starts: the running code, or for an app that never ran, its latest attempt that had any. */
@@ -818,19 +850,19 @@ function runs({ containers }: ServiceHealth): boolean {
 
 /** A name another app does not have, and that the contract allows. */
 function usableName(state: State, name: string, to: string): string {
-  if (to === name) throw new Error(`\`${name}\` is already called that.`);
-  if (findApp(state, to) !== undefined) throw new Error(`There is already an app called \`${to}\`.`);
-  if (to === SIGN_IN) throw new Error(`\`${to}\` is the name of Mayfly's sign-in. Choose another.`);
+  if (to === name) throw new Error(`\`${name}\` is already called that`);
+  if (findApp(state, to) !== undefined) throw new Error(`There is already an app called \`${to}\``);
+  if (to === SIGN_IN) throw new Error(`\`${to}\` is the name of Mayfly's sign-in`);
   try {
     return parseAppName(to);
   } catch {
-    throw new Error(`\`${to}\` can't be an app's name: use lowercase letters, digits and inner hyphens, at most 40 characters.`);
+    throw new Error(`\`${to}\` can't be an app's name: use up to 40 lowercase letters or digits with hyphens between them`);
   }
 }
 
 function existingApp(state: State, name: string): App {
   const app = findApp(state, name);
-  if (app === undefined) throw new Error(`No app is called \`${name}\`.`);
+  if (app === undefined) throw new Error(`No app is called \`${name}\``);
   return app;
 }
 
@@ -865,9 +897,9 @@ function replyFor(app: App, versions: readonly Version[], runs: boolean): string
   const last = versions.at(-1);
   if (last?.problem === null && !runs) return SAVED;
   if (last?.problem === null) return last.summary || (app.head === null ? MADE : CHANGED);
-  const unchanged = app.head === null ? "" : " Previous deployment unchanged.";
-  const failed = versions.length === 1 ? "Trial failed." : `All ${versions.length} attempts failed.`;
-  return `${failed}${unchanged} ${versions.length === 1 ? "Error" : "Last error"}:\n\n${last?.problem ?? ""}`;
+  const unchanged = app.head === null ? "" : " so the running version stays";
+  const failed = versions.length === 1 ? "The trial failed" : `All ${versions.length} attempts failed`;
+  return `${failed}${unchanged}:\n\n${last?.problem ?? ""}`;
 }
 
 /** Enters the calls in the ledger, and counts what each spent against the total and its app. */

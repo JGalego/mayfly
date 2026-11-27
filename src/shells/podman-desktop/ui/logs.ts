@@ -44,7 +44,6 @@ export function logViewer(post: (message: FromUi) => void, { activity }: { activ
     "section",
     "log-viewer",
     h("div", "section-head", h("h2", "", "Logs"), h("div", "", refresh, expand)),
-    h("p", "hint", "Mayfly's own activity, and what each app and the sign-in service wrote."),
     h("div", "log-controls", source, level, since, search),
     count,
     list,
@@ -61,7 +60,7 @@ export function logViewer(post: (message: FromUi) => void, { activity }: { activ
     const age = Number(since.value);
     const filter = { level: level.value as Level, since: age === 0 ? 0 : Date.now() - age, text: search.value };
     const shown = (lines ?? []).filter((line) => matches(line, filter));
-    const empty = lines === undefined ? "Loading logs…" : lines.length === 0 ? "No logs yet." : "No matching lines.";
+    const empty = lines === undefined ? "Loading logs…" : lines.length === 0 ? "No logs yet" : "No matching lines";
     count.textContent = lines === undefined || lines.length === 0 ? "" : `${shown.length} of ${lines.length} lines`;
     list.replaceChildren(...(shown.length === 0 ? [h("li", "quiet", empty)] : shown.map(lineItem)));
     list.scrollTop = list.scrollHeight;

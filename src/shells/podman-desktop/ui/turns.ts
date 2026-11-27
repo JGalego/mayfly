@@ -2,6 +2,7 @@ import { kindOf } from "../../../engine/attachments.ts";
 import type { Turn } from "../../../engine/state.ts";
 import type { Progress } from "../messages.ts";
 import { nameChip, withChips } from "./chips.ts";
+import { leadingCommand } from "./commands.ts";
 import { h, keepTime } from "./dom.ts";
 import { markdownView, type Opener } from "./markdown-view.ts";
 import { progressView, TITLES, type Showing } from "./progress.ts";
@@ -19,10 +20,16 @@ export function turnItem(said: Turn, speaking: Speaking, extras: readonly Node[]
   const { from, text, at } = said;
   // Mayfly's replies, and its model's, can be Markdown. What a person typed shows as they typed it.
   const failure = said.from === "mayfly" && said.failed === true;
-  const words = from === "mayfly" ? h("div", failure ? "md failure" : "md", ...markdownView(text, speaking.open)) : h("p", "", ...withChips(text));
+  const words = from === "mayfly" ? h("div", failure ? "md failure" : "md", ...markdownView(text, speaking.open)) : h("p", "", ...typedWords(text));
   // When it was said, for anyone who wants to know.
   if (at !== 0) words.title = new Date(at).toLocaleString();
   return turn(from, h("div", "", words, ...extras), speaking);
+}
+
+// A command stands out in the conversation, as it did in the composer.
+function typedWords(text: string): (Node | string)[] {
+  const typed = leadingCommand(text);
+  return typed === undefined ? withChips(text) : [h("span", "typed-command", typed.command), ...withChips(typed.rest)];
 }
 
 export function turn(from: Turn["from"], body: HTMLElement, speaking: Speaking): HTMLLIElement {

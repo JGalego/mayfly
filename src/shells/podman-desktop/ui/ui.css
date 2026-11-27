@@ -1531,13 +1531,47 @@ pre.problem {
   border-color: var(--line);
 }
 
-#composer textarea {
+.request-field {
+  position: relative;
+  display: flex;
   flex: 1;
+}
+
+#composer textarea,
+.request-backdrop {
   padding: 0.35rem;
+  line-height: 1.4;
+}
+
+#composer textarea {
+  position: relative;
+  flex: 1;
   border: 0;
   outline: none;
   resize: none;
   background: transparent;
+}
+
+/* Behind the textarea, in step with it: only the highlight shows, under the command's own letters. */
+.request-backdrop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  white-space: pre;
+  pointer-events: none;
+}
+
+.request-backdrop .typed-command {
+  position: relative;
+  top: var(--scrolled, 0);
+  color: transparent;
+}
+
+/* A command, in the composer and in the conversation alike. */
+.typed-command {
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 /* Settings */
@@ -1651,6 +1685,10 @@ pre.problem {
   height: 16px;
   margin-top: 0.15em;
   font-size: 0.65rem;
+}
+
+.model-check .spinner {
+  border-width: 2px;
 }
 
 .model-actions {
@@ -1787,6 +1825,11 @@ pre.problem {
 
 .fail > .finding-mark {
   background: var(--error);
+}
+
+.skip > .finding-mark {
+  background: var(--line);
+  color: var(--muted);
 }
 
 .finding-name {

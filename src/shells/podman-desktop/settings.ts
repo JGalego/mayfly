@@ -10,6 +10,8 @@ export interface ModelSetting {
   /** Used only by an OpenAI-compatible provider. OpenAI's endpoint is fixed. */
   readonly baseUrl: string;
   readonly model: string;
+  /** What the person calls it, if they named it. Versions and usage keep its label, which says what it is. */
+  readonly name?: string;
 }
 
 /** Every model the person set up, and the one new apps use. */
@@ -33,6 +35,11 @@ export function endpointOf(setting: ModelSetting): string {
 /** The model as people know it: "OpenAI · gpt-6.2-sol", or with the server for another provider. */
 export function labelOf(setting: ModelSetting): string {
   return `${providerOf(setting)} · ${setting.model}`;
+}
+
+/** What the page calls a model: the name the person gave it, or its label. */
+export function nameOf(setting: ModelSetting): string {
+  return setting.name ?? labelOf(setting);
 }
 
 /** Who provides a model: OpenAI, or the server another provider runs on. */

@@ -1,10 +1,20 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { parse, suggestions } from "./commands.ts";
+import { leadingCommand, parse, suggestions } from "./commands.ts";
 
 const models = ["OpenAI · gpt-6.2-sol", "localhost:11434 · qwen3"];
 
 describe("commands", () => {
+  it("finds the command a text starts with, to set it apart, and only a command Mayfly knows", () => {
+    assert.deepEqual(leadingCommand("/fix"), { command: "/fix", rest: "" });
+    assert.deepEqual(leadingCommand("/ASK how does it split?"), { command: "/ASK", rest: " how does it split?" });
+    assert.deepEqual(leadingCommand("/rename\nbills"), { command: "/rename", rest: "\nbills" });
+    assert.equal(leadingCommand("/fi"), undefined);
+    assert.equal(leadingCommand("/fixit"), undefined);
+    assert.equal(leadingCommand("/deploy v1"), undefined);
+    assert.equal(leadingCommand("please /fix"), undefined);
+  });
+
   it("reads a request as a request, and a slash and a name as a command with what follows it", () => {
     assert.deepEqual(parse("split lunch bills"), { kind: "request", text: "split lunch bills" });
     assert.partialDeepStrictEqual(parse("/model  OpenAI · gpt-6.2-sol"), { kind: "command", command: { name: "model" }, argument: "OpenAI · gpt-6.2-sol" });

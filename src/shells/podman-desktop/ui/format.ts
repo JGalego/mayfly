@@ -9,8 +9,8 @@ export function compact(count: number): string {
 }
 
 export function tokens({ input, output, thinking }: Usage): string {
-  const thought = thinking === 0 ? "" : `, ${compact(thinking)} thinking`;
-  return `${compact(input)} tokens in, ${compact(output)} out${thought}`;
+  const thought = thinking === 0 ? "" : ` · ${compact(thinking)} thinking`;
+  return `${compact(input)} tokens in · ${compact(output)} out${thought}`;
 }
 
 /** When something happened, the way people say it: "5 minutes ago", "yesterday". */

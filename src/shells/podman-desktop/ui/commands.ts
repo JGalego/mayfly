@@ -15,7 +15,7 @@ export const COMMANDS: readonly Command[] = [
   { name: "retry", says: "Retry the last request", needsApp: true },
   { name: "undo", says: "Redeploy the previous version", needsApp: true },
   { name: "start", says: "Start the stopped app", needsApp: true },
-  { name: "model", says: "Switch models", takes: "provider · model", needsApp: false },
+  { name: "model", says: "Switch models", takes: "a model", needsApp: false },
   { name: "rename", says: "Rename and redeploy the app", takes: "a new name", needsApp: true },
   { name: "remove", says: "Delete the app and its history", needsApp: true },
 ];
@@ -36,6 +36,13 @@ export interface Suggestion {
 
 const COMMAND = /^\/(\S*)\s*([\s\S]*)$/;
 const MODEL_ARGUMENT = /^\/model\s+(.*)$/i;
+
+/** The command a text starts with, as typed, and what follows it: for setting a command apart wherever it's shown. */
+export function leadingCommand(text: string): { readonly command: string; readonly rest: string } | undefined {
+  const command = /^\/[a-z]+(?=\s|$)/i.exec(text)?.[0];
+  if (command === undefined || !COMMANDS.some((known) => `/${known.name}` === command.toLowerCase())) return undefined;
+  return { command, rest: text.slice(command.length) };
+}
 
 export function parse(text: string): Typed {
   const match = COMMAND.exec(text);

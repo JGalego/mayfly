@@ -37,7 +37,7 @@ export function changes(before: string, after: string): { readonly view: HTMLEle
   const lines = hunks.flatMap((hunk) => hunk.lines);
   const added = lines.filter((line) => line.startsWith("+")).length;
   const removed = lines.filter((line) => line.startsWith("-")).length;
-  if (hunks.length === 0) return { view: h("p", "quiet", "No code changes."), added, removed };
+  if (hunks.length === 0) return { view: h("p", "quiet", "No code changes"), added, removed };
   const rows = hunks.flatMap((hunk) => [
     h("span", "diff-hunk", `@@ -${hunk.oldStart},${hunk.oldLines} +${hunk.newStart},${hunk.newLines} @@`),
     ...hunk.lines.map((line) => h("span", LINE_CLASS[line[0] ?? ""] ?? "", line)),

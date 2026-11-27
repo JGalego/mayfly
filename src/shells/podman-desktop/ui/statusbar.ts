@@ -77,7 +77,7 @@ function tokenBreakdown({ apps, spent }: State): HTMLElement {
     "div",
     "",
     h("p", "popover-title", "Tokens by app"),
-    h("p", "quiet", ...(thinking ? ["↑ sent to the model, ↓ written in its replies, ", icon("thinking"), " spent thinking"] : ["↑ sent to the model, ↓ written by it"])),
+    h("p", "quiet", ...(thinking ? ["↑ sent to the model · ↓ written by it · ", icon("thinking"), " spent thinking"] : ["↑ sent to the model · ↓ written by it"])),
     h("table", "token-table", h("tbody", "", ...rows, tokenRow("Total (includes removed apps)", spent, "total", thinking))),
   );
 }

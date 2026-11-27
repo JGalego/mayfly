@@ -44,7 +44,7 @@ export function failure(args: readonly string[], stderr: string): Error {
   const port = /listen tcp\S* \S*:(\d+): bind:/.exec(stderr)?.[1];
   if (port !== undefined) return new PortTaken(Number(port));
   // On Windows and macOS, Podman runs containers in a machine it reaches over a socket.
-  if (/Cannot connect to Podman|unable to connect to Podman socket/.test(stderr)) return new Error("Podman's machine isn't running. Start it in Podman Desktop's Dashboard, then try again.");
+  if (/Cannot connect to Podman|unable to connect to Podman socket/.test(stderr)) return new Error("Start the Podman machine in Podman Desktop's Dashboard and try again");
   return new Error(`podman ${args.join(" ")} failed: ${stderr.trim()}`);
 }
 
@@ -57,5 +57,5 @@ export function withInstallDirs(env: NodeJS.ProcessEnv, platform: NodeJS.Platfor
 }
 
 function notFound(): Error {
-  return new Error("Mayfly could not find Podman. Set it up from Podman Desktop's Dashboard, then try again.");
+  return new Error("Set up Podman in Podman Desktop's Dashboard and try again");
 }

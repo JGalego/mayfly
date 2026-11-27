@@ -19,11 +19,11 @@ export function fileStore(folder: string): FileStore {
       return id;
     },
     async get(id) {
-      if (!ID.test(id)) throw new Error(`There is no file ${id}.`);
+      if (!ID.test(id)) throw new Error(`There is no file ${id}`);
       return new Uint8Array(await readFile(join(folder, id)));
     },
     async remove(id) {
-      if (!ID.test(id)) throw new Error(`There is no file ${id}.`);
+      if (!ID.test(id)) throw new Error(`There is no file ${id}`);
       await rm(join(folder, id), { force: true });
     },
   };

@@ -80,7 +80,7 @@ function historyRow(app: AppView, row: GraphRow, width: number, picked: boolean,
     h("span", "history-when with-icon", ...byHand, `${MARK[status]} ${when(version.at)}`),
   );
   item.type = "button";
-  item.title = `${STATUS[status]}, by ${version.by.name}`;
+  item.title = `${STATUS[status]} · by ${version.by.name}`;
   // Said in words, not the marks: "c3: Greet people by their first name. Passed, 25 minutes ago".
   item.setAttribute("aria-label", `${version.id}: ${version.request === "" ? "No request" : version.request}. ${STATUS[status]}, ${when(version.at)}`);
   item.setAttribute("aria-pressed", String(picked));
@@ -89,7 +89,7 @@ function historyRow(app: AppView, row: GraphRow, width: number, picked: boolean,
 }
 
 function facts(version: VersionView, pick: (version: string) => void): HTMLElement {
-  const made = h("span", "", ...(version.by.kind === "model" ? [icon("bot"), ` ${version.by.name}`] : [icon("pencil"), ` ${version.by.name}, by hand`]));
+  const made = h("span", "", ...(version.by.kind === "model" ? [icon("bot"), ` ${version.by.name}`] : [icon("pencil"), ` ${version.by.name} by hand`]));
   const at = h("span", "", when(version.at));
   if (version.at !== 0) at.title = new Date(version.at).toLocaleString();
   const rows: [string, Node | string][] = [

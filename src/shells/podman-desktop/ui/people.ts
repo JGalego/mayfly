@@ -100,15 +100,15 @@ export function renderShare(app: AppView | undefined, people: readonly string[],
 
 function emailText(mail: MailAbout, from: string | null): (Node | string)[] {
   const what = mail.about === "shared" ? ["the link to ", nameChip(mail.app)] : ["their password"];
-  if (from !== null) return ["Mayfly emails them ", ...what, " from ", nameChip(from), "."];
-  return ["Mayfly drafts an email in your mail app with ", ...what, ", for you to send. To have Mayfly send it, add a mail account in Settings → People."];
+  if (from !== null) return ["Mayfly emails them ", ...what, " from ", nameChip(from)];
+  return ["Mayfly drafts an email with ", ...what, " in your mail app for you to send"];
 }
 
 function shareNote(anyone: boolean, phoneOn: boolean, busy: boolean): string {
   if (busy) return "Restarting the app with the new access…";
-  if (!anyone) return "Add people in Settings to share this app.";
-  if (!phoneOn) return "Turn on phone access in Settings first. Other people open apps through Tailscale.";
-  return "When you add someone, Mayfly offers to email them the link.";
+  if (!anyone) return "Add people in Settings to share this app";
+  if (!phoneOn) return "Turn on phone access in Settings so others can open it";
+  return "Mayfly offers to email the link to anyone you add";
 }
 
 function shareOption(label: string, checked: boolean, disabled: boolean, change: (on: boolean) => void): HTMLElement {

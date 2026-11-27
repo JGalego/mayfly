@@ -7,9 +7,9 @@ export const EMAIL = /^[^\s@]+@[^\s@]+$/;
 /** Adds someone the owner can share apps with, with a password of their own. */
 export function withPerson(state: State, email: string): { readonly state: State; readonly person: Person } {
   const address = email.trim().toLowerCase();
-  if (!EMAIL.test(address)) throw new Error("Enter a valid email address.");
-  if (address === state.owner?.email.toLowerCase()) throw new Error("That's you: you can open every app already.");
-  if (findPerson(state, address) !== undefined) throw new Error(`\`${address}\` is already here.`);
+  if (!EMAIL.test(address)) throw new Error("Enter a valid email address");
+  if (address === state.owner?.email.toLowerCase()) throw new Error("You can open every app already");
+  if (findPerson(state, address) !== undefined) throw new Error(`\`${address}\` is already here`);
   const person = { email: address, password: newPassword(), group: newGroup() };
   return { state: { ...state, people: [...state.people, person] }, person };
 }
@@ -61,7 +61,7 @@ export function findPerson(state: State, email: string): Person | undefined {
 
 function existingPerson(state: State, email: string): Person {
   const person = findPerson(state, email);
-  if (person === undefined) throw new Error(`No one called \`${email}\` is here.`);
+  if (person === undefined) throw new Error(`No one called \`${email}\` is here`);
   return person;
 }
 

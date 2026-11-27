@@ -6,6 +6,8 @@ import { choicesOf, filtered, groupsOf, periodsOf, spanStart, tallyOf, totalOf, 
 import { elapsed } from "./stages.ts";
 
 const SPANS: readonly [string, string, Span][] = [
+  ["minutes", "Last hour", { grain: "minute", periods: 60 }],
+  ["hours", "Last 24 hours", { grain: "hour", periods: 24 }],
   ["days", "Last 14 days", { grain: "day", periods: 14 }],
   ["weeks", "Last 12 weeks", { grain: "week", periods: 12 }],
   ["months", "Last 12 months", { grain: "month", periods: 12 }],
@@ -93,7 +95,7 @@ function ledgerBody(every: readonly ModelCall[], context: Context, span: Span, f
   const calls = filtered(every, filter);
   const since = span.periods === "all" ? 0 : from.getTime();
   const inSpan = calls.filter((call) => call.at >= since);
-  if (inSpan.length === 0) return [h("p", "quiet", "No model calls match these filters.")];
+  if (inSpan.length === 0) return [h("p", "quiet", "No model calls match these filters")];
   const periods = periodsOf(calls, span.grain, from, now);
   const unfiltered = Object.values(filter).every((value) => value === "");
   // What the ledger has no record of belongs to no app, model or provider it can name.
@@ -118,7 +120,7 @@ function tokens(periods: readonly Period[], grain: Grain, calls: readonly ModelC
 function attempts(periods: readonly Period[], grain: Grain, calls: readonly ModelCall[]): Node[] {
   const { passed, failed } = tallyOf(calls);
   const known = passed + failed;
-  if (known === 0) return [h("p", "quiet", "No recorded trial results.")];
+  if (known === 0) return [h("p", "quiet", "No recorded trial results")];
   // Answers to questions wrote no code, so they have no outcome to miss.
   const unknown = calls.filter((call) => call.passed === undefined && call.question !== true).length;
   const notes = [`${Math.round((passed / known) * 100)}% passed`, ...(unknown === 0 ? [] : [`${unknown.toLocaleString()} more with no known outcome`])];
@@ -145,7 +147,7 @@ function groupTable(calls: readonly ModelCall[], by: GroupBy, apps: readonly str
 /** The charts' numbers, for reading without hovering. */
 function periodTable(periods: readonly Period[], grain: Grain): HTMLElement {
   const rows = periods.filter((period) => period.calls > 0).map((period) => usageRow(longLabel(period.start, grain), period, ""));
-  return h("details", "code", h("summary", "", `Usage by ${grain}`), table(grain === "day" ? "Day" : grain === "week" ? "Week" : "Month", rows));
+  return h("details", "code", h("summary", "", `Usage by ${grain}`), table(`${grain[0]?.toUpperCase()}${grain.slice(1)}`, rows));
 }
 
 function table(first: string, rows: readonly HTMLTableRowElement[]): HTMLTableElement {
@@ -162,10 +164,12 @@ function usageRow(name: string, tally: Partial<Tally> & Pick<Tally, "spent">, cl
 }
 
 function shortLabel(start: Date, grain: Grain): string {
+  if (grain === "minute" || grain === "hour") return start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   return start.toLocaleDateString(undefined, grain === "month" ? { month: "short" } : { month: "short", day: "numeric" });
 }
 
 function longLabel(start: Date, grain: Grain): string {
+  if (grain === "minute" || grain === "hour") return start.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
   if (grain === "month") return start.toLocaleDateString(undefined, { month: "long", year: "numeric" });
   if (grain === "week") return `Week of ${start.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
   return start.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
