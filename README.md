@@ -26,6 +26,8 @@
 
 Describe a small web app. Mayfly builds it and runs it locally in Podman behind sign-in. The model writes the app's routes; Mayfly supplies authentication, health checks, logs and container settings.
 
+![Mayfly writes a lunch-splitting app, tries it, repairs it and runs it, then changes it, answers a question about it, and shows its history, code and usage](assets/demo.gif)
+
 ## Use it
 
 ### Prerequisites
