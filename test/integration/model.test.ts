@@ -105,13 +105,13 @@ describe("the OpenAI-compatible model, against a server that turns down every re
   });
 
   it("says the provider refused the key it was given, without quoting it", async () => {
-    await assert.rejects(ask("sk-test"), { message: "The provider refused the key." });
+    await assert.rejects(ask("sk-test"), { message: "The provider refused the key" });
     assert.equal(keys.at(-1), "Bearer sk-test");
   });
 
   it("says plainly what any other refusal was", async () => {
     status = 404;
-    await assert.rejects(ask("sk-test"), { message: "The provider has no model called m." });
+    await assert.rejects(ask("sk-test"), { message: "The provider has no model called m" });
     status = 429;
     await assert.rejects(ask("sk-test"), /limiting requests/);
   });
