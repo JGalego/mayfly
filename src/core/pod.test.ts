@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { buildProxyConfigMap } from "./auth-proxy-container.ts";
-import { buildPod } from "./pod.ts";
+import { buildDataClaim, buildPod } from "./pod.ts";
 import type { Container, Pod } from "./kube.ts";
 
 const END_SESSION = "http://localhost:5556/dex/logout";
@@ -115,6 +115,29 @@ describe("the pod Mayfly runs for an app", () => {
       assert.ok(container.resources.limits.cpu, `${container.name} cpu`);
       assert.ok(container.resources.limits.memory, `${container.name} memory`);
     }
+  });
+});
+
+describe("the pod of an app that keeps data", () => {
+  const keeping = buildPod({ manifest: { name: "expenses", image: "localhost/mayfly-expenses:1" }, hostPort: 8137, endSessionUrl: END_SESSION, keepsData: true });
+
+  it("mounts the app's own volume, writable, where the runtime keeps its store, and in no other container", () => {
+    assert.deepEqual(containerNamed(keeping, "app").volumeMounts, [{ name: "data", mountPath: "/data", readOnly: false }]);
+    assert.deepEqual(keeping.spec.volumes?.at(-1), { name: "data", persistentVolumeClaim: { claimName: "mayfly-expenses-data" } });
+    assert.deepEqual(containerNamed(keeping, "auth-proxy"), proxy);
+  });
+
+  it("claims the volume for the user the app runs as, sized to what the store lets it hold", () => {
+    const claim = buildDataClaim("expenses");
+
+    assert.equal(claim.metadata.name, "mayfly-expenses-data");
+    assert.deepEqual(claim.metadata.annotations, { "volume.podman.io/uid": "65534", "volume.podman.io/gid": "65534" });
+    assert.deepEqual(claim.spec.resources.requests, { storage: "100M" });
+  });
+
+  it("gives an app that keeps nothing no volume, so its whole disk stays read-only", () => {
+    assert.equal(app.volumeMounts, undefined);
+    assert.ok(!pod.spec.volumes?.some((volume) => "persistentVolumeClaim" in volume));
   });
 });
 

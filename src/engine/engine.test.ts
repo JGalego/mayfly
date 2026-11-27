@@ -3,11 +3,13 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { ConfigMap, KubeObject, Pod } from "../core/kube.ts";
 import { createEngine, RecordedFailure } from "./engine.ts";
-import { PortTaken, type Builder, type Deployer, type FileStore, type IdentitySource, type Message, type ModelProvider, type Observer, type PhoneNetwork, type PhoneNetworkStatus, type StateStore, type Trial } from "./ports.ts";
+import { PortTaken, type AppData, type Builder, type Deployer, type FileStore, type IdentitySource, type Message, type ModelProvider, type Observer, type PhoneNetwork, type PhoneNetworkStatus, type StateStore, type Trial } from "./ports.ts";
 import { EMPTY_STATE, type State } from "./state.ts";
 
 const COST = { input: 100, output: 20, thinking: 0 };
 const crashed: Trial = { ok: false, problem: "crashed" };
+const passed: Trial = { ok: true, keepsData: false };
+const keeps: Trial = { ok: true, keepsData: true };
 
 describe("changes made at once", () => {
   it("keep a password reset made while an app deploys, in the state and in sign-in", async () => {
@@ -112,14 +114,14 @@ describe("the engine", () => {
   });
 
   it("keeps every attempt as a version, failed ones too, each starting from the one it repairs", async () => {
-    const { engine } = setUp([reply("lunch"), reply("lunch")], [crashed, { ok: true }]);
+    const { engine } = setUp([reply("lunch"), reply("lunch")], [crashed, passed]);
 
     const app = await engine.create("split lunch bills");
 
-    const [failed, passed] = app.versions;
-    assert.deepEqual([failed?.problem, passed?.problem], ["crashed", null]);
-    assert.deepEqual([failed?.parent, passed?.parent], [null, failed?.id]);
-    assert.equal(app.head, passed?.id);
+    const [failed, repaired] = app.versions;
+    assert.deepEqual([failed?.problem, repaired?.problem], ["crashed", null]);
+    assert.deepEqual([failed?.parent, repaired?.parent], [null, failed?.id]);
+    assert.equal(app.head, repaired?.id);
   });
 
   it("changes an app from its running code, at the same URL and with the same secrets", async () => {
@@ -137,7 +139,7 @@ describe("the engine", () => {
   });
 
   it("leaves a running app as it was when every attempt at a change fails, and says so", async () => {
-    const { engine, deployed } = setUp([reply("lunch"), reply("lunch"), reply("lunch"), reply("lunch")], [{ ok: true }, crashed, crashed, crashed]);
+    const { engine, deployed } = setUp([reply("lunch"), reply("lunch"), reply("lunch"), reply("lunch")], [passed, crashed, crashed, crashed]);
     const before = await engine.create("split lunch bills");
 
     const after = await engine.change("lunch", "break it");
@@ -195,7 +197,7 @@ describe("the engine", () => {
   });
 
   it("keeps a hand edit that fails its trial, and leaves the app as it was", async () => {
-    const { engine } = setUp([reply("lunch")], [{ ok: true }, crashed]);
+    const { engine } = setUp([reply("lunch")], [passed, crashed]);
     const before = await engine.create("split lunch bills");
 
     const after = await engine.save("lunch", before.head ?? "", "throw 1;\n", "");
@@ -306,7 +308,7 @@ describe("the engine", () => {
   });
 
   it("names the apps that have a version to run but that Podman is not running", async () => {
-    const { engine } = setUp([reply("lunch"), reply("gone"), reply("never"), reply("never"), reply("never")], [{ ok: true }, { ok: true }, crashed, crashed, crashed]);
+    const { engine } = setUp([reply("lunch"), reply("gone"), reply("never"), reply("never"), reply("never")], [passed, passed, crashed, crashed, crashed]);
     await engine.create("split lunch bills");
     await engine.create("an app Podman has lost");
     await engine.create("an app that never ran");
@@ -315,7 +317,7 @@ describe("the engine", () => {
   });
 
   it("names the apps Podman is running", async () => {
-    const { engine } = setUp([reply("lunch"), reply("gone"), reply("never"), reply("never"), reply("never")], [{ ok: true }, { ok: true }, crashed, crashed, crashed]);
+    const { engine } = setUp([reply("lunch"), reply("gone"), reply("never"), reply("never"), reply("never")], [passed, passed, crashed, crashed, crashed]);
     await engine.create("split lunch bills");
     await engine.create("an app Podman has lost");
     await engine.create("an app that never ran");
@@ -368,7 +370,7 @@ describe("the engine", () => {
   });
 
   it("refuses to save from a version it does not have, or to deploy one that failed", async () => {
-    const { engine } = setUp([reply("lunch"), reply("lunch")], [crashed, { ok: true }]);
+    const { engine } = setUp([reply("lunch"), reply("lunch")], [crashed, passed]);
     const app = await engine.create("split lunch bills");
 
     await assert.rejects(engine.save("lunch", "nope", "export default 2;\n", ""), /`lunch` has no version `nope`/);
@@ -389,7 +391,7 @@ describe("the engine", () => {
   });
 
   it("says how each running app and the sign-in service are doing", async () => {
-    const { engine } = setUp([reply("lunch"), reply("notes"), reply("notes"), reply("notes")], [{ ok: true }, crashed, crashed, crashed]);
+    const { engine } = setUp([reply("lunch"), reply("notes"), reply("notes"), reply("notes")], [passed, crashed, crashed, crashed]);
     await engine.create("split lunch bills");
     await engine.create("keep notes");
 
@@ -429,7 +431,7 @@ describe("the engine", () => {
   });
 
   it("counts the tokens each app spent, and all of them, including failed attempts and removed apps", async () => {
-    const { engine } = setUp([reply("lunch"), reply("lunch"), reply("lunch"), reply("lunch")], [{ ok: true }, crashed, crashed, crashed]);
+    const { engine } = setUp([reply("lunch"), reply("lunch"), reply("lunch"), reply("lunch")], [passed, crashed, crashed, crashed]);
     await engine.create("split lunch bills");
 
     await engine.change("lunch", "break it");
@@ -440,7 +442,7 @@ describe("the engine", () => {
   });
 
   it("keeps a ledger of every call to a model: when, how long, for which app, to whom, what it spent and whether its code passed, removed apps' too", async () => {
-    const { engine } = setUp([reply("lunch"), reply("lunch"), reply("lunch")], [crashed, { ok: true }, { ok: true }]);
+    const { engine } = setUp([reply("lunch"), reply("lunch"), reply("lunch")], [crashed, passed, passed]);
     const before = Date.now();
     await engine.create("split lunch bills");
     await engine.change("lunch", "add a total");
@@ -495,7 +497,7 @@ describe("the engine", () => {
   });
 
   it("stops the sign-in service with the last running app, and stops reporting on it", async () => {
-    const { engine, log } = setUp([reply("lunch"), reply("notes"), reply("notes"), reply("notes")], [{ ok: true }, crashed, crashed, crashed]);
+    const { engine, log } = setUp([reply("lunch"), reply("notes"), reply("notes"), reply("notes")], [passed, crashed, crashed, crashed]);
     await engine.create("split lunch bills");
     await engine.create("keep notes");
 
@@ -589,6 +591,166 @@ function reply(name: string, summary = "", code = "export default 1;"): string {
 /** What the model was asked, as text, with any image as its media type. */
 function textOf(content: Message["content"]): string {
   return typeof content === "string" ? content : content.map((part) => (part.type === "text" ? part.text : `[${part.mediaType}]`)).join("\n");
+}
+
+describe("an app that keeps data", () => {
+  it("runs on a volume of its own once a version that declares records runs, and keeps it through versions that don't", async () => {
+    const { engine, deployed } = setUp([reply("notes"), reply("notes")], [keeps, passed]);
+    await engine.create("keep notes");
+
+    await engine.change("notes", "make it blue");
+
+    for (const objects of deployed) assert.ok(names(objects).includes("PersistentVolumeClaim/mayfly-notes-data"));
+    assert.deepEqual(containerNamed(deployed.at(-1), "app")?.volumeMounts, [{ name: "data", mountPath: "/data", readOnly: false }]);
+  });
+
+  it("gets no volume while no version that declares records has run", async () => {
+    const { engine, deployed } = setUp([reply("lunch")]);
+
+    await engine.create("split lunch bills");
+
+    assert.ok(!names(deployed[0]).some((name) => name.startsWith("PersistentVolumeClaim/")));
+  });
+
+  it("tries each change and hand edit on a copy of its records, once it has some", async () => {
+    const { engine, triedOn } = setUp([reply("notes"), reply("notes")], [keeps, keeps, keeps]);
+    const created = await engine.create("keep notes");
+
+    await engine.change("notes", "add tags");
+    await engine.save("notes", created.head ?? "", "export default 2;", "Tidy up");
+
+    assert.deepEqual(triedOn, [null, "mayfly-notes-data", "mayfly-notes-data"]);
+  });
+
+  it("tries a version that declares records on them before putting it back, and leaves the app as it was when they don't fit", async () => {
+    const misfit = "Stored records don't fit this version:\n\n- 2 `note:` records have no `title` but this version needs it as `string`";
+    const { engine, triedOn } = setUp([reply("notes"), reply("notes")], [keeps, keeps, { ok: false, problem: misfit }]);
+    await engine.create("keep notes");
+    const changed = await engine.change("notes", "add titles");
+
+    await assert.rejects(engine.undo("notes"), RecordedFailure);
+
+    const after = (await engine.list())[0];
+    assert.equal(after?.head, changed.head);
+    assert.deepEqual(triedOn, [null, "mayfly-notes-data", "mayfly-notes-data"]);
+    assert.deepEqual(after?.conversation.at(-1), { ...after?.conversation.at(-1), text: misfit, failed: true });
+  });
+
+  it("puts back a version that keeps no records without trying it again", async () => {
+    const { engine, triedOn } = setUp([reply("notes"), reply("notes")], [passed, keeps]);
+    const first = await engine.create("keep notes");
+    await engine.change("notes", "keep them on the server");
+
+    const undone = await engine.undo("notes");
+
+    assert.equal(undone.head, first.head);
+    assert.deepEqual(triedOn, [null, null]);
+  });
+
+  it("copies its records to a new name while it's stopped, before the old name's volume goes", async () => {
+    const { engine, log } = setUp([reply("notes")], [keeps]);
+    await engine.create("keep notes");
+    log.length = 0;
+
+    await engine.rename("notes", "journal");
+
+    assert.deepEqual(log.slice(0, 3), ["stop app", "copy mayfly-notes-data to mayfly-journal-data", "remove"]);
+  });
+
+  it("copies nothing when an app that keeps none is renamed", async () => {
+    const { engine, log } = setUp([reply("lunch")]);
+    await engine.create("split lunch bills");
+
+    await engine.rename("lunch", "bills");
+
+    assert.ok(!log.some((entry) => entry === "stop app" || entry.startsWith("copy")));
+  });
+});
+
+describe("an app's backups", () => {
+  it("copies its records before each version runs, and keeps the last three", async () => {
+    const { engine, log } = setUp([reply("notes"), reply("notes"), reply("notes"), reply("notes"), reply("notes")], [keeps, keeps, keeps, keeps, keeps]);
+    await engine.create("keep notes");
+    const versions: string[] = [];
+    for (const change of ["add tags", "add dates", "add colours", "add search"]) versions.push((await engine.change("notes", change)).head ?? "");
+
+    const { backups } = (await engine.list())[0]!;
+
+    assert.deepEqual(backups.map((backup) => backup.before), versions.slice(1).map((version) => ({ version })));
+    assert.equal(log.filter((entry) => entry.startsWith("copy mayfly-notes-data to mayfly-backup-")).length, 4);
+    assert.equal(log.filter((entry) => entry.startsWith("remove mayfly-backup-")).length, 1);
+  });
+
+  it("copies its records before an undo too, and has none to copy before its first version that keeps any", async () => {
+    const { engine } = setUp([reply("notes"), reply("notes")], [keeps, keeps, keeps]);
+    const first = await engine.create("keep notes");
+    await engine.change("notes", "add tags");
+
+    const undone = await engine.undo("notes");
+
+    assert.deepEqual(undone.backups.map((backup) => backup.before), [{ version: undone.versions[1]?.id }, { version: first.head }]);
+  });
+
+  it("puts back a backup's records after trying the running version on them, keeping the records it replaces as a backup", async () => {
+    const { engine, log, triedOn, volumes } = setUp([reply("notes"), reply("notes")], [keeps, keeps, keeps]);
+    await engine.create("keep notes");
+    volumes.set("mayfly-notes-data", "old");
+    const { backups: [backup] } = await engine.change("notes", "add tags");
+    volumes.set("mayfly-notes-data", "new");
+    log.length = 0;
+
+    const restored = await engine.restore("notes", backup!.id);
+
+    const replaced = restored.backups.at(-1)!;
+    assert.equal(triedOn.at(-1), `mayfly-backup-${backup!.id}`);
+    assert.deepEqual(log.slice(0, 4), ["stop app", `copy mayfly-notes-data to mayfly-backup-${replaced.id}`, "remove mayfly-notes-data", `copy mayfly-backup-${backup!.id} to mayfly-notes-data`]);
+    assert.equal(log.at(-1), "deploy");
+    assert.deepEqual([volumes.get("mayfly-notes-data"), volumes.get(`mayfly-backup-${replaced.id}`)], ["old", "new"]);
+    assert.deepEqual(replaced.before, { restore: backup!.id });
+    assert.deepEqual(restored.conversation.slice(-2).map((turn) => turn.text), [`Restore backup \`${backup!.id}\``, `Restored backup \`${backup!.id}\``]);
+  });
+
+  it("leaves the app's records as they were when the running version doesn't fit the backup's", async () => {
+    const { engine, log } = setUp([reply("notes"), reply("notes")], [keeps, keeps, crashed]);
+    await engine.create("keep notes");
+    const { backups: [backup] } = await engine.change("notes", "add tags");
+
+    await assert.rejects(engine.restore("notes", backup!.id), RecordedFailure);
+
+    assert.ok(!log.includes("remove mayfly-notes-data"));
+    assert.equal((await engine.list())[0]?.conversation.at(-1)?.text, "crashed");
+  });
+
+  it("refuses a backup it doesn't have", async () => {
+    const { engine } = setUp([reply("notes")], [keeps]);
+    await engine.create("keep notes");
+
+    await assert.rejects(engine.restore("notes", "0000aaaa"), /`notes` has no backup `0000aaaa`/);
+  });
+
+  it("exports an app's records, and refuses for an app that keeps none", async () => {
+    const { engine, volumes } = setUp([reply("notes"), reply("lunch")], [keeps, passed]);
+    await engine.create("keep notes");
+    await engine.create("split lunch bills");
+    volumes.set("mayfly-notes-data", '{"note:1":{"text":"hi"}}');
+
+    assert.equal(await engine.exportData("notes"), '{"note:1":{"text":"hi"}}');
+    await assert.rejects(engine.exportData("lunch"), /`lunch` keeps no data/);
+  });
+
+  it("deletes an app's backups with it", async () => {
+    const { engine, log } = setUp([reply("notes"), reply("notes")], [keeps, keeps]);
+    await engine.create("keep notes");
+    const { backups: [backup] } = await engine.change("notes", "add tags");
+
+    await engine.remove("notes");
+
+    assert.ok(log.includes(`remove mayfly-backup-${backup!.id}`));
+  });
+});
+
+function containerNamed(objects: readonly KubeObject[] | undefined, name: string) {
+  return objects?.find((o): o is Pod => o.kind === "Pod")?.spec.containers.find((c) => c.name === name);
 }
 
 // A reply, or an error the model's service fails with instead.
@@ -746,7 +908,7 @@ describe("phone access", () => {
   });
 
   it("turns on by serving sign-in and each running app's phone door, and running the apps with it", async () => {
-    const { engine, served, deployed, synced } = setUp([reply("lunch"), reply("notes"), reply("notes"), reply("notes")], [{ ok: true }, crashed, crashed, crashed]);
+    const { engine, served, deployed, synced } = setUp([reply("lunch"), reply("notes"), reply("notes"), reply("notes")], [passed, crashed, crashed, crashed]);
     await engine.create("split lunch bills");
     await engine.create("keep notes");
 
@@ -862,7 +1024,19 @@ function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: st
       log.push("deploy");
       deployed.push(objects);
     },
+    stop: async () => void log.push("stop app"),
     remove: async (objects) => void (log.push("remove"), removed.push(objects)),
+  };
+  /** The records on each volume that has any, as the app's export would give them. */
+  const volumes = new Map<string, string>();
+  const data: AppData = {
+    copy: async (from, to) => {
+      log.push(`copy ${from} to ${to}`);
+      const records = volumes.get(from);
+      if (records !== undefined) volumes.set(to, records);
+    },
+    remove: async (volume) => void (log.push(`remove ${volume}`), volumes.delete(volume)),
+    export: async (volume) => volumes.get(volume) ?? "{}",
   };
   /** Ports another program holds, where Dex can't listen. */
   const takenPorts = new Set<number>();
@@ -891,9 +1065,11 @@ function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: st
     },
   });
   let builds = 0;
+  /** Whose records each trial ran on, or null for none. */
+  const triedOn: (string | null)[] = [];
   const builder: Builder = {
     build: async (name) => `localhost/mayfly-app-${name}:${++builds}`,
-    trial: async () => trials.shift() ?? { ok: true },
+    trial: async (_image, records) => (triedOn.push(records), trials.shift() ?? passed),
     forget: async (name) => void forgotten.push(name),
   };
   const observer: Observer = {
@@ -918,8 +1094,8 @@ function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: st
     serve: async (port, to) => void served.set(port, to),
     stop: async (port) => void served.delete(port),
   };
-  const engine = createEngine({ store, deployer, observer, identity, models, builder, files, phoneNetwork });
-  return { engine, deployed, removed, synced, forgotten, served, log, asked, logged, kept, deployFailures, takenPorts, holdDeploy };
+  const engine = createEngine({ store, deployer, observer, identity, models, builder, data, files, phoneNetwork });
+  return { engine, deployed, removed, synced, forgotten, served, log, asked, logged, kept, deployFailures, takenPorts, holdDeploy, triedOn, volumes };
 }
 
 /** The cookie secret an app's proxy got, from the Secret among its objects. */

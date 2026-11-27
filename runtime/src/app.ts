@@ -8,11 +8,12 @@ import { log } from "./log.ts";
 import { logRequests } from "./request-log.ts";
 import { sameOriginOnly } from "./same-origin.ts";
 import { signOut, SIGN_OUT_PATH, type SignOutTargets } from "./sign-out.ts";
+import type { Store } from "./store.ts";
 
 const ONE_MEGABYTE = 1024 * 1024;
 
 /** Wraps a generated app's routes in everything the contract promises and the model never writes. */
-export function buildApp(routes: Hono<Env>, signOutTargets: SignOutTargets = {}): Hono<Env> {
+export function buildApp(routes: Hono<Env>, signOutTargets: SignOutTargets, store: Store): Hono<Env> {
   const app = new Hono<Env>();
   // Ahead of everything else: the liveness probe has no identity and its checks should not fill the logs.
   app.get("/healthz", (c) => c.json({ status: "ok" }));
@@ -21,6 +22,10 @@ export function buildApp(routes: Hono<Env>, signOutTargets: SignOutTargets = {})
   app.use(bodyLimit({ maxSize: ONE_MEGABYTE }));
   app.use(requireIdentity());
   app.use(sameOriginOnly());
+  app.use(async (c, next) => {
+    c.set("store", store);
+    await next();
+  });
   app.all(SIGN_OUT_PATH, signOut(signOutTargets));
   app.route("/", routes);
   app.onError(hideError);

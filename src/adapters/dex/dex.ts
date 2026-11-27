@@ -1,7 +1,8 @@
 import { hash } from "bcryptjs";
 import type { IdpSettings } from "../../core/auth-config-map.ts";
+import { writableClaim } from "../../core/claim.ts";
 import { HARDENED, LOOPBACK } from "../../core/hardening.ts";
-import type { ConfigMap, KubeObject, PersistentVolumeClaim, Pod, Secret, Volume, VolumeMount } from "../../core/kube.ts";
+import type { ConfigMap, KubeObject, Pod, Secret, Volume, VolumeMount } from "../../core/kube.ts";
 import { mayflyName, SIGN_IN } from "../../core/names.ts";
 import { execProbe } from "../../core/probe.ts";
 import { PASSWORD_PAGE } from "./password-page.ts";
@@ -71,7 +72,7 @@ export async function buildDex({ users, clients, logo, port = PREFERRED_SIGN_IN_
     staticClients: clients.map(staticClient),
   };
   const brand: ConfigMap[] = logo === undefined ? [] : [{ apiVersion: "v1", kind: "ConfigMap", metadata: { name: BRAND }, data: { "logo.svg": logo } }];
-  return [configSecret(config), pages(), ...brand, dataClaim(), dexPod(brand.length > 0, port, sessionKey !== undefined)];
+  return [configSecret(config), pages(), ...brand, writableClaim(DATA, "64Mi"), dexPod(brand.length > 0, port, sessionKey !== undefined)];
 }
 
 /** One sign-in serves every app, on each device, until it ends. "Remember me" starts ticked: these are the owner's own devices. */
@@ -82,16 +83,6 @@ function sessionsWith(cookieEncryptionKey: string) {
 /** Pages of Dex's own, changed for Mayfly, which replace Dex's one by one. */
 function pages(): ConfigMap {
   return { apiVersion: "v1", kind: "ConfigMap", metadata: { name: PAGES }, data: { "password.html": PASSWORD_PAGE } };
-}
-
-function dataClaim(): PersistentVolumeClaim {
-  const owner = { "volume.podman.io/uid": String(HARDENED.runAsUser), "volume.podman.io/gid": String(HARDENED.runAsGroup) };
-  return {
-    apiVersion: "v1",
-    kind: "PersistentVolumeClaim",
-    metadata: { name: DATA, annotations: owner },
-    spec: { accessModes: ["ReadWriteOnce"], resources: { requests: { storage: "64Mi" } } },
-  };
 }
 
 /** Where the browser ends its Dex session: OIDC's RP-initiated logout, which Dex serves only with sessions on. */

@@ -1,6 +1,7 @@
 import * as api from "@podman-desktop/api";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { readFile, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { basename, join } from "node:path";
 import { dexIdentity } from "../../adapters/dex/dex-identity.ts";
 import { readJson, writeJson } from "../../adapters/json-file/json-file.ts";
 import { jsonFileStore } from "../../adapters/json-file/json-file-store.ts";
@@ -9,6 +10,7 @@ import { KeyNeeded, listModels, openAiCompatibleModel } from "../../adapters/ope
 import { podmanBuilder } from "../../adapters/podman/podman-builder.ts";
 import { send, verify } from "../../adapters/smtp/smtp.ts";
 import { imageExists, podmanDeployer, podmanObserver, versions } from "../../adapters/podman/podman.ts";
+import { podmanData } from "../../adapters/podman/podman-data.ts";
 import { tailscaleNetwork } from "../../adapters/tailscale/tailscale.ts";
 import { createEngine, type Engine } from "../../engine/engine.ts";
 import type { ModelProvider, PhoneNetwork } from "../../engine/ports.ts";
@@ -40,6 +42,7 @@ export async function activate(context: api.ExtensionContext): Promise<void> {
     identity: dexIdentity(logo),
     models: (id) => configuredModel(modelFor(models.models(), id), keys),
     builder: podmanBuilder(RUNTIME_IMAGE),
+    data: podmanData(RUNTIME_IMAGE),
     files: fileStore(join(context.storagePath, "files")),
     phoneNetwork,
   });
@@ -151,6 +154,12 @@ async function controllerPorts(context: api.ExtensionContext, { engine, keys, mo
     },
     openExternal: (url) => api.env.openExternal(api.Uri.parse(url)),
     copy: (text) => api.env.clipboard.writeText(text),
+    saveFile: async (name, contents) => {
+      const chosen = await api.window.showSaveDialog({ defaultUri: api.Uri.file(join(homedir(), name)), saveLabel: "Save", filters: [{ name: "JSON", extensions: ["json"] }] });
+      if (chosen === undefined) return undefined;
+      await writeFile(chosen.fsPath, contents);
+      return basename(chosen.fsPath);
+    },
     doctor: (tell) =>
       examine(
         {

@@ -2,7 +2,7 @@
   "name": "@mayfly/runtime",
   "version": "0.0.0",
   "private": true,
-  "description": "The fixed part of every Mayfly app: sign-in identity, JSON logs, health checks, security headers.",
+  "description": "The fixed part of every Mayfly app: sign-in identity, a store, JSON logs, health checks, security headers.",
   "license": "MIT",
   "type": "module",
   "dependencies": {

@@ -15,6 +15,8 @@ const lunch: AppView = {
   conversation: [{ from: "person", text: "split lunch bills", at: 1 }],
   spent: NO_USAGE,
   people: ["ana@example.com"],
+  keepsData: false,
+  backups: [],
 };
 
 const state: ToUi = {

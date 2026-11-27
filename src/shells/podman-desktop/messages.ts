@@ -29,7 +29,7 @@ export interface Upload {
 /** A request Mayfly is working on, and what it has done so far. */
 export interface Progress extends Work {
   /** Making a new app, changing one, answering a question about it, deploying one of its versions, saving a hand edit to it, renaming it, starting it again, or removing it. */
-  readonly kind: "create" | "change" | "ask" | "deploy" | "save" | "rename" | "start" | "remove";
+  readonly kind: "create" | "change" | "ask" | "deploy" | "save" | "rename" | "start" | "remove" | "restore";
   /** When Mayfly started on it, in milliseconds since the epoch. */
   readonly since: number;
   readonly steps: readonly Step[];
@@ -100,6 +100,10 @@ export type FromUi =
   | { readonly type: "updated" }
   | { readonly type: "rename"; readonly app: string; readonly name: string }
   | { readonly type: "deploy"; readonly app: string; readonly version: string }
+  /** Puts back the records of one of an app's backups. */
+  | { readonly type: "restore"; readonly app: string; readonly id: string }
+  /** Asks where to save an app's records, as JSON. */
+  | { readonly type: "export-data"; readonly app: string }
   | { readonly type: "save"; readonly app: string; readonly from: string; readonly routes: string; readonly message: string };
 
 /** What the extension tells the page. Never a secret, but for a password the person asks to see. */

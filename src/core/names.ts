@@ -16,3 +16,13 @@ export function authConfigName(appName: string): string {
 export function proxyConfigName(appName: string): string {
   return `${mayflyName(appName)}-proxy`;
 }
+
+/** Names the volume an app keeps its records on. */
+export function dataVolumeName(appName: string): string {
+  return `${mayflyName(appName)}-data`;
+}
+
+/** Names a copy of an app's records by the copy's own id, so it keeps its name when the app is renamed. */
+export function backupVolumeName(id: string): string {
+  return `mayfly-backup-${id}`;
+}

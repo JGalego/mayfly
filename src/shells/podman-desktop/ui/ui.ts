@@ -10,6 +10,7 @@ import { findBar } from "./find-bar.ts";
 import { threadFind } from "./thread-find.ts";
 import { imageUrl, uploads } from "./uploads.ts";
 import { chooseTab, keyboardTabs } from "./tabs.ts";
+import { dataView, type DataActions } from "./data-view.ts";
 import { commandMenu } from "./command-menu.ts";
 import { markCommands } from "./command-mark.ts";
 import { parse, suggestions, type Command } from "./commands.ts";
@@ -41,7 +42,7 @@ type State = Extract<ToUi, { type: "state" }>;
 /** What the main area shows: a new app's empty conversation, an app's conversation, or the settings. */
 type View = { readonly kind: "new" } | { readonly kind: "app"; readonly name: string; readonly tab: Tab } | { readonly kind: "settings"; readonly tab: SettingsTab };
 /** An app's conversation, or its history. */
-type Tab = "chat" | "history" | "code" | "logs";
+type Tab = "chat" | "history" | "code" | "logs" | "data";
 /** What Mayfly needs, the models, how everything is running, or how the models did. */
 type SettingsTab = "general" | "people" | "models" | "logs" | "usage";
 
@@ -217,6 +218,8 @@ element("tab-chat").addEventListener("click", () => showTab("chat"));
 element("tab-history").addEventListener("click", () => showTab("history"));
 element("tab-code").addEventListener("click", () => showTab("code"));
 element("tab-logs").addEventListener("click", () => showTab("logs"));
+element("tab-data").addEventListener("click", () => showTab("data"));
+element("export-before-remove").addEventListener("click", () => view.kind === "app" && post({ type: "export-data", app: view.name }));
 element("edit-code").addEventListener("click", () => {
   const app = shownApp();
   const base = app === undefined ? undefined : startingPoint(app);
@@ -586,6 +589,14 @@ function pick(next: typeof picked): void {
   document.querySelector(".history-row.picked")?.scrollIntoView({ block: "nearest" });
 }
 
+function dataActions(app: string): DataActions {
+  return {
+    exportData: () => post({ type: "export-data", app }),
+    restore: (id) => startWork({ type: "restore", app, id }),
+    redraw: render,
+  };
+}
+
 function showTab(tab: Tab): void {
   if (view.kind === "app") go({ ...view, tab });
 }
@@ -667,6 +678,8 @@ function removeApp(): void {
   const dialog = element<HTMLDialogElement>("remove-dialog");
   const confirm = element<HTMLButtonElement>("confirm-remove");
   element("remove-title").replaceChildren("Remove ", nameChip(name), "?");
+  element("export-before-remove").hidden = shownApp()?.keepsData !== true;
+  element("remove-what").textContent = shownApp()?.keepsData === true ? "This stops the app and deletes its data, versions and conversation" : "This stops the app and deletes its versions and conversation but not data kept in browsers";
   let left = REMOVE_WAIT_S;
   const count = (): void => {
     confirm.disabled = left > 0;
@@ -919,8 +932,8 @@ function renderChat(state: State, app: AppView | undefined): void {
   const pending = working === null ? failure : [...asked, turn("mayfly", pendingView(working, showing, SPEAKING), SPEAKING)];
   const thread = element("thread");
   const following = thread.scrollHeight - thread.scrollTop - thread.clientHeight < FOLLOW_PX;
-  // History and Code are for developers.
-  const tab = view.kind !== "app" || !state.developer ? "chat" : view.tab;
+  // History and Code are for developers, and Data for an app that keeps some.
+  const tab = view.kind !== "app" || !state.developer || (view.tab === "data" && app?.keepsData !== true) ? "chat" : view.tab;
   // The editor has its own message box; a second one for the model would only confuse.
   element("composer").hidden = tab === "code" && editing !== undefined && editing.app === app?.name;
   element("turns").hidden = tab !== "chat";
@@ -928,7 +941,10 @@ function renderChat(state: State, app: AppView | undefined): void {
   conversationFind.mark();
   element("history").hidden = tab !== "history";
   renderHistory(tab === "history" ? app : undefined, showing, state.working === null);
-  for (const name of ["chat", "history", "code", "logs"] as const) chooseTab(element(`tab-${name}`), tab === name);
+  for (const name of ["chat", "history", "code", "logs", "data"] as const) chooseTab(element(`tab-${name}`), tab === name);
+  element("tab-data").hidden = app?.keepsData !== true;
+  element("data-tab").hidden = tab !== "data";
+  if (tab === "data" && app !== undefined) element("data-tab").replaceChildren(...dataView(app, state.working === null, dataActions(app.name)));
   element("logs-tab").hidden = tab !== "logs";
   if (tab === "logs" && app !== undefined) renderAppLogs(app);
   else appLogsShown = undefined;

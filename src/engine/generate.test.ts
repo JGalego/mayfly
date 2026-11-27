@@ -8,10 +8,11 @@ import type { Step } from "./step.ts";
 const good = 'name: notes\n```ts\nexport default 1;\n```\nKeeps your notes.';
 const broken = 'name: notes\n```ts\nthrow new Error("boom");\n```';
 const newNotes: Ask = { description: "keep notes", taken: [] };
+const passed: Trial = { ok: true, keepsData: false };
 
 describe("generateApp", () => {
   it("builds and trials the app the model wrote, and returns it with what the model said and spent", async () => {
-    const { model, builder, built } = fakes([good], [{ ok: true }]);
+    const { model, builder, built } = fakes([good], [passed]);
 
     const { name, attempts } = await generateApp(newNotes, { model, builder });
 
@@ -21,7 +22,7 @@ describe("generateApp", () => {
   });
 
   it("asks in the person's words, under the system prompt's rules", async () => {
-    const { model, builder, conversations } = fakes([good], [{ ok: true }]);
+    const { model, builder, conversations } = fakes([good], [passed]);
 
     await generateApp(newNotes, { model, builder });
 
@@ -30,7 +31,7 @@ describe("generateApp", () => {
   });
 
   it("names a new app so it never replaces one that exists", async () => {
-    const { model, builder } = fakes([good], [{ ok: true }]);
+    const { model, builder } = fakes([good], [passed]);
 
     const generated = await generateApp({ description: "keep notes", taken: ["notes", "notes-2"] }, { model, builder });
 
@@ -38,7 +39,7 @@ describe("generateApp", () => {
   });
 
   it("never names a new app as Mayfly's sign-in is named", async () => {
-    const { model, builder } = fakes([good.replace("name: notes", "name: dex")], [{ ok: true }]);
+    const { model, builder } = fakes([good.replace("name: notes", "name: dex")], [passed]);
 
     const generated = await generateApp(newNotes, { model, builder });
 
@@ -46,8 +47,8 @@ describe("generateApp", () => {
   });
 
   it("changes an app from its current code, keeping its name whatever the model calls it", async () => {
-    const { model, builder, conversations } = fakes([good], [{ ok: true }]);
-    const app = { name: "my-notes", routes: "export default 0;\n" };
+    const { model, builder, conversations } = fakes([good], [passed]);
+    const app = { name: "my-notes", routes: "export default 0;\n", keepsData: false };
 
     const generated = await generateApp({ change: "add a search box", app }, { model, builder });
 
@@ -57,10 +58,28 @@ describe("generateApp", () => {
     assert.equal(generated.name, "my-notes");
   });
 
+  it("tries a change on a copy of the records its app keeps, and a new app or one that keeps none on none", async () => {
+    const { model, builder, triedOn } = fakes([good, good, good], [passed, passed, passed]);
+
+    await generateApp({ change: "add tags", app: { name: "notes", routes: "export default 0;\n", keepsData: true } }, { model, builder });
+    await generateApp({ change: "add tags", app: { name: "lunch", routes: "export default 0;\n", keepsData: false } }, { model, builder });
+    await generateApp(newNotes, { model, builder });
+
+    assert.deepEqual(triedOn, ["mayfly-notes-data", null, null]);
+  });
+
+  it("notes which version keeps data, as its trial found", async () => {
+    const { model, builder } = fakes([good], [{ ok: true, keepsData: true }]);
+
+    const { attempts } = await generateApp(newNotes, { model, builder });
+
+    assert.equal(attempts[0]?.problem === null && attempts[0].keepsData, true);
+  });
+
   it("applies the model's edits to the app's code", async () => {
     const edits = "name: notes\n<<<<<<< SEARCH\nconst a = 1;\n=======\nconst a = 2;\n>>>>>>> REPLACE\nNow two.";
-    const { model, builder, built } = fakes([edits], [{ ok: true }]);
-    const app = { name: "notes", routes: "const a = 1;\nexport default a;\n" };
+    const { model, builder, built } = fakes([edits], [passed]);
+    const app = { name: "notes", routes: "const a = 1;\nexport default a;\n", keepsData: false };
 
     const { attempts } = await generateApp({ change: "make it two", app }, { model, builder });
 
@@ -70,8 +89,8 @@ describe("generateApp", () => {
 
   it("tells the model when an edit matches nothing, showing it the code", async () => {
     const edits = "name: notes\n<<<<<<< SEARCH\nconst z = 9;\n=======\nconst z = 0;\n>>>>>>> REPLACE";
-    const { model, builder, conversations } = fakes([edits, good], [{ ok: true }]);
-    const app = { name: "notes", routes: "const a = 1;\n" };
+    const { model, builder, conversations } = fakes([edits, good], [passed]);
+    const app = { name: "notes", routes: "const a = 1;\n", keepsData: false };
 
     await generateApp({ change: "make it zero", app }, { model, builder });
 
@@ -81,7 +100,7 @@ describe("generateApp", () => {
   });
 
   it("sends a failed trial's problem back to the model and tries again", async () => {
-    const { model, builder, conversations } = fakes([broken, good], [{ ok: false, problem: "boom at start" }, { ok: true }]);
+    const { model, builder, conversations } = fakes([broken, good], [{ ok: false, problem: "boom at start" }, passed]);
 
     const { attempts } = await generateApp(newNotes, { model, builder });
 
@@ -98,7 +117,7 @@ describe("generateApp", () => {
   });
 
   it("tells the model when its reply is not in the expected format", async () => {
-    const { model, builder, conversations, built } = fakes(["Sure! Here is an app.", good], [{ ok: true }]);
+    const { model, builder, conversations, built } = fakes(["Sure! Here is an app.", good], [passed]);
 
     await generateApp(newNotes, { model, builder });
 
@@ -107,7 +126,7 @@ describe("generateApp", () => {
   });
 
   it("tells a watcher each step: writing, the code, building, trying it, and why it failed", async () => {
-    const { model, builder } = fakes([broken, good], [{ ok: false, problem: "boom at start" }, { ok: true }]);
+    const { model, builder } = fakes([broken, good], [{ ok: false, problem: "boom at start" }, passed]);
     const steps: Step[] = [];
 
     await generateApp(newNotes, { model, builder, watch: (step) => steps.push(step) });
@@ -135,7 +154,7 @@ describe("generateApp", () => {
         return { text: good, thinking: "Notes need one route.", usage: { input: 1, output: 1, thinking: 0 } };
       },
     };
-    const { builder } = fakes([], [{ ok: true }]);
+    const { builder } = fakes([], [passed]);
     const seen: string[] = [];
 
     const { attempts } = await generateApp(newNotes, { model, builder, watch: (step) => "text" in step && seen.push(`${step.kind}: ${step.text}`) });
@@ -177,6 +196,8 @@ describe("generateApp", () => {
 function fakes(replies: string[], trials: Trial[]) {
   const conversations: { system: string; messages: Message[] }[] = [];
   const built: { name: string; routes: string }[] = [];
+  /** Whose records each trial ran on, or null for none. */
+  const triedOn: (string | null)[] = [];
   const model: ModelProvider = {
     name: "the test model",
     provider: "the test provider",
@@ -190,8 +211,8 @@ function fakes(replies: string[], trials: Trial[]) {
       built.push({ name, routes });
       return `image-${built.length}`;
     },
-    trial: async () => trials.shift() ?? { ok: false, problem: "no more trials" },
+    trial: async (_image, data) => (triedOn.push(data), trials.shift() ?? { ok: false, problem: "no more trials" }),
     forget: async () => {},
   };
-  return { model, builder, conversations, built };
+  return { model, builder, conversations, built, triedOn };
 }

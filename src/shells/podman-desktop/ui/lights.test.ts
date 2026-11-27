@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import type { AppView, ServiceHealth } from "../../../engine/engine.ts";
 import { lightFor } from "./lights.ts";
 
-const app: AppView = { name: "lunch", url: "http://localhost:18100/", model: null, starred: false, head: "v1", versions: [], conversation: [], spent: { input: 0, output: 0, thinking: 0 }, people: [] };
+const app: AppView = { name: "lunch", url: "http://localhost:18100/", model: null, starred: false, head: "v1", versions: [], conversation: [], spent: { input: 0, output: 0, thinking: 0 }, people: [], keepsData: false, backups: [] };
 
 function healthWith(...containers: { state: string; restarts: number; health?: "starting" | "healthy" | "unhealthy" }[]): ServiceHealth[] {
   return [{ name: "lunch", kind: "app", pod: "mayfly-lunch", containers: containers.map((container, index) => ({ name: `c${index}`, status: "", ...container })) }];

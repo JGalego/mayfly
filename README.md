@@ -76,7 +76,7 @@ Mayfly sends these emails from your mail account once you add it under **Setting
 
 Each person has a sign-in group of their own. Each app lets in only yours and those of the people it's shared with, which you choose in the app. Taking someone off an app, removing them, or resetting their password restarts the apps involved and ends their sessions there. You stay signed in. Apps see who is signed in, so an app can treat you and others differently.
 
-To remove Mayfly, `/remove` each app, which takes its pod and images with it, and then uninstall the extension. Sign-in and Mayfly's Podman network go with the last app. The runtime, Dex and oauth2-proxy images stay under **Images** until you remove them.
+To remove Mayfly, `/remove` each app, which takes its pod, images and data with it, and then uninstall the extension. Sign-in and Mayfly's Podman network go with the last app. The runtime, Dex and oauth2-proxy images stay under **Images** until you remove them.
 
 ## Why not Dyad?
 
@@ -84,15 +84,17 @@ Applications like [Dyad](https://www.dyad.sh/) and [Lovable](https://lovable.dev
 
 ## The contract
 
-A generated app is one TypeScript file, `routes.ts`, using [Hono](https://hono.dev/) on Node 24. The runtime listens on `$PORT`, serves `/healthz` and writes JSON logs to stdout. The app serves HTML at `/` with a link to `/oauth2/sign_out`. It has no server-side storage; data that must survive a restart can live in the browser.
+A generated app is one TypeScript file, `routes.ts`, using [Hono](https://hono.dev/) on Node 24. The runtime listens on `$PORT`, serves `/healthz` and writes JSON logs to stdout. The app serves HTML at `/` with a link to `/oauth2/sign_out`.
+
+An app keeps data in the runtime's store, as JSON records by key in SQLite, on a volume of its own at `/data`. It declares the kinds of record it keeps, by key prefix, and the store refuses a record that doesn't fit its kind. Before any version runs, the trial checks that every stored record fits it, on a copy of the data, so a change can only add fields and no change loses data. Mayfly also keeps a copy from before each of the last three deploys, which developer mode's **Data** tab can put back or save as JSON. See [the design](docs/design/app-data.md).
 
 [oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/) handles sign-in, checks the OIDC `groups` claim against the app's allowed roles and forwards identity in headers. It keeps the browser's cookies from the app, since browsers send every app on a host the cookies of all the others. [Dex](https://dexidp.io/) provides local OIDC. The app's port is not published; the proxy's is, on loopback only.
 
-Mayfly deploys an OCI image and Kubernetes objects with `podman kube play`. Containers run as non-root with a read-only root filesystem, no Linux capabilities and CPU and memory limits. The proxy's ConfigMap sets the identity provider and allowed roles; credentials live in a Secret.
+Mayfly deploys an OCI image and Kubernetes objects with `podman kube play`. Containers run as non-root with a read-only root filesystem, no Linux capabilities and CPU and memory limits. The one place an app can write is its data volume. The proxy's ConfigMap sets the identity provider and allowed roles; credentials live in a Secret.
 
 ## The runtime image
 
-The runtime image uses Node 24 on [Wolfi](https://github.com/wolfi-dev), built with [apko](https://github.com/chainguard-dev/apko) from locked packages, for amd64 and arm64. It has no shell or package manager. Its code is root-owned and read-only to the app. The runtime also sets security headers, limits request bodies to 1 MiB and handles shutdown.
+The runtime image uses Node 24 on [Wolfi](https://github.com/wolfi-dev), built with [apko](https://github.com/chainguard-dev/apko) from locked packages, for amd64 and arm64. It has no shell or package manager. Its code is root-owned and read-only to the app. The runtime also keeps the app's store, sets security headers, limits request bodies to 1 MiB and handles shutdown.
 
 `pixi run check-image` runs these checks locally and in CI:
 
@@ -132,7 +134,7 @@ flowchart LR
   model["OpenAI-compatible model provider<br/>your own key"] -. implements .-> ports
 ```
 
-For each request, Mayfly builds and tests the model's code without network access or elevated privileges. The trial checks that the app starts, answers `/healthz` and serves an HTML home page with a sign-out link. Mayfly sends failures back to the model for up to three attempts in total.
+For each request, Mayfly builds and tests the model's code without network access or elevated privileges. The trial checks that the app starts, answers `/healthz`, fits the records the app keeps and serves an HTML home page with a sign-out link. Mayfly sends failures back to the model for up to three attempts in total.
 
 ```mermaid
 flowchart LR
@@ -192,7 +194,6 @@ Each app runs as one pod: oauth2-proxy in front, on 127.0.0.1, and the app behin
 ## Non-goals
 
 - Login, user databases or sessions inside generated apps.
-- Server-side persistence.
 - Outbound network restrictions after deployment. The app shares a network with the proxy, which needs to reach the identity provider.
 - More than one stack for generated apps.
 - Mobile or WebAssembly targets.

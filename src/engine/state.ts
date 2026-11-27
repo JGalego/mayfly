@@ -19,7 +19,13 @@ export interface Person {
 /** One attempt at an app's code, kept whether or not it passed: a commit in the app's history. */
 export type Version = VersionDetails &
   (
-    | { readonly problem: null; /** The image it was built into. */ readonly image: string }
+    | {
+        readonly problem: null;
+        /** The image it was built into. */
+        readonly image: string;
+        /** It declares kinds of record, so it keeps data in the app's store. */
+        readonly keepsData?: true;
+      }
     | { /** Why it failed. */ readonly problem: string; readonly image: null }
   );
 
@@ -85,6 +91,18 @@ export interface App {
   readonly spent: Usage;
   /** The people it's shared with, by email. The owner can always open it. */
   readonly people?: readonly string[];
+  /** It has kept records since a version that declares them ran, on a volume of its own that goes when the app does. */
+  readonly keepsData?: true;
+  /** Copies of its records from before the last few changes that could touch them, oldest first. */
+  readonly backups?: readonly Backup[];
+}
+
+/** A copy of an app's records, from just before a version ran or a backup was put back. */
+export interface Backup {
+  readonly id: string;
+  readonly at: number;
+  /** What came after it: the version that ran, or the backup put back. */
+  readonly before: { readonly version: string } | { readonly restore: string };
 }
 
 /** One call to a model: when it ended, for which app, to which model, what it spent and how it went. Kept when the app is removed. */

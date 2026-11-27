@@ -19,7 +19,7 @@ const BUSY = "Wait for the request in progress to finish";
 const DRAFT_MS = 150;
 // Enough to see the last few hours of work, and small enough to keep in memory.
 const ACTIVITY = 200;
-const DONE: Record<Exclude<Progress["kind"], "remove">, string> = { create: "Made", change: "Changed", ask: "Answered a question about", deploy: "Deployed a version of", save: "Saved a hand edit to", rename: "Renamed", start: "Started" };
+const DONE: Record<Exclude<Progress["kind"], "remove">, string> = { create: "Made", change: "Changed", ask: "Answered a question about", deploy: "Deployed a version of", save: "Saved a hand edit to", rename: "Renamed", start: "Started", restore: "Restored the data of" };
 
 export interface ControllerPorts {
   readonly engine: Engine;
@@ -28,6 +28,8 @@ export interface ControllerPorts {
   readonly notify: (note: { readonly text: string; readonly failed: boolean; readonly seen: boolean }) => void;
   readonly openExternal: (url: string) => Promise<unknown>;
   readonly copy: (text: string) => Promise<unknown>;
+  /** Asks the person where to save a file, and saves it there. Says the file's name, or undefined when they cancel. */
+  readonly saveFile: (name: string, contents: string) => Promise<string | undefined>;
   readonly settings: {
     models(): Models;
     saveModels(models: Models): Promise<void>;
@@ -171,6 +173,10 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       return runAlone({ app: request.app, request: "/start", kind: "start" }, session, (watch) => session.engine.start(request.app, watch));
     case "deploy":
       return deploy(request.app, request.version, session);
+    case "restore":
+      return runAlone({ app: request.app, request: `Restore backup \`${request.id}\``, kind: "restore" }, session, (watch) => session.engine.restore(request.app, request.id, watch));
+    case "export-data":
+      return exportData(request.app, session);
     case "save":
       return saveByHand(request.app, request.from, request.routes, request.message.trim(), session);
   }
@@ -238,6 +244,11 @@ async function rename(app: string, to: string, session: Session): Promise<void> 
     await session.post({ type: "renamed", from: app, to: renamed.name });
     return renamed;
   });
+}
+
+async function exportData(app: string, session: Session): Promise<void> {
+  const saved = await session.saveFile(`${app}.json`, await session.engine.exportData(app));
+  if (saved !== undefined) await session.post({ type: "notice", text: `Saved the data of \`${app}\` to \`${saved}\`` });
 }
 
 async function deploy(app: string, version: string, session: Session): Promise<void> {
@@ -595,7 +606,10 @@ function readRequest(message: unknown): FromUi | undefined {
       return typeof app === "string" && typeof question === "string" && sent !== undefined ? { type, app, question, ...(sent.length === 0 ? {} : { files: sent }) } : undefined;
     }
     case "attachment":
+    case "restore":
       return typeof app === "string" && typeof id === "string" ? { type, app, id } : undefined;
+    case "export-data":
+      return typeof app === "string" ? { type, app } : undefined;
     case "fix":
     case "retry":
     case "undo":

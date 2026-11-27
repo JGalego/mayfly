@@ -5,7 +5,7 @@ FROM localhost/mayfly-runtime-base@sha256:20b959ad5960230b65a77b746bdbf5d991ade4
 
 ARG REVISION
 LABEL org.opencontainers.image.title="mayfly-runtime" \
-      org.opencontainers.image.description="Node 24 runtime for Mayfly apps: sign-in identity, JSON logs, health checks" \
+      org.opencontainers.image.description="Node 24 runtime for Mayfly apps: sign-in identity, a store, JSON logs, health checks" \
       org.opencontainers.image.source="https://github.com/JGalego/mayfly" \
       org.opencontainers.image.revision="${REVISION}" \
       org.opencontainers.image.licenses="MIT"

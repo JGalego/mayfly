@@ -19,6 +19,8 @@ const lunch: AppView = {
   versions: [],
   spent: { input: 100, output: 20, thinking: 0 },
   people: [],
+  keepsData: false,
+  backups: [],
 };
 const owner = { email: "owner@mayfly.local", username: "owner", password: "s3cret-pass" };
 const openai: ModelSetting = { id: "openai", provider: "openai", baseUrl: "", model: "gpt-6.2-sol" };
@@ -168,6 +170,27 @@ describe("the Mayfly panel's controller", () => {
     assert.deepEqual(calls, ["deploy lunch-split v1"]);
     assert.equal(stateOf(posted[0])?.working?.kind, "deploy");
     assert.equal(stateOf(posted.at(-1))?.working, null);
+  });
+
+  it("restores a backup, showing the work while it runs", async () => {
+    const { handle, posted, calls } = setUp({ apps: [lunch] });
+
+    await handle({ type: "restore", app: "lunch-split", id: "0a1b2c3d" });
+
+    assert.deepEqual(calls, ["restore lunch-split 0a1b2c3d"]);
+    assert.equal(stateOf(posted[0])?.working?.kind, "restore");
+    assert.equal(stateOf(posted.at(-1))?.working, null);
+  });
+
+  it("saves an app's data where the person picks, and says nothing when they cancel", async () => {
+    const { handle, posted, saved } = setUp({ apps: [lunch] });
+
+    await handle({ type: "export-data", app: "lunch-split" });
+    saved.cancel = true;
+    await handle({ type: "export-data", app: "lunch-split" });
+
+    assert.deepEqual(saved.files, [["lunch-split.json", '{"visit:1":{"count":1}}']]);
+    assert.deepEqual(posted, [{ type: "notice", text: "Saved the data of `lunch-split` to `lunch-split.json`" }]);
   });
 
   it("saves code edited by hand from a version, and refuses empty code", async () => {
@@ -837,6 +860,11 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
       calls.push(`deploy ${name} ${version}`);
       return lunch;
     },
+    restore: async (name, id) => {
+      calls.push(`restore ${name} ${id}`);
+      return lunch;
+    },
+    exportData: async () => '{"visit:1":{"count":1}}',
     star: async (name, starred) => void calls.push(`star ${name} ${starred}`),
     useModel: async (name, model) => {
       calls.push(`use ${name} ${model}`);
@@ -920,12 +948,19 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
       return { ...lunch, people: shared ? [email] : [] };
     },
   };
+  /** The files the person saved, unless they cancel the dialog. */
+  const saved = { files: [] as [string, string][], cancel: false };
   const handle = createController({
     engine,
     post: async (message) => void posted.push(message),
     notify: (note) => void notes.push(note),
     openExternal: async (url) => void opened.push(url),
     copy: async (text) => void copied.push(text),
+    saveFile: async (name, contents) => {
+      if (saved.cancel) return undefined;
+      saved.files.push([name, contents]);
+      return name;
+    },
     doctor: async (tell) => {
       const examination: Examination = { ready: [{ name: "Podman", status: "pass", detail: "Podman 5.8.9 is running" }], models: [{ id: "openai", status: "pass", detail: "Ready" }] };
       tell(examination);
@@ -964,5 +999,5 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
     },
   });
   const mail = { account: () => account, verified, sent };
-  return { handle, posted, opened, copied, calls, savedKeys, models: () => models, finish, notes, mail };
+  return { handle, posted, opened, copied, calls, savedKeys, models: () => models, finish, notes, mail, saved };
 }

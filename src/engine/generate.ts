@@ -1,5 +1,5 @@
-import { SIGN_IN } from "../core/names.ts";
-import type { Builder, Listener, Message, ModelProvider } from "./ports.ts";
+import { dataVolumeName, SIGN_IN } from "../core/names.ts";
+import type { Builder, Listener, Message, ModelProvider, Trial } from "./ports.ts";
 import { changeFor, repairFor, requestFor, SYSTEM_PROMPT, withFiles } from "./prompt.ts";
 import type { FileData } from "./attachments.ts";
 import { applyEdits, type Applied } from "./edits.ts";
@@ -16,13 +16,13 @@ const UNNAMED = "new-app";
 /** A new app, which must not take the name of one that exists, or a change to an app, which keeps its name. */
 export type Ask = (
   | { readonly description: string; readonly taken: readonly string[] }
-  | { readonly change: string; readonly app: { readonly name: string; readonly routes: string } }
+  | { readonly change: string; readonly app: { readonly name: string; readonly routes: string; readonly keepsData: boolean } }
 ) & {
   /** Files the person attached, which go with the request, so every attempt sees them. */
   readonly files?: readonly FileData[];
 };
 
-type Outcome = { readonly problem: null; readonly image: string } | { readonly problem: string; readonly image: null };
+type Outcome = { readonly problem: null; readonly image: string; readonly keepsData?: true } | { readonly problem: string; readonly image: null };
 
 /** One go at the code: what the model wrote, and thought when its provider shares that, and whether it passed its trial. */
 export type Attempt = Tried & { readonly thinking?: string; readonly spent: Usage; readonly at: number };
@@ -48,11 +48,14 @@ export async function generateApp(
   const nameFor = (proposed: string): string => (name ??= unusedName(proposed, taken));
   // The code the next edits apply to: the app's, then each attempt's that had any.
   let current = "change" in ask ? ask.app.routes : "";
+  // Each attempt runs on a copy of the records the app keeps, so one that doesn't fit them fails its trial.
+  const data = "change" in ask && ask.app.keepsData ? dataVolumeName(ask.app.name) : null;
+  const tryOut = (appName: string, routes: string): Promise<Outcome> => tryCode(appName, routes, data, builder, watch);
   const attempts: Attempt[] = [];
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
     watch({ kind: "writing", attempt });
     const { text: reply, thinking, usage } = await model.complete(SYSTEM_PROMPT, messages, listenFor(watch));
-    const tried = await tryReply(reply, current, nameFor, builder, watch);
+    const tried = await tryReply(reply, current, nameFor, tryOut);
     attempts.push({ ...tried, ...(thinking === "" ? {} : { thinking }), spent: usage, at: Date.now() });
     if (tried.problem === null) break;
     current = tried.routes || current;
@@ -73,12 +76,12 @@ export function listenFor(watch: Watcher): Listener {
   };
 }
 
-async function tryReply(reply: string, current: string, nameFor: (proposed: string) => string, builder: Builder, watch: Watcher): Promise<Tried> {
+async function tryReply(reply: string, current: string, nameFor: (proposed: string) => string, tryOut: (name: string, routes: string) => Promise<Outcome>): Promise<Tried> {
   const parsed = parseReply(reply);
   if (!parsed.ok) return unusable(parsed.problem);
   const code = resolve(parsed.code, current);
   if (!code.ok) return unusable(code.problem);
-  return { routes: code.routes, summary: parsed.summary, ...(await tryCode(nameFor(parsed.name), code.routes, builder, watch)) };
+  return { routes: code.routes, summary: parsed.summary, ...(await tryOut(nameFor(parsed.name), code.routes)) };
 }
 
 /** The whole code a reply gives, applying its edits to the code there is. */
@@ -92,13 +95,18 @@ function unusable(problem: string): Tried {
   return { routes: "", summary: "", problem, image: null };
 }
 
-async function tryCode(name: string, routes: string, builder: Builder, watch: Watcher): Promise<Outcome> {
+async function tryCode(name: string, routes: string, data: string | null, builder: Builder, watch: Watcher): Promise<Outcome> {
   watch({ kind: "wrote", routes });
   watch({ kind: "building" });
   const image = await builder.build(name, routes);
   watch({ kind: "trying" });
-  const trial = await builder.trial(image);
-  return trial.ok ? { problem: null, image } : { problem: trial.problem, image: null };
+  return outcomeOf(await builder.trial(image, data), image);
+}
+
+/** What a trial makes of an attempt: the image to run, and whether it keeps data, or why it failed. */
+export function outcomeOf(trial: Trial, image: string): Outcome {
+  if (!trial.ok) return { problem: trial.problem, image: null };
+  return { problem: null, image, ...(trial.keepsData ? { keepsData: true } : {}) };
 }
 
 /** Models pick obvious names, and a second "notes" must not replace the first, nor a "dex" Mayfly's sign-in. */
