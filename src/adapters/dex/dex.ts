@@ -1,7 +1,7 @@
 import { hash } from "bcryptjs";
 import type { IdpSettings } from "../../core/auth-config-map.ts";
 import { HARDENED, LOOPBACK } from "../../core/hardening.ts";
-import type { ConfigMap, KubeObject, Pod, Secret, Volume, VolumeMount } from "../../core/kube.ts";
+import type { ConfigMap, KubeObject, PersistentVolumeClaim, Pod, Secret, Volume, VolumeMount } from "../../core/kube.ts";
 import { execProbe } from "../../core/probe.ts";
 
 // Pinned: v2.45 is the first release that gives static users groups.
@@ -10,6 +10,14 @@ const NAME = "mayfly-dex";
 export const DEX_POD = NAME;
 const CONFIG = `${NAME}-config`;
 const BRAND = `${NAME}-brand`;
+const DATA = `${NAME}-data`;
+export const DEX_VOLUME = DATA;
+// Where Dex keeps its sessions and signing keys, on a volume that outlives the pod Mayfly replaces on every change.
+// Not the image's own /var/dex: Podman would give an empty volume that directory's owner, not the one Dex runs as.
+const DATA_DIR = "/var/lib/mayfly-dex";
+// One sign-in lasts this long at most, and ends sooner when it isn't used.
+const SESSION_LIFETIME = "720h";
+const SESSION_IDLE = "168h";
 // Dex serves its pages from here, and anything in static/ as is.
 const WEB = "/srv/dex/web";
 const LOGO = "static/mayfly/logo.svg";
@@ -39,15 +47,18 @@ export interface DexInput {
   readonly logo?: string;
   /** The loopback port people sign in on. */
   readonly port?: number;
+  /** 32 characters that encrypt the cookie keeping people signed in across apps. Without it, everyone signs in to each app. */
+  readonly sessionKey?: string;
 }
 
 /** The local identity provider: a pod published on loopback, configured from a Secret, its sign-in page named for Mayfly. */
-export async function buildDex({ users, clients, logo, port = PREFERRED_SIGN_IN_PORT }: DexInput): Promise<KubeObject[]> {
+export async function buildDex({ users, clients, logo, port = PREFERRED_SIGN_IN_PORT, sessionKey }: DexInput): Promise<KubeObject[]> {
   const frontend = logo === undefined ? { issuer: "Mayfly" } : { issuer: "Mayfly", dir: WEB, logoURL: LOGO };
   const config = {
     issuer: issuerOn(port),
     frontend,
-    storage: { type: "memory" },
+    storage: { type: "sqlite3", config: { file: `${DATA_DIR}/dex.db` } },
+    ...(sessionKey === undefined ? {} : { sessions: sessionsWith(sessionKey) }),
     web: { http: `0.0.0.0:${PORT}` },
     oauth2: { skipApprovalScreen: true },
     enablePasswordDB: true,
@@ -55,7 +66,22 @@ export async function buildDex({ users, clients, logo, port = PREFERRED_SIGN_IN_
     staticClients: clients.map(staticClient),
   };
   const brand: ConfigMap[] = logo === undefined ? [] : [{ apiVersion: "v1", kind: "ConfigMap", metadata: { name: BRAND }, data: { "logo.svg": logo } }];
-  return [configSecret(config), ...brand, dexPod(brand.length > 0, port)];
+  return [configSecret(config), ...brand, dataClaim(), dexPod(brand.length > 0, port, sessionKey !== undefined)];
+}
+
+/** One sign-in serves every app, on each device, until it ends. "Remember me" starts ticked: these are the owner's own devices. */
+function sessionsWith(cookieEncryptionKey: string) {
+  return { absoluteLifetime: SESSION_LIFETIME, validIfNotUsedFor: SESSION_IDLE, rememberMeCheckedByDefault: true, cookieEncryptionKey, ssoSharedWithDefault: "all" };
+}
+
+function dataClaim(): PersistentVolumeClaim {
+  const owner = { "volume.podman.io/uid": String(HARDENED.runAsUser), "volume.podman.io/gid": String(HARDENED.runAsGroup) };
+  return {
+    apiVersion: "v1",
+    kind: "PersistentVolumeClaim",
+    metadata: { name: DATA, annotations: owner },
+    spec: { accessModes: ["ReadWriteOnce"], resources: { requests: { storage: "64Mi" } } },
+  };
 }
 
 /** How an app's auth proxy signs people in with Dex: the browser uses the issuer, the proxy uses the network. */
@@ -90,9 +116,15 @@ function issuerOn(port: number): string {
   return `http://localhost:${port}/dex`;
 }
 
-function dexPod(branded: boolean, port: number): Pod {
-  const volumes: Volume[] = [{ name: "config", secret: { secretName: CONFIG } }];
-  const mounts: VolumeMount[] = [{ name: "config", mountPath: "/etc/dex", readOnly: true }];
+function dexPod(branded: boolean, port: number, sessions: boolean): Pod {
+  const volumes: Volume[] = [
+    { name: "config", secret: { secretName: CONFIG } },
+    { name: "data", persistentVolumeClaim: { claimName: DATA } },
+  ];
+  const mounts: VolumeMount[] = [
+    { name: "config", mountPath: "/etc/dex", readOnly: true },
+    { name: "data", mountPath: DATA_DIR, readOnly: false },
+  ];
   if (branded) {
     volumes.push({ name: "brand", configMap: { name: BRAND } });
     mounts.push({ name: "brand", mountPath: `${WEB}/static/mayfly`, readOnly: true });
@@ -107,6 +139,8 @@ function dexPod(branded: boolean, port: number): Pod {
           name: "dex",
           image: IMAGE,
           args: ["dex", "serve", "/etc/dex/config.yaml"],
+          // Dex 2.46 keeps sessions behind a feature flag.
+          ...(sessions ? { env: [{ name: "DEX_SESSIONS_ENABLED", value: "true" }] } : {}),
           ports: [{ containerPort: PORT, hostPort: port, hostIP: LOOPBACK }],
           volumeMounts: mounts,
           livenessProbe: execProbe(["wget", "-q", "--spider", `http://127.0.0.1:${PORT}/dex/healthz`]),

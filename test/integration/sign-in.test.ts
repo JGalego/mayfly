@@ -1,8 +1,8 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { buildDex, dexSettings } from "../../src/adapters/dex/dex.ts";
-import { down, health, play } from "../../src/adapters/podman/podman.ts";
+import { buildDex, DEX_VOLUME, dexSettings } from "../../src/adapters/dex/dex.ts";
+import { down, health, play, removeVolume } from "../../src/adapters/podman/podman.ts";
 import { appUrl, callbackUrl } from "../../src/core/app-url.ts";
 import { buildAuthConfigMap } from "../../src/core/auth-config-map.ts";
 import { buildAuthSecret } from "../../src/core/auth-secret.ts";
@@ -23,7 +23,7 @@ let app: KubeObject[] = [];
 
 before(async () => {
   const image = buildEchoImage();
-  dex = await buildDex({ users: [owner, guest], clients: [client], logo: readFileSync("assets/logo.svg", "utf8") });
+  dex = await buildDex({ users: [owner, guest], clients: [client], logo: readFileSync("assets/logo.svg", "utf8"), sessionKey: secret() });
   app = [
     buildAuthConfigMap({ appName: "echo", policy: { roles: ["owner"] }, idp: dexSettings(client.id) }),
     buildAuthSecret({ appName: "echo", clientSecret: client.secret, cookieSecret: secret() }),
@@ -38,6 +38,7 @@ before(async () => {
 after(async () => {
   await down(app);
   await down(dex);
+  await removeVolume(DEX_VOLUME);
 });
 
 describe("an app behind Mayfly's sign-in, on Podman", () => {
@@ -93,6 +94,23 @@ describe("an app behind Mayfly's sign-in, on Podman", () => {
     const page = await signIn({ ...owner, password: "wrong" });
 
     assert.equal(page.status, 401);
+  });
+});
+
+describe("Dex's sign-in sessions", () => {
+  it("skip the password when signing in again, even after Dex starts again", async () => {
+    const browser = new Browser();
+    await browser.submit(await browser.get(APP), { login: owner.email, password: owner.password, remember_me: "on" });
+
+    browser.forget("mayfly-echo");
+    const again = await browser.get(APP);
+    await play(dex);
+    await waitUntilUp("http://localhost:5556/dex/healthz");
+    browser.forget("mayfly-echo");
+    const afterRestart = await browser.get(APP);
+
+    assert.equal(JSON.parse(again.body).email, owner.email);
+    assert.equal(JSON.parse(afterRestart.body).email, owner.email);
   });
 });
 

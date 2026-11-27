@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { App } from "../../engine/state.ts";
 import { NO_USAGE } from "../../engine/usage.ts";
-import { clientFor } from "./dex-identity.ts";
+import { clientFor, sessionKeyFor } from "./dex-identity.ts";
 
 const app: App = { name: "lunch", hostPort: 18100, clientSecret: "secret", cookieSecret: "cookie", model: null, starred: false, versions: [], head: null, conversation: [], spent: NO_USAGE };
 
@@ -16,5 +16,24 @@ describe("each app's sign-in client", () => {
       "http://localhost:18100/oauth2/callback",
       "https://mayfly.tail1a2b.ts.net:38100/oauth2/callback",
     ]);
+  });
+});
+
+describe("the sign-in session key", () => {
+  const owner = { email: "me@mayfly.local", username: "me", password: "thank-machine-dreamless-unease-landless-reverence" };
+
+  it("is 32 characters, the same for the same password, so sessions survive Dex starting again", () => {
+    const key = sessionKeyFor(owner);
+
+    assert.equal(key?.length, 32);
+    assert.equal(sessionKeyFor({ ...owner }), key);
+  });
+
+  it("changes with the password, so a new password signs every device out", () => {
+    assert.notEqual(sessionKeyFor({ ...owner, password: "another-six-words-for-the-owner" }), sessionKeyFor(owner));
+  });
+
+  it("is none without an owner, who is the only one who signs in", () => {
+    assert.equal(sessionKeyFor(null), undefined);
   });
 });

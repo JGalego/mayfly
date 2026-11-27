@@ -53,5 +53,6 @@ describe("the engine on Podman with Dex", () => {
     // The last app took sign-in and Mayfly's network with it.
     await assert.rejects(fetch("http://localhost:5556/dex/healthz"));
     assert.notEqual(spawnSync("podman", ["network", "exists", "mayfly"]).status, 0);
+    assert.notEqual(spawnSync("podman", ["volume", "exists", "mayfly-dex-data"]).status, 0);
   });
 });
