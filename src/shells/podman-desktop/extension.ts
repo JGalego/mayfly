@@ -138,7 +138,7 @@ function configuredModel(setting: ModelSetting, keys: KeyStore): ModelProvider {
       try {
         return await openAiCompatibleModel({ baseUrl, ...(apiKey ? { apiKey } : {}), model: setting.model }).complete(system, messages, listener);
       } catch (error) {
-        if (error instanceof KeyNeeded) throw new Error(`${name} needs an API key. Add it in Settings → Models.`);
+        if (error instanceof KeyNeeded) throw new Error(`\`${name}\` needs an API key. Add it in Settings → Models.`);
         throw error;
       }
     },

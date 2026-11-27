@@ -1063,7 +1063,7 @@ function showError(text: string, recorded = false): void {
 
 function showBanner(text: string, kind: "notice" | "error"): void {
   const banner = element("banner");
-  banner.textContent = text;
+  banner.replaceChildren(...withChips(text));
   banner.className = kind;
   banner.setAttribute("role", kind === "error" ? "alert" : "status");
   banner.hidden = false;

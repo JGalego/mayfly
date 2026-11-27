@@ -360,7 +360,7 @@ async function setPhone(on: boolean, session: Session): Promise<void> {
   if (on) {
     const host = await session.engine.turnOnPhone();
     note(session, "info", `Phone access on at ${host}`);
-    await session.post({ type: "notice", text: `Phone access is on. With Tailscale, your phone opens apps at ${host}.` });
+    await session.post({ type: "notice", text: `Phone access is on. With Tailscale, your phone opens apps at \`${host}\`.` });
   } else {
     await session.engine.turnOffPhone();
     note(session, "info", "Phone access off");
@@ -382,7 +382,7 @@ async function removePerson(email: string, session: Session): Promise<void> {
   if (session.working !== null) return void (await session.post({ type: "error", text: BUSY }));
   await session.engine.removePerson(email);
   note(session, "info", `Removed ${email}`);
-  await session.post({ type: "notice", text: `Removed ${email}. No app lets them in now.` });
+  await session.post({ type: "notice", text: `Removed \`${email}\`. No app lets them in now.` });
   await showState(session);
 }
 
@@ -417,7 +417,7 @@ async function mailFor(about: MailAbout, session: Session): Promise<Mail> {
   }
   const host = await session.engine.phoneAccess();
   const app = (await session.engine.list()).find((candidate) => candidate.name === about.app);
-  if (host === null || app === undefined) throw new Error(`${about.app} can't be reached from another device now. Turn on phone access in Settings first.`);
+  if (host === null || app === undefined) throw new Error(`\`${about.app}\` can't be reached from another device now. Turn on phone access in Settings first.`);
   return sharedMail(about.email, app.name, onPhone(app.url, host));
 }
 

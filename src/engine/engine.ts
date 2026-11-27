@@ -290,7 +290,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       await runApps(moved);
       return moved;
     }
-    throw new Error(`Ports ${taken} to ${taken + SIGN_IN_TRIES} are all in use, so sign-in can't start. Free one of them, then try again.`);
+    throw new Error(`Ports \`${taken}\` to \`${taken + SIGN_IN_TRIES}\` are all in use, so sign-in can't start. Free one of them, then try again.`);
   }
 
   /** Runs sign-in and one app, and returns the state, which says where sign-in ended up. */
@@ -368,7 +368,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     async fix(name, watch = UNWATCHED) {
       existingApp(await store.load(), name);
       const errors = errorsIn(await observer.logs(mayflyName(name), "app", LOG_LINES));
-      if (errors.length === 0) throw new Error(`${name} logged no errors to fix.`);
+      if (errors.length === 0) throw new Error(`\`${name}\` logged no errors to fix.`);
       return engine.change(name, fixFor(errors), watch);
     },
 
@@ -376,13 +376,13 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       const app = existingApp(await store.load(), name);
       // Apps kept before the last request was remembered have their model's last version's.
       const request = app.lastRequest ?? app.versions.findLast((version) => version.by.kind === "model")?.request;
-      if (request === undefined) throw new Error(`${name} has no request to retry.`);
+      if (request === undefined) throw new Error(`\`${name}\` has no request to retry.`);
       return engine.change(name, request, watch, await loaded(app.lastAttachments ?? []));
     },
 
     async undo(name, watch = UNWATCHED) {
       const { previous } = existingApp(await store.load(), name);
-      if (previous === undefined) throw new Error(`${name} has no previous deployment.`);
+      if (previous === undefined) throw new Error(`\`${name}\` has no previous deployment.`);
       return engine.deploy(name, previous, watch);
     },
 
@@ -396,7 +396,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
         const state = withOwner(await store.load());
         const app = existingApp(state, name);
         const running = runningVersion(app);
-        if (running === undefined) throw new Error(`${name} has no deployed version to start.`);
+        if (running === undefined) throw new Error(`\`${name}\` has no deployed version to start.`);
         // Built again, as when deploying, in case its image is gone; it passed its trial when it was made.
         watch({ kind: "building" });
         const image = await builder.build(name, running.routes);
@@ -483,7 +483,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       return recording(name, message || "Manual edit", [], async () => {
         const started = Date.now();
         const state = withOwner(await store.load());
-        if (findVersion(existingApp(state, name), from) === undefined) throw new Error(`${name} has no version ${from}`);
+        if (findVersion(existingApp(state, name), from) === undefined) throw new Error(`\`${name}\` has no version \`${from}\``);
         watch({ kind: "building" });
         const image = await builder.build(name, routes);
         watch({ kind: "trying" });
@@ -502,7 +502,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
         const state = withOwner(await store.load());
         const app = existingApp(state, name);
         const version = findVersion(app, id);
-        if (version?.problem !== null) throw new Error(`${name} has no version ${id} that passed`);
+        if (version?.problem !== null) throw new Error(`\`${name}\` has no version \`${id}\` that passed`);
         // It passed its trial when it was made, on the same runtime, so it is built again but not tried again.
         watch({ kind: "building" });
         const image = await builder.build(name, version.routes);
@@ -523,13 +523,13 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     async attachment(name, id) {
       const app = existingApp(await store.load(), name);
       const found = app.conversation.flatMap((turn) => (turn.from === "person" ? (turn.attachments ?? []) : [])).find((file) => file.id === id);
-      if (found === undefined) throw new Error(`${name} has no file ${id}`);
+      if (found === undefined) throw new Error(`\`${name}\` has no file \`${id}\``);
       return { name: found.name, type: found.type, data: await files.get(id) };
     },
 
     async written(name, id) {
       const version = findVersion(existingApp(await store.load(), name), id);
-      if (version === undefined) throw new Error(`${name} has no version ${id}`);
+      if (version === undefined) throw new Error(`\`${name}\` has no version \`${id}\``);
       return { routes: version.routes, thinking: version.thinking ?? "" };
     },
 
@@ -608,7 +608,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
 
     async person(email) {
       const person = findPerson(await store.load(), email);
-      if (person === undefined) throw new Error(`No one called ${email} is here.`);
+      if (person === undefined) throw new Error(`No one called \`${email}\` is here.`);
       return person;
     },
 
@@ -699,18 +699,18 @@ function runs({ containers }: ServiceHealth): boolean {
 
 /** A name another app does not have, and that the contract allows. */
 function usableName(state: State, name: string, to: string): string {
-  if (to === name) throw new Error(`${name} is already called that.`);
-  if (findApp(state, to) !== undefined) throw new Error(`There is already an app called ${to}.`);
+  if (to === name) throw new Error(`\`${name}\` is already called that.`);
+  if (findApp(state, to) !== undefined) throw new Error(`There is already an app called \`${to}\`.`);
   try {
     return parseAppName(to);
   } catch {
-    throw new Error(`${to} can't be an app's name: use lowercase letters, digits and inner hyphens, at most 40 characters.`);
+    throw new Error(`\`${to}\` can't be an app's name: use lowercase letters, digits and inner hyphens, at most 40 characters.`);
   }
 }
 
 function existingApp(state: State, name: string): App {
   const app = findApp(state, name);
-  if (app === undefined) throw new Error(`no app named ${name}`);
+  if (app === undefined) throw new Error(`No app is called \`${name}\`.`);
   return app;
 }
 

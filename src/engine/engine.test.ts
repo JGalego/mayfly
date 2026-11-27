@@ -168,7 +168,7 @@ describe("the engine", () => {
     const { engine, asked, logged } = setUp([reply("lunch"), reply("lunch")]);
     await engine.create("split lunch bills");
 
-    await assert.rejects(engine.fix("lunch"), /lunch logged no errors to fix/);
+    await assert.rejects(engine.fix("lunch"), /`lunch` logged no errors to fix/);
     logged.push('2026-11-26T15:04:05Z {"time":"x","level":"info","msg":"GET / 200"}', '2026-11-26T15:04:06Z {"time":"x","level":"error","msg":"bills is not defined"}');
     const fixed = await engine.fix("lunch");
 
@@ -221,9 +221,9 @@ describe("the engine", () => {
     await engine.create("split lunch bills");
     await engine.create("keep notes");
 
-    await assert.rejects(engine.rename("lunch", "Lunch Bills"), /Lunch Bills can't be an app's name: use lowercase letters/);
-    await assert.rejects(engine.rename("lunch", "notes"), /There is already an app called notes/);
-    await assert.rejects(engine.rename("lunch", "lunch"), /lunch is already called that/);
+    await assert.rejects(engine.rename("lunch", "Lunch Bills"), /`Lunch Bills` can't be an app's name: use lowercase letters/);
+    await assert.rejects(engine.rename("lunch", "notes"), /There is already an app called `notes`/);
+    await assert.rejects(engine.rename("lunch", "lunch"), /`lunch` is already called that/);
   });
 
   it("starts the running version again, with the sign-in service, changing nothing about the app", async () => {
@@ -250,7 +250,7 @@ describe("the engine", () => {
     const { engine } = setUp([reply("lunch"), reply("lunch"), reply("lunch")], [crashed, crashed, crashed]);
     await engine.create("split lunch bills");
 
-    await assert.rejects(engine.start("lunch"), /lunch has no deployed version to start/);
+    await assert.rejects(engine.start("lunch"), /`lunch` has no deployed version to start/);
   });
 
   it("sends attached files with a request, keeps them apart from the state and in the conversation by name, and sends them again on retry", async () => {
@@ -267,7 +267,7 @@ describe("the engine", () => {
     assert.deepEqual(attached.map((file) => [file.name, file.type, file.bytes]), [["bills.csv", "text/csv", 10], ["mockup.png", "image/png", 3]]);
     assert.equal(kept.size, 2);
     assert.deepEqual([...(await engine.attachment("lunch", attached[1]?.id ?? "")).data], [1, 2, 3]);
-    await assert.rejects(engine.attachment("lunch", "0".repeat(64)), /lunch has no file 0+/);
+    await assert.rejects(engine.attachment("lunch", "0".repeat(64)), /`lunch` has no file `0+`/);
     await engine.retry("lunch");
     assert.match(asked.at(-1) ?? "", /who,amount/);
   });
@@ -294,7 +294,7 @@ describe("the engine", () => {
     const { engine } = setUp([reply("lunch"), reply("lunch")], [crashed, { ok: true }]);
     const app = await engine.create("split lunch bills");
 
-    await assert.rejects(engine.save("lunch", "nope", "export default 2;\n", ""), /lunch has no version nope/);
+    await assert.rejects(engine.save("lunch", "nope", "export default 2;\n", ""), /`lunch` has no version `nope`/);
     await assert.rejects(engine.deploy("lunch", app.versions[0]?.id ?? ""), /no version .* that passed/);
   });
 
@@ -348,7 +348,7 @@ describe("the engine", () => {
   it("refuses to change an app it does not know", async () => {
     const { engine } = setUp([]);
 
-    await assert.rejects(engine.change("ghost", "make it blue"), /no app named ghost/);
+    await assert.rejects(engine.change("ghost", "make it blue"), /No app is called `ghost`/);
   });
 
   it("counts the tokens each app spent, and all of them, including failed attempts and removed apps", async () => {
@@ -431,7 +431,7 @@ describe("the engine", () => {
   it("refuses to remove an app it does not know", async () => {
     const { engine } = setUp([]);
 
-    await assert.rejects(engine.remove("ghost"), /no app named ghost/);
+    await assert.rejects(engine.remove("ghost"), /No app is called `ghost`/);
   });
 
   it("changes the owner's email and password, and tells the sign-in service once an app runs", async () => {

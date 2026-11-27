@@ -1,5 +1,6 @@
 import type { AppView } from "../../../engine/engine.ts";
 import type { FromUi, MailAbout } from "../messages.ts";
+import { nameChip } from "./chips.ts";
 import { h } from "./dom.ts";
 import { icon, type IconName } from "./icons.ts";
 import { passwordCard, PASSWORD_SHOWN_MS } from "./password-card.ts";
@@ -39,11 +40,12 @@ export function setUpPeople(send: Post, rerender: () => void, openPeople: () => 
 export function offerEmail(mail: MailAbout): void {
   const dialog = element<HTMLDialogElement>("email-dialog");
   const titles = { welcome: "their sign-in", "new-password": "their new password", shared: "the link" };
-  element("email-title").textContent = `Email ${mail.email} ${titles[mail.about]}?`;
-  element("email-text").textContent =
-    mail.about === "shared"
-      ? `Mayfly drafts an email in your mail app with the link to ${mail.app}, for you to send.`
-      : "Mayfly drafts an email in your mail app with their password, for you to send.";
+  element("email-title").replaceChildren("Email ", nameChip(mail.email), ` ${titles[mail.about]}?`);
+  element("email-text").replaceChildren(
+    ...(mail.about === "shared"
+      ? ["Mayfly drafts an email in your mail app with the link to ", nameChip(mail.app), ", for you to send."]
+      : ["Mayfly drafts an email in your mail app with their password, for you to send."]),
+  );
   dialog.returnValue = "";
   dialog.addEventListener("close", () => dialog.returnValue === "email" && post({ type: "email", ...mail }), { once: true });
   dialog.showModal();
