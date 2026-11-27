@@ -293,10 +293,12 @@ function receive(message: ToUi): void {
 
 function receiveState(next: State): void {
   const previous = state;
-  if (previous === undefined) post({ type: "health" });
+  const ended = previous !== undefined && previous.working !== null && next.working === null;
+  // Asked again when work ends too, or a new or renamed app shows as stopped until the next check.
+  if (previous === undefined || ended) post({ type: "health" });
   state = next;
   // Whatever the outcome, an error for it came before this.
-  if (previous !== undefined && previous.working !== null && next.working === null) lastSent = undefined;
+  if (ended) lastSent = undefined;
   if (view.kind === "app" && shownApp() === undefined) view = { kind: "new" };
   // The ledger grows when work ends, which sends the state.
   if (view.kind === "settings") post({ type: "ledger" });
