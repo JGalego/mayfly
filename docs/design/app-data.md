@@ -2,7 +2,7 @@
 
 Status: being built on `feat/app-data`, for 0.5.0. It changes the contract, and takes "Server-side persistence" off the README's non-goals.
 
-Built so far: the store, the check in every trial, undo and deploy on the data, rename and remove. Restore and export come next.
+Built so far: the store, the check in every trial, undo and deploy on the data, backups with restore and export, rename and remove. Still to build: offering the backup when an undo doesn't fit.
 
 Apps keep data in the browser today. That breaks as soon as an app has more than one browser: two people sharing a tracker each see their own list, an entry made on the phone isn't there on the computer, and clearing the browser deletes it. The goal is data that lives with the app, where the model declares what it keeps and Mayfly makes sure no change can lose it.
 
@@ -74,7 +74,7 @@ flowchart LR
 ```
 
 - **Undo** puts back the code and keeps the data. Changes only add, and the store keeps fields a version doesn't declare, so the version going back almost always fits. When it doesn't, Mayfly says which records don't fit and offers the backup from before the undone version.
-- **Restore** puts back the data from before one of the last three deploys. Anything written since is lost, so Mayfly says how much and asks first. It sits in developer mode, with **Export**, which saves the data as a JSON file.
+- **Restore** puts back the data from before one of the last three deploys. Anything written since is lost, so Mayfly says when the backup was made and asks first. The data it replaces becomes a backup too, so a restore can be undone the same way. It sits in developer mode's **Data** tab, with **Export**, which saves the data as a JSON file.
 - **Rename** copies the data to the new name's volume.
 - **Remove** deletes the data, after offering an export. A volume left behind would hand old data to the next app with that name, and maybe to other people.
 

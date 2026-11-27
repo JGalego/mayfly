@@ -113,6 +113,22 @@ export function copyStore(from: string, to: string): void {
   db.close();
 }
 
+/** Writes every stored record as one JSON object by key, a record a line, as it reads them, so a large store needs little memory. */
+export function exportStore(file: string, write: (chunk: string) => void): void {
+  write("{");
+  if (existsSync(file)) {
+    const db = new DatabaseSync(file, { readOnly: true });
+    let first = true;
+    // The store keeps each record as JSON already.
+    for (const row of db.prepare("SELECT key, value FROM records ORDER BY key").iterate() as Iterable<{ key: string; value: string }>) {
+      write(`${first ? "" : ","}\n  ${JSON.stringify(row.key)}: ${row.value}`);
+      first = false;
+    }
+    db.close();
+  }
+  write("\n}\n");
+}
+
 function open(file: string): Statements {
   const db = new DatabaseSync(file);
   db.exec("CREATE TABLE IF NOT EXISTS records (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID");

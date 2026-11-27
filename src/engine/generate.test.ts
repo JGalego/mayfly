@@ -65,7 +65,7 @@ describe("generateApp", () => {
     await generateApp({ change: "add tags", app: { name: "lunch", routes: "export default 0;\n", keepsData: false } }, { model, builder });
     await generateApp(newNotes, { model, builder });
 
-    assert.deepEqual(triedOn, ["notes", null, null]);
+    assert.deepEqual(triedOn, ["mayfly-notes-data", null, null]);
   });
 
   it("notes which version keeps data, as its trial found", async () => {

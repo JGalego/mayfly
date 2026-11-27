@@ -6,7 +6,6 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { APP_PORT, DATA_CHECK, DATA_DIR, HEALTH_CHECK, HOME_PAGE_TIMEOUT_MS, NODE } from "../../core/contract.ts";
 import { dataProblem, type DataReport } from "../../core/data-fit.ts";
 import { homePageProblem, type HomePage } from "../../core/home-page.ts";
-import { dataVolumeName } from "../../core/names.ts";
 import type { Builder, Trial } from "../../engine/ports.ts";
 import { podman, run } from "./cli.ts";
 import { copyData } from "./podman-data.ts";
@@ -53,16 +52,16 @@ async function forget(name: string): Promise<void> {
 }
 
 // The trial runs the model's code before anyone has looked at it, sandboxed, on a throwaway copy of the app's records.
-async function trial(image: string, data: string | null): Promise<Trial> {
+async function trial(image: string, records: string | null): Promise<Trial> {
   const container = `mayfly-trial-${randomUUID().slice(0, 8)}`;
-  const records = `${container}-data`;
+  const copy = `${container}-data`;
   try {
-    if (data !== null) await copyData(image, dataVolumeName(data), records);
-    await podman(["run", "--detach", "--name", container, ...SANDBOX, "--volume", `${records}:${DATA_DIR}:U`, "--env", `PORT=${APP_PORT}`, image]);
+    if (records !== null) await copyData(image, records, copy);
+    await podman(["run", "--detach", "--name", container, ...SANDBOX, "--volume", `${copy}:${DATA_DIR}:U`, "--env", `PORT=${APP_PORT}`, image]);
     return await visit(container);
   } finally {
     await run(["rm", "--force", "--time", "0", container]);
-    await run(["volume", "rm", "--force", records]);
+    await run(["volume", "rm", "--force", copy]);
   }
 }
 

@@ -76,7 +76,7 @@ Applications like [Dyad](https://www.dyad.sh/) and [Lovable](https://lovable.dev
 
 A generated app is one TypeScript file, `routes.ts`, using [Hono](https://hono.dev/) on Node 24. The runtime listens on `$PORT`, serves `/healthz` and writes JSON logs to stdout. The app serves HTML at `/` with a link to `/oauth2/sign_out`.
 
-An app keeps data in the runtime's store, as JSON records by key in SQLite, on a volume of its own at `/data`. It declares the kinds of record it keeps, by key prefix, and the store refuses a record that doesn't fit its kind. Before any version runs, the trial checks that every stored record fits it, on a copy of the data, so a change can only add fields and no change loses data. See [the design](docs/design/app-data.md).
+An app keeps data in the runtime's store, as JSON records by key in SQLite, on a volume of its own at `/data`. It declares the kinds of record it keeps, by key prefix, and the store refuses a record that doesn't fit its kind. Before any version runs, the trial checks that every stored record fits it, on a copy of the data, so a change can only add fields and no change loses data. Mayfly also keeps a copy from before each of the last three deploys, which developer mode's **Data** tab can put back or save as JSON. See [the design](docs/design/app-data.md).
 
 [oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/) handles sign-in, checks the OIDC `groups` claim against the app's allowed roles and forwards identity in headers. It keeps the browser's cookies from the app, since browsers send every app on a host the cookies of all the others. [Dex](https://dexidp.io/) provides local OIDC. The app's port is not published; the proxy's is, on loopback only.
 

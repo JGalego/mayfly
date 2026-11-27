@@ -25,10 +25,14 @@ export interface Deployer {
   remove(objects: readonly KubeObject[]): Promise<void>;
 }
 
-/** The volumes apps keep their records on. */
+/** The volumes apps keep their records on, and their backups, by name. A volume that doesn't exist holds no records. */
 export interface AppData {
-  /** Copies an app's records to another name's volume, as renaming it needs. An app that never kept any copies none. */
+  /** Copies the records on one volume to a new one. */
   copy(from: string, to: string): Promise<void>;
+  /** Deletes a volume. One that doesn't exist is gone already. */
+  remove(volume: string): Promise<void>;
+  /** Every record on a volume, as one JSON object by key. */
+  export(volume: string): Promise<string>;
 }
 
 /** How one container is doing. */
@@ -137,10 +141,10 @@ export interface Builder {
   /** Builds an app's image from its routes and returns the image's reference. */
   build(name: string, routes: string): Promise<string>;
   /**
-   * Runs the image briefly, cut off from the network, on a throwaway copy of the named app's records, or none, and visits it as a
+   * Runs the image briefly, cut off from the network, on a throwaway copy of the records on a volume, or none, and visits it as a
    * signed-in person would. It fails when a stored record doesn't fit the kinds the code declares.
    */
-  trial(image: string, data: string | null): Promise<Trial>;
+  trial(image: string, records: string | null): Promise<Trial>;
   /** Removes every image built for an app. Any version can be built again from its code. */
   forget(name: string): Promise<void>;
 }

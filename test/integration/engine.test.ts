@@ -84,8 +84,19 @@ describe("the engine on Podman with Dex", () => {
     images.push(...imagesOf(await store.load()));
     assert.match((await browser.get(app.url)).body, /Visits: 4/);
 
+    // The same code again: a new version, which runs once the records are backed up as they are, at 4 visits.
+    writes = { name: "visits", fixture: "tally-app" };
+    const { backups: [backup] } = await engine.change("visits", "count again");
+    await waitUntilUp(app.url);
+    assert.match((await browser.get(app.url)).body, /Visits: 5/);
+    await engine.restore("visits", backup!.id);
+    await waitUntilUp(app.url);
+    assert.match((await browser.get(app.url)).body, /Visits: 5/);
+    assert.deepEqual(JSON.parse(await engine.exportData("visits")), { [`visit:${owner.email}`]: { count: 5 } });
+
+    const backups = (await engine.list()).find((kept) => kept.name === "visits")?.backups ?? [];
     await engine.remove("visits");
-    assert.notEqual(spawnSync("podman", ["volume", "exists", "mayfly-visits-data"]).status, 0);
+    for (const volume of ["mayfly-visits-data", ...backups.map((kept) => `mayfly-backup-${kept.id}`)]) assert.notEqual(spawnSync("podman", ["volume", "exists", volume]).status, 0, volume);
   });
 });
 

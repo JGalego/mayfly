@@ -65,6 +65,7 @@
           <button id="tab-history" role="tab" type="button" data-icon="history">History</button>
           <button id="tab-code" role="tab" type="button" data-icon="code">Code</button>
           <button id="tab-logs" role="tab" type="button" data-icon="logs">Logs</button>
+          <button id="tab-data" role="tab" type="button" data-icon="data" hidden>Data</button>
         </div>
       </header>
       <div id="workspace">
@@ -88,6 +89,7 @@
             <ul id="app-health" class="health-list"></ul>
             <div id="app-logs"></div>
           </div>
+          <div id="data-tab" role="tabpanel" aria-labelledby="tab-data" hidden></div>
           <div id="code-tab" role="tabpanel" aria-labelledby="tab-code" hidden>
             <div id="code-reading">
               <div class="code-head">
@@ -304,6 +306,7 @@
         <h2 id="remove-title">Remove this app?</h2>
         <p id="remove-what"></p>
         <div class="editor-actions">
+          <button id="export-before-remove" type="button" class="quiet-button" hidden>Export data</button>
           <button value="keep" class="quiet-button" autofocus>Cancel</button>
           <button id="confirm-remove" value="remove" class="danger">Remove</button>
         </div>

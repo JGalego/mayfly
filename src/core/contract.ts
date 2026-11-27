@@ -22,3 +22,5 @@ export const DATA_DIR = "/data";
 export const DATA_CHECK = [NODE, "/app/runtime/data-check.ts"];
 /** The runtime's copy of an app's records from one folder to another. It runs none of the app's code. */
 export const DATA_COPY = [NODE, "/app/runtime/data-copy.ts"];
+/** The runtime's export of the records in a folder, as JSON by key on stdout. It runs none of the app's code. */
+export const DATA_EXPORT = [NODE, "/app/runtime/data-export.ts"];

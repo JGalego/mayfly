@@ -1,6 +1,7 @@
 import * as api from "@podman-desktop/api";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { readFile, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { basename, join } from "node:path";
 import { dexIdentity } from "../../adapters/dex/dex-identity.ts";
 import { readJson, writeJson } from "../../adapters/json-file/json-file.ts";
 import { jsonFileStore } from "../../adapters/json-file/json-file-store.ts";
@@ -101,6 +102,12 @@ async function openPanel(context: api.ExtensionContext, engine: Engine, keys: Ke
     },
     openExternal: (url) => api.env.openExternal(api.Uri.parse(url)),
     copy: (text) => api.env.clipboard.writeText(text),
+    saveFile: async (name, contents) => {
+      const chosen = await api.window.showSaveDialog({ defaultUri: api.Uri.file(join(homedir(), name)), saveLabel: "Save", filters: [{ name: "JSON", extensions: ["json"] }] });
+      if (chosen === undefined) return undefined;
+      await writeFile(chosen.fsPath, contents);
+      return basename(chosen.fsPath);
+    },
     doctor: (tell) =>
       examine(
         {

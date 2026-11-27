@@ -59,26 +59,30 @@ describe("the Podman builder", () => {
     built.push(tally);
     keep(tally, volume, { "visit:a": { count: 1 }, "visit:b": { count: 5 } });
 
-    const strict = await buildAndTry("tallied", readFileSync("test/fixtures/tally-strict/routes.ts", "utf8"), "tallied");
-    const again = await builder.trial(tally, "tallied");
+    const strict = await buildAndTry("tallied", readFileSync("test/fixtures/tally-strict/routes.ts", "utf8"), volume);
+    const again = await builder.trial(tally, volume);
 
     assert.equal(strict.ok ? "" : strict.problem, "Stored records don't fit this version:\n\n- 2 `visit:` records have no `first` but this version needs it as `string`");
     assert.deepEqual(again, { ok: true, keepsData: true });
     assert.deepEqual(stored(tally, volume), { "visit:a": { count: 1 }, "visit:b": { count: 5 } });
   });
 
-  it("copies an app's records to a new name, and copies nothing for an app that kept none", async () => {
+  it("copies, exports and deletes the records on a volume, and copies nothing from one that doesn't exist", async () => {
     const data = podmanData(RUNTIME_IMAGE);
     removed.push("mayfly-copied-data", "mayfly-copy-data", "mayfly-none-data");
     const tally = await builder.build("copied", readFileSync("test/fixtures/tally-app/routes.ts", "utf8"));
     built.push(tally);
     keep(tally, "mayfly-copied-data", { "visit:a": { count: 3 } });
 
-    await data.copy("copied", "copy");
-    await data.copy("never", "none");
+    await data.copy("mayfly-copied-data", "mayfly-copy-data");
+    await data.copy("mayfly-never-data", "mayfly-none-data");
+    const exported = await data.export("mayfly-copy-data");
+    await data.remove("mayfly-copied-data");
 
     assert.deepEqual(stored(tally, "mayfly-copy-data"), { "visit:a": { count: 3 } });
-    assert.notEqual(spawnSync("podman", ["volume", "exists", "mayfly-none-data"]).status, 0);
+    assert.deepEqual(JSON.parse(exported), { "visit:a": { count: 3 } });
+    assert.deepEqual(JSON.parse(await data.export("mayfly-none-data")), {});
+    for (const volume of ["mayfly-none-data", "mayfly-copied-data"]) assert.notEqual(spawnSync("podman", ["volume", "exists", volume]).status, 0, volume);
   });
 
   it("tags an image by its code, so the same routes give the same image", async () => {

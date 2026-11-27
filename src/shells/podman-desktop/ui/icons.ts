@@ -12,6 +12,7 @@ const ICONS = {
   close: [path("M6 6l12 12M18 6L6 18")],
   code: [path("M8 7l-5 5 5 5M16 7l5 5-5 5")],
   coins: [["ellipse", { cx: 12, cy: 6, rx: 7, ry: 3 }], path("M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6")],
+  data: [["ellipse", { cx: 12, cy: 5, rx: 8, ry: 3 }], path("M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3")],
   conversation: [path("M21 15a2 2 0 0 1-2 2H8l-4 4V6a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2z")],
   copy: [["rect", { x: 8, y: 8, width: 12, height: 12, rx: 2 }], path("M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2")],
   eye: [path("M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"), circle(12, 12, 3)],

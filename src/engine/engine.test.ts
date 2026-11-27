@@ -602,7 +602,7 @@ describe("an app that keeps data", () => {
     await engine.change("notes", "add tags");
     await engine.save("notes", created.head ?? "", "export default 2;", "Tidy up");
 
-    assert.deepEqual(triedOn, [null, "notes", "notes"]);
+    assert.deepEqual(triedOn, [null, "mayfly-notes-data", "mayfly-notes-data"]);
   });
 
   it("tries a version that declares records on them before putting it back, and leaves the app as it was when they don't fit", async () => {
@@ -615,7 +615,7 @@ describe("an app that keeps data", () => {
 
     const after = (await engine.list())[0];
     assert.equal(after?.head, changed.head);
-    assert.deepEqual(triedOn, [null, "notes", "notes"]);
+    assert.deepEqual(triedOn, [null, "mayfly-notes-data", "mayfly-notes-data"]);
     assert.deepEqual(after?.conversation.at(-1), { ...after?.conversation.at(-1), text: misfit, failed: true });
   });
 
@@ -637,7 +637,7 @@ describe("an app that keeps data", () => {
 
     await engine.rename("notes", "journal");
 
-    assert.deepEqual(log.slice(0, 3), ["stop app", "copy notes to journal", "remove"]);
+    assert.deepEqual(log.slice(0, 3), ["stop app", "copy mayfly-notes-data to mayfly-journal-data", "remove"]);
   });
 
   it("copies nothing when an app that keeps none is renamed", async () => {
@@ -647,6 +647,88 @@ describe("an app that keeps data", () => {
     await engine.rename("lunch", "bills");
 
     assert.ok(!log.some((entry) => entry === "stop app" || entry.startsWith("copy")));
+  });
+});
+
+describe("an app's backups", () => {
+  it("copies its records before each version runs, and keeps the last three", async () => {
+    const { engine, log } = setUp([reply("notes"), reply("notes"), reply("notes"), reply("notes"), reply("notes")], [keeps, keeps, keeps, keeps, keeps]);
+    await engine.create("keep notes");
+    const versions: string[] = [];
+    for (const change of ["add tags", "add dates", "add colours", "add search"]) versions.push((await engine.change("notes", change)).head ?? "");
+
+    const { backups } = (await engine.list())[0]!;
+
+    assert.deepEqual(backups.map((backup) => backup.before), versions.slice(1).map((version) => ({ version })));
+    assert.equal(log.filter((entry) => entry.startsWith("copy mayfly-notes-data to mayfly-backup-")).length, 4);
+    assert.equal(log.filter((entry) => entry.startsWith("remove mayfly-backup-")).length, 1);
+  });
+
+  it("copies its records before an undo too, and has none to copy before its first version that keeps any", async () => {
+    const { engine } = setUp([reply("notes"), reply("notes")], [keeps, keeps, keeps]);
+    const first = await engine.create("keep notes");
+    await engine.change("notes", "add tags");
+
+    const undone = await engine.undo("notes");
+
+    assert.deepEqual(undone.backups.map((backup) => backup.before), [{ version: undone.versions[1]?.id }, { version: first.head }]);
+  });
+
+  it("puts back a backup's records after trying the running version on them, keeping the records it replaces as a backup", async () => {
+    const { engine, log, triedOn, volumes } = setUp([reply("notes"), reply("notes")], [keeps, keeps, keeps]);
+    await engine.create("keep notes");
+    volumes.set("mayfly-notes-data", "old");
+    const { backups: [backup] } = await engine.change("notes", "add tags");
+    volumes.set("mayfly-notes-data", "new");
+    log.length = 0;
+
+    const restored = await engine.restore("notes", backup!.id);
+
+    const replaced = restored.backups.at(-1)!;
+    assert.equal(triedOn.at(-1), `mayfly-backup-${backup!.id}`);
+    assert.deepEqual(log.slice(0, 4), ["stop app", `copy mayfly-notes-data to mayfly-backup-${replaced.id}`, "remove mayfly-notes-data", `copy mayfly-backup-${backup!.id} to mayfly-notes-data`]);
+    assert.equal(log.at(-1), "deploy");
+    assert.deepEqual([volumes.get("mayfly-notes-data"), volumes.get(`mayfly-backup-${replaced.id}`)], ["old", "new"]);
+    assert.deepEqual(replaced.before, { restore: backup!.id });
+    assert.deepEqual(restored.conversation.slice(-2).map((turn) => turn.text), [`Restore backup \`${backup!.id}\``, `Restored backup \`${backup!.id}\``]);
+  });
+
+  it("leaves the app's records as they were when the running version doesn't fit the backup's", async () => {
+    const { engine, log } = setUp([reply("notes"), reply("notes")], [keeps, keeps, crashed]);
+    await engine.create("keep notes");
+    const { backups: [backup] } = await engine.change("notes", "add tags");
+
+    await assert.rejects(engine.restore("notes", backup!.id), RecordedFailure);
+
+    assert.ok(!log.includes("remove mayfly-notes-data"));
+    assert.equal((await engine.list())[0]?.conversation.at(-1)?.text, "crashed");
+  });
+
+  it("refuses a backup it doesn't have", async () => {
+    const { engine } = setUp([reply("notes")], [keeps]);
+    await engine.create("keep notes");
+
+    await assert.rejects(engine.restore("notes", "0000aaaa"), /`notes` has no backup `0000aaaa`/);
+  });
+
+  it("exports an app's records, and refuses for an app that keeps none", async () => {
+    const { engine, volumes } = setUp([reply("notes"), reply("lunch")], [keeps, passed]);
+    await engine.create("keep notes");
+    await engine.create("split lunch bills");
+    volumes.set("mayfly-notes-data", '{"note:1":{"text":"hi"}}');
+
+    assert.equal(await engine.exportData("notes"), '{"note:1":{"text":"hi"}}');
+    await assert.rejects(engine.exportData("lunch"), /`lunch` keeps no data/);
+  });
+
+  it("deletes an app's backups with it", async () => {
+    const { engine, log } = setUp([reply("notes"), reply("notes")], [keeps, keeps]);
+    await engine.create("keep notes");
+    const { backups: [backup] } = await engine.change("notes", "add tags");
+
+    await engine.remove("notes");
+
+    assert.ok(log.includes(`remove mayfly-backup-${backup!.id}`));
   });
 });
 
@@ -895,7 +977,17 @@ function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: st
     stop: async () => void log.push("stop app"),
     remove: async (objects) => void (log.push("remove"), removed.push(objects)),
   };
-  const data: AppData = { copy: async (from, to) => void log.push(`copy ${from} to ${to}`) };
+  /** The records on each volume that has any, as the app's export would give them. */
+  const volumes = new Map<string, string>();
+  const data: AppData = {
+    copy: async (from, to) => {
+      log.push(`copy ${from} to ${to}`);
+      const records = volumes.get(from);
+      if (records !== undefined) volumes.set(to, records);
+    },
+    remove: async (volume) => void (log.push(`remove ${volume}`), volumes.delete(volume)),
+    export: async (volume) => volumes.get(volume) ?? "{}",
+  };
   /** Ports another program holds, where Dex can't listen. */
   const takenPorts = new Set<number>();
   const identity: IdentitySource = {
@@ -953,7 +1045,7 @@ function setUp(replies: (string | Error)[], trials: Trial[] = [], named: (id: st
     stop: async (port) => void served.delete(port),
   };
   const engine = createEngine({ store, deployer, observer, identity, models, builder, data, files, phoneNetwork });
-  return { engine, deployed, removed, synced, forgotten, served, log, asked, logged, kept, deployFailures, takenPorts, holdDeploy, triedOn };
+  return { engine, deployed, removed, synced, forgotten, served, log, asked, logged, kept, deployFailures, takenPorts, holdDeploy, triedOn, volumes };
 }
 
 /** The cookie secret an app's proxy got, from the Secret among its objects. */

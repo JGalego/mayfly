@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { kindsFrom } from "./records.ts";
-import { checkStore, copyStore, openStore } from "./store.ts";
+import { checkStore, copyStore, exportStore, openStore } from "./store.ts";
 
 const folder = mkdtempSync(join(tmpdir(), "mayfly-store-"));
 let files = 0;
@@ -125,5 +125,26 @@ describe("copying an app's store", () => {
     copyStore(join(folder, "none.db"), to);
 
     assert.deepEqual(checkStore(to, v1).misfits, []);
+  });
+});
+
+describe("exporting an app's store", () => {
+  it("writes every record as JSON by key, with the fields no version declares now", () => {
+    const file = newFile();
+    openStore(file, v2).set("task:1", { title: "t", done: false, tags: ["home"] });
+    openStore(file, v1).set("note:1", { text: "n" });
+    let written = "";
+
+    exportStore(file, (chunk) => (written += chunk));
+
+    assert.deepEqual(JSON.parse(written), { "note:1": { text: "n" }, "task:1": { title: "t", done: false, tags: ["home"] } });
+  });
+
+  it("writes an empty object for an app that never kept anything", () => {
+    let written = "";
+
+    exportStore(join(folder, "none.db"), (chunk) => (written += chunk));
+
+    assert.deepEqual(JSON.parse(written), {});
   });
 });

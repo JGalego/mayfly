@@ -1,4 +1,4 @@
-import { SIGN_IN } from "../core/names.ts";
+import { dataVolumeName, SIGN_IN } from "../core/names.ts";
 import type { Builder, Listener, Message, ModelProvider, Trial } from "./ports.ts";
 import { changeFor, repairFor, requestFor, SYSTEM_PROMPT, withFiles } from "./prompt.ts";
 import type { FileData } from "./attachments.ts";
@@ -49,7 +49,7 @@ export async function generateApp(
   // The code the next edits apply to: the app's, then each attempt's that had any.
   let current = "change" in ask ? ask.app.routes : "";
   // Each attempt runs on a copy of the records the app keeps, so one that doesn't fit them fails its trial.
-  const data = "change" in ask && ask.app.keepsData ? ask.app.name : null;
+  const data = "change" in ask && ask.app.keepsData ? dataVolumeName(ask.app.name) : null;
   const tryOut = (appName: string, routes: string): Promise<Outcome> => tryCode(appName, routes, data, builder, watch);
   const attempts: Attempt[] = [];
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {

@@ -6,12 +6,12 @@ import { generateApp, listenFor, outcomeOf, type Ask, type Attempt, type Generat
 import { ASK_PROMPT, fixFor, questionFor, withFiles } from "./prompt.ts";
 import type { Attachment, FileData } from "./attachments.ts";
 import { errorsIn } from "./log-errors.ts";
-import { mayflyName, SIGN_IN } from "../core/names.ts";
+import { backupVolumeName, dataVolumeName, mayflyName, SIGN_IN } from "../core/names.ts";
 import { parseAppName } from "../core/manifest.ts";
 import { PortTaken, type ContainerHealth, type ModelProvider, type PhoneNetworkStatus, type Ports } from "./ports.ts";
 import { newPassword, newSecret } from "./secrets.ts";
 import { allowedGroups, EMAIL, findPerson, peopleOf, sharing, withNewPassword, withoutPerson, withPerson } from "./people.ts";
-import { findApp, findVersion, runningVersion, withApp, withoutApp, type App, type Author, type ModelCall, type Owner, type Person, type State, type Turn, type Version } from "./state.ts";
+import { findApp, findVersion, runningVersion, withApp, withoutApp, type App, type Author, type Backup, type ModelCall, type Owner, type Person, type State, type Turn, type Version } from "./state.ts";
 import { UNWATCHED, type Watcher } from "./step.ts";
 import { addUsage, metered, NO_USAGE, type Usage } from "./usage.ts";
 
@@ -23,6 +23,8 @@ const CONTAINER = /^[a-z0-9-]+$/;
 const MADE = "App deployed";
 const CHANGED = "Update deployed";
 const SAVED = "Saved and ready to deploy";
+// How many copies of an app's records Mayfly keeps, from before the last few changes that could touch them.
+const BACKUPS = 3;
 // How many ports past a taken one sign-in tries before it gives up.
 const SIGN_IN_TRIES = 20;
 /** What to do before phone access can be turned on, for each way Tailscale isn't ready. */
@@ -87,6 +89,8 @@ export interface AppView {
   readonly people: readonly string[];
   /** It keeps records, which go when it's removed. */
   readonly keepsData: boolean;
+  /** Copies of its records it can put back, oldest first. */
+  readonly backups: readonly Backup[];
 }
 
 export interface Engine {
@@ -125,8 +129,12 @@ export interface Engine {
   /** The code of one version of an app, and what the model thought writing it. */
   written(name: string, version: string): Promise<Written>;
   list(): Promise<AppView[]>;
-  /** Removes an app, with its records, its images and its conversation. */
+  /** Removes an app, with its records and their backups, its images and its conversation. */
   remove(name: string): Promise<void>;
+  /** Puts back the records of one of an app's backups, once the running version fits them. The records it replaces become a backup too. */
+  restore(name: string, backup: string, watch?: Watcher): Promise<AppView>;
+  /** Every record an app keeps, as one JSON object by key. */
+  exportData(name: string): Promise<string>;
   /** Who signs in to the apps. Created on first use. */
   owner(): Promise<Owner>;
   /** Signs the owner in with another email from now on. */
@@ -256,16 +264,17 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       // It passed its trial when it was made, on the same runtime. Records written since may not fit it, so then it's tried on them.
       if (app.keepsData === true && version.keepsData === true) {
         watch({ kind: "trying" });
-        const trial = await builder.trial(image, name);
+        const trial = await builder.trial(image, dataVolumeName(name));
         if (!trial.ok) throw new Error(trial.problem);
       }
+      const backups = await backedUp(app, { version: id });
       // Versions go in backticks, like app names, so shells set them apart.
       const note = `Deployed version \`${id}\`: “${version.request}”`;
       const conversation: Turn[] = [
         { from: "person", text: said, at: started },
         { from: "mayfly", text: note, versions: [], took: Date.now() - started, at: Date.now() },
       ];
-      const next: App = { ...app, ...(app.head === null || app.head === id ? {} : { previous: app.head }), ...keeping(version), head: id, conversation: [...app.conversation, ...conversation] };
+      const next: App = { ...app, ...(app.head === null || app.head === id ? {} : { previous: app.head }), ...keeping(version), ...backups, head: id, conversation: [...app.conversation, ...conversation] };
       const nextState = withApp(state, next);
       watch({ kind: "deploying" });
       await store.save(await signInAndRun(nextState, next, image));
@@ -316,22 +325,24 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     const nextState = charge(withApp(state, next), calls);
     // Kept before it runs: whatever happens then, the model's work and what it cost stay.
     await store.save(nextState);
-    if (running !== undefined) {
-      watch({ kind: "deploying" });
-      let ready = nextState;
-      try {
-        ready = await signInAndRun(nextState, next, running.image);
-        if (ready !== nextState) await store.save(ready);
-      } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error);
-        // The version stays the one to run, so Start runs it, and Undo still goes back to the one before.
-        const text = [running.summary, `It passed its trial but didn't start: ${reason}`].filter(Boolean).join("\n\n");
-        const kept: App = { ...next, conversation: [...next.conversation.slice(0, -1), { ...reply, text, failed: true }] };
-        await store.save(withApp(ready, kept));
-        throw new RecordedFailure(reason, name, { cause: error });
-      }
+    // As charged for the calls that made it.
+    let ran = existingApp(nextState, name);
+    if (running === undefined) return appView(ran);
+    watch({ kind: "deploying" });
+    let ready = nextState;
+    try {
+      ran = { ...ran, ...(await backedUp(app, { version: running.id })) };
+      ready = await signInAndRun(withApp(nextState, ran), ran, running.image);
+      await store.save(ready);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      // The version stays the one to run, so Start runs it, and Undo still goes back to the one before.
+      const text = [running.summary, `It passed its trial but didn't start: ${reason}`].filter(Boolean).join("\n\n");
+      const kept: App = { ...ran, conversation: [...ran.conversation.slice(0, -1), { ...reply, text, failed: true }] };
+      await store.save(withApp(ready, kept));
+      throw new RecordedFailure(reason, name, { cause: error });
     }
-    return appView(existingApp(nextState, name));
+    return appView(ran);
   }
 
   /** Changes the owner, and tells the sign-in service when it is running for some app. */
@@ -404,6 +415,58 @@ export function createEngine({ store, deployer, observer, identity, models, buil
     if (state.phoneHost !== null) await phoneNetwork.serve(phoneSidePort(app.hostPort), phoneDoorPort(app.hostPort));
   }
 
+  /** Copies an app's records before a change could touch them, keeping the last few copies. An app that keeps none has none to copy. */
+  async function backedUp(app: App, before: Backup["before"]): Promise<Pick<App, "backups">> {
+    if (app.keepsData !== true) return {};
+    const backup = await backUp(app.name, before);
+    return { backups: await lastBackups([...(app.backups ?? []), backup]) };
+  }
+
+  async function backUp(name: string, before: Backup["before"]): Promise<Backup> {
+    const backup: Backup = { id: randomBytes(4).toString("hex"), at: Date.now(), before };
+    await data.copy(dataVolumeName(name), backupVolumeName(backup.id));
+    return backup;
+  }
+
+  /** The last few backups, deleting the older ones' copies. */
+  async function lastBackups(backups: readonly Backup[]): Promise<Backup[]> {
+    for (const old of backups.slice(0, -BACKUPS)) await data.remove(backupVolumeName(old.id));
+    return backups.slice(-BACKUPS);
+  }
+
+  /** Puts back a backup's records, once the running version fits them. The conversation keeps it. */
+  async function restored(name: string, id: string, said: string, watch: Watcher): Promise<AppView> {
+    const started = Date.now();
+    const state = withOwner(await store.load());
+    const app = existingApp(state, name);
+    const backup = app.backups?.find((kept) => kept.id === id);
+    const running = runningVersion(app);
+    if (backup === undefined || running === undefined) throw new Error(`\`${name}\` has no backup \`${id}\``);
+    watch({ kind: "building" });
+    const image = await builder.build(name, running.routes);
+    if (running.keepsData === true) {
+      watch({ kind: "trying" });
+      const trial = await builder.trial(image, backupVolumeName(id));
+      if (!trial.ok) throw new Error(trial.problem);
+    }
+    watch({ kind: "deploying" });
+    // Stopped first, so nothing writes to its records while they're replaced. They're kept, and the state says so, before they go.
+    await deployer.stop(appObjects(app, running.image, identity.settingsFor(app, signInPortOf(state))));
+    const replaced = await backUp(name, { restore: id });
+    const saved: App = { ...app, backups: [...(app.backups ?? []), replaced] };
+    await store.save(withApp(state, saved));
+    await data.remove(dataVolumeName(name));
+    await data.copy(backupVolumeName(id), dataVolumeName(name));
+    const turns: Turn[] = [
+      { from: "person", text: said, at: started },
+      { from: "mayfly", text: `Restored backup \`${id}\``, versions: [], took: Date.now() - started, at: Date.now() },
+    ];
+    const next: App = { ...saved, backups: await lastBackups(saved.backups ?? []), conversation: [...app.conversation, ...turns] };
+    const nextState = withApp(state, next);
+    await store.save(await signInAndRun(nextState, next, image));
+    return appView(next);
+  }
+
   /**
    * Keeps a change to who may sign in or open what. Sign-in learns of it when people changed, and the named apps run again,
    * since each app's auth proxy decides whom it lets in. Kept only once they have it: a change that fails partway stays
@@ -463,6 +526,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       if (state.phoneHost !== null) await phoneNetwork.stop(phoneSidePort(app.hostPort));
     }
     await builder.forget(name);
+    for (const backup of app.backups ?? []) await data.remove(backupVolumeName(backup.id));
     const rest = withoutApp(state, name);
     await store.save(await syncSignIn(rest));
     // Its conversation goes, and the files people attached in it with it. A file another app has too stays for that one.
@@ -586,7 +650,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
           if (app.keepsData === true) {
             // Stopped first, so nothing writes to its records while they're copied to the new name.
             await deployer.stop(objects);
-            await data.copy(name, newName);
+            await data.copy(dataVolumeName(name), dataVolumeName(newName));
           }
           await deployer.remove(objects);
           ready = await signInAndRun(next, renamed, image);
@@ -617,7 +681,7 @@ export function createEngine({ store, deployer, observer, identity, models, buil
         watch({ kind: "building" });
         const image = await builder.build(name, routes);
         watch({ kind: "trying" });
-        const trial = await builder.trial(image, app.keepsData === true ? name : null);
+        const trial = await builder.trial(image, app.keepsData === true ? dataVolumeName(name) : null);
         if (!trial.ok) watch({ kind: "failed", problem: trial.problem });
         const outcome = outcomeOf(trial, image);
         const attempt: Attempt = { routes, summary: "", spent: NO_USAGE, at: Date.now(), ...outcome };
@@ -649,6 +713,17 @@ export function createEngine({ store, deployer, observer, identity, models, buil
 
     remove(name) {
       return changing(() => removed(name));
+    },
+
+    restore(name, id, watch = UNWATCHED) {
+      const said = `Restore backup \`${id}\``;
+      return recording(name, said, [], () => changing(() => restored(name, id, said, watch)));
+    },
+
+    async exportData(name) {
+      const app = existingApp(await store.load(), name);
+      if (app.keepsData !== true) throw new Error(`\`${name}\` keeps no data`);
+      return data.export(dataVolumeName(name));
     },
 
     async phoneAccess() {
@@ -894,7 +969,7 @@ function appView(app: App): AppView {
     lines: routes.split("\n").length - 1,
     thinkingWords: thinking.split(/\s+/).filter(Boolean).length,
   }));
-  return { name: app.name, url: appUrl(app.hostPort), model: app.model, starred: app.starred, head: app.head, versions, conversation: app.conversation, spent: app.spent, people: peopleOf(app), keepsData: app.keepsData === true };
+  return { name: app.name, url: appUrl(app.hostPort), model: app.model, starred: app.starred, head: app.head, versions, conversation: app.conversation, spent: app.spent, people: peopleOf(app), keepsData: app.keepsData === true, backups: app.backups ?? [] };
 }
 
 /** Runs each piece of work after the last has ended, failed or not. */
