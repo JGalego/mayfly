@@ -1,5 +1,6 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { buildDex, DEX_VOLUME, dexEndSession, dexSettings } from "../../src/adapters/dex/dex.ts";
 import { down, health, play, removeVolume } from "../../src/adapters/podman/podman.ts";
@@ -72,6 +73,14 @@ describe("an app behind Mayfly's sign-in, on Podman", () => {
     const page = await signIn(owner);
 
     assert.equal(JSON.parse(page.body).cookie, null);
+  });
+
+  it("keeps the app off its proxies' ports, so it can never answer the browser in their place", () => {
+    const bind = (port: number) => `require("node:net").createServer().once("error", (e) => console.log(e.code)).listen(${port}, () => console.log("bound"))`;
+
+    for (const port of [4180, 4181]) {
+      assert.equal(execFileSync("podman", ["exec", "mayfly-echo-app", "/usr/bin/node", "-e", `${bind(port)}; setTimeout(() => process.exit(), 500)`], { encoding: "utf8" }).trim(), "EACCES", String(port));
+    }
   });
 
   it("keeps the app and Dex passing their own liveness probes, with no shell or curl, and says the app is healthy", async () => {
