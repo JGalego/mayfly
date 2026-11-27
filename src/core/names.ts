@@ -8,3 +8,8 @@ export function mayflyName(appName: string): string {
 export function authConfigName(appName: string): string {
   return `${mayflyName(appName)}-auth`;
 }
+
+/** Names the ConfigMap holding each of an app's auth proxies' settings file. */
+export function proxyConfigName(appName: string): string {
+  return `${mayflyName(appName)}-proxy`;
+}

@@ -5,6 +5,7 @@ import { buildDex, DEX_VOLUME, dexEndSession, dexSettings } from "../../src/adap
 import { down, health, play, removeVolume } from "../../src/adapters/podman/podman.ts";
 import { appUrl, callbackUrl } from "../../src/core/app-url.ts";
 import { buildAuthConfigMap } from "../../src/core/auth-config-map.ts";
+import { buildProxyConfigMap } from "../../src/core/auth-proxy-container.ts";
 import { buildAuthSecret } from "../../src/core/auth-secret.ts";
 import type { KubeObject } from "../../src/core/kube.ts";
 import { buildPod } from "../../src/core/pod.ts";
@@ -26,6 +27,7 @@ before(async () => {
   dex = await buildDex({ users: [owner, guest], clients: [client], logo: readFileSync("assets/logo.svg", "utf8"), sessionKey: secret() });
   app = [
     buildAuthConfigMap({ appName: "echo", policy: { roles: ["owner"] }, idp: dexSettings(client.id) }),
+    buildProxyConfigMap("echo"),
     buildAuthSecret({ appName: "echo", clientSecret: client.secret, cookieSecret: secret() }),
     buildPod({ manifest: { name: "echo", image }, hostPort: HOST_PORT, endSessionUrl: dexEndSession() }),
   ];
@@ -64,6 +66,12 @@ describe("an app behind Mayfly's sign-in, on Podman", () => {
     assert.equal(page.status, 200);
     assert.equal(JSON.parse(page.body).email, owner.email);
     assert.deepEqual(JSON.parse(page.body).groups, ["owner"]);
+  });
+
+  it("never hands the app a cookie, so it can't take the browser's sessions to other apps or to Dex", async () => {
+    const page = await signIn(owner);
+
+    assert.equal(JSON.parse(page.body).cookie, null);
   });
 
   it("keeps the app and Dex passing their own liveness probes, with no shell or curl, and says the app is healthy", async () => {

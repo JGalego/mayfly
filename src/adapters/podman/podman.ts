@@ -6,7 +6,8 @@ import { podman, run } from "./cli.ts";
 /** Every Mayfly pod joins this network, so auth proxies can reach Dex by name. */
 const NETWORK = "mayfly";
 
-export const podmanDeployer: Deployer = { deploy: play, remove: down };
+// An app's only volume is the copy Podman makes of its proxy's settings, which would outlive the app.
+export const podmanDeployer: Deployer = { deploy: play, remove: (objects) => down(objects, { volumes: true }) };
 
 export const podmanObserver: Observer = { health, logs };
 
@@ -63,9 +64,9 @@ export async function play(objects: readonly KubeObject[]): Promise<void> {
   await podman(["kube", "play", "--replace", "--network", NETWORK, "-"], toKubeYaml(objects));
 }
 
-/** Stops and removes the objects' pods and secrets, and Mayfly's network once nothing is left on it. */
-export async function down(objects: readonly KubeObject[]): Promise<void> {
-  await podman(["kube", "down", "-"], toKubeYaml(objects));
+/** Stops and removes the objects' pods and secrets, with their volumes if asked, and Mayfly's network once nothing is left on it. */
+export async function down(objects: readonly KubeObject[], { volumes = false } = {}): Promise<void> {
+  await podman(["kube", "down", ...(volumes ? ["--force"] : []), "-"], toKubeYaml(objects));
   // Podman refuses while any pod still uses the network, which is what it should do.
   await run(["network", "rm", NETWORK]);
 }
