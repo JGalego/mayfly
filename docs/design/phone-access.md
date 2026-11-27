@@ -1,12 +1,12 @@
 # Design: open apps from your phone
 
-Status: proposal. Nothing here is built yet.
+Status: in progress on `feat/phone-access`. The phone door is built in core, and the spike signed a phone in through it.
 
 Today every app and Dex listen on `127.0.0.1`, and sign-in uses `http://localhost` URLs, so only the machine running Mayfly can open its apps. The goal is for the owner to open them from their phone too, with the same sign-in, without exposing them to the local network or the internet, and without changing how they open on the computer.
 
 ## Proposal
 
-An opt-in setting, off by default, that gives each app a second front door for the phone. The localhost door stays exactly as it is. The phone door is a second oauth2-proxy in the app's pod, on its own loopback port, reached only through [Tailscale Serve](https://tailscale.com/kb/1312/serve) on the computer's tailnet name. The phone joins the owner's tailnet with the Tailscale app. Nothing listens on the LAN.
+An opt-in setting, off by default, that gives each app a second front door for the phone, always over HTTPS. The localhost door stays exactly as it is. The phone door is a second oauth2-proxy in the app's pod, on its own loopback port, reached only through [Tailscale Serve](https://tailscale.com/kb/1312/serve) on the computer's tailnet name. The phone joins the owner's tailnet with the Tailscale app. Nothing listens on the LAN.
 
 ```mermaid
 flowchart LR
@@ -29,28 +29,22 @@ The phone uses the same port number as the computer. Serve maps the tailnet name
 
 | | Localhost door (today, unchanged) | Phone door (new) |
 |---|---|---|
-| Address | `http://localhost:18100/` | `https://<machine>.<tailnet>.ts.net:18100/`, or `http://` in the HTTP mode |
+| Address | `http://localhost:18100/` | `https://<machine>.<tailnet>.ts.net:18100/` |
 | Listens on | `127.0.0.1:18100` | `127.0.0.1:28100`, reached only through Serve |
 | Sign-in page | `http://localhost:5556/dex` | the tailnet name, port 5556, through Serve |
 | Redirect URL | `http://localhost:18100/oauth2/callback` | the same path on the tailnet name |
-| Cookie | not Secure | Secure in the HTTPS mode |
+| Cookie | not Secure | Secure |
 | Dex issuer, checked in tokens | `http://localhost:5556/dex` | the same |
 
 One Dex serves both doors and its issuer never changes. Dex 2.46.1 sends browsers to paths during the password login, not to full URLs (`url.URL{Path: IssuerURL.AbsPath(...)}` in `server/authflow/login.go`). Its form posts back to the request's own URL, so a phone that reached Dex on the tailnet name stays there. The only absolute redirect is to the client's redirect URI, and each app's Dex client lists both doors' callbacks. Both proxies fetch tokens over the Mayfly network and check the same issuer.
 
-Turning the setting on adds the phone doors and the Serve mappings, and turning it off takes them away. The localhost doors aren't touched, so nobody on the computer signs in again. Creating an app adds its phone door and removing it takes the door away. Renaming keeps the port, so the mapping stays. The state keeps the tailnet name and the mode while the setting is on.
+Turning the setting on adds the phone doors and the Serve mappings, and turning it off takes them away. The localhost doors aren't touched, so nobody on the computer signs in again. Creating an app adds its phone door and removing it takes the door away. Renaming keeps the port, so the mapping stays. The state keeps the tailnet name while the setting is on.
 
-## Two modes
+## HTTPS only
 
-| | HTTPS (default) | HTTP over the tailnet |
-|---|---|---|
-| Serve | `tailscale serve --bg --https=18100 http://127.0.0.1:28100` | `tailscale serve --bg --http=18100 http://127.0.0.1:28100` |
-| Certificate | Tailscale's, once the tailnet enables HTTPS certificates | none |
-| Made public | the machine and tailnet name, in [certificate transparency logs](https://tailscale.com/kb/1153/enabling-https) | nothing |
-| On the phone | a padlock, a Secure cookie, every web feature | "Not secure", no Secure cookie, no camera, location, clipboard or offline use |
-| Encryption | TLS inside WireGuard | WireGuard, end to end, [relayed or not](https://tailscale.com/docs/concepts/tailscale-encryption) |
+The phone always uses HTTPS, with Tailscale's certificate for the tailnet name. That gives a padlock, a Secure cookie, and every web feature an app might use on the phone, such as the camera or location. Plain HTTP over the tailnet was considered and dropped: WireGuard encrypts it, but the browser would call it not secure and withhold those features.
 
-In the HTTPS mode, the published name is `<machine>.<tailnet>.ts.net`. The tailnet part is already random: `tail<hex>`, or a [randomized two-word name](https://tailscale.com/kb/1217/tailnet-name). Before enabling HTTPS, the setting suggests [renaming the machine](https://tailscale.com/kb/1098/machine-names) to something that says nothing about its owner, such as `mayfly`. The logs then show only that some tailnet has a machine called `mayfly`.
+The cost is that the certificate puts the name `<machine>.<tailnet>.ts.net` in public [certificate transparency logs](https://tailscale.com/kb/1153/enabling-https). The tailnet part is already random: `tail<hex>`, or a [randomized two-word name](https://tailscale.com/kb/1217/tailnet-name). Before enabling HTTPS, the setting suggests [renaming the machine](https://tailscale.com/kb/1098/machine-names) to something that says nothing about its owner, such as `mayfly`. The logs then show only that some tailnet has a machine called `mayfly`.
 
 ## Turning it on
 
@@ -60,11 +54,9 @@ flowchart TD
   found -->|no| install["Explain: install Tailscale and sign in"]
   found -->|yes| up{"Signed in and running?"}
   up -->|no| login["Explain: open Tailscale and sign in"]
-  up -->|yes| mode{"Mode"}
-  mode -->|HTTPS| https{"HTTPS certificates enabled in the tailnet?"}
+  up -->|yes| https{"HTTPS certificates enabled in the tailnet?"}
   https -->|no| enable["Explain: the DNS page → Enable HTTPS, and what it publishes"]
   https -->|yes| name["Suggest renaming the machine if its name is personal"]
-  mode -->|HTTP| serve
   name --> serve["Serve Dex and every app's phone door"]
   serve --> doors["Add the phone doors to running apps"]
   doors --> done(["Show each app's phone address as a QR code"])
@@ -80,14 +72,14 @@ Mayfly drives the Tailscale the person already runs, so the plan is theirs, not 
 |---|---|---|---|
 | Publish on the LAN (`0.0.0.0`) | none | Self-signed certificates, or a local CA installed on the phone, and anyone on the same Wi-Fi reaches the sign-in page | no |
 | Public tunnel (Tailscale Funnel, Cloudflare Tunnel) | varies | Sign-in faces the internet: SaaS-level risk | no |
-| Tailscale Serve | Personal plan free for non-commercial use, Standard plan for commercial | Machine name public in the HTTPS mode | **yes, first** |
-| [Headscale](https://headscale.net/stable/about/clients/) | BSD-3, self-hosted, official Tailscale apps connect | A server with a public IP and a domain, and no `ts.net` certificates, so the HTTP mode only. Whether Serve works under it is unverified. | later, if asked for |
-| [NetBird](https://netbird.io/pricing) | Free cloud: 5 users, 100 machines, "for individuals or small teams", no non-commercial clause found. Open source and self-hostable. | No Serve equivalent verified, so the phone door would listen on NetBird's address | later, through the private-address mode |
+| Tailscale Serve | Personal plan free for non-commercial use, Standard plan for commercial | Machine name in certificate transparency logs | **yes, first** |
+| [Headscale](https://headscale.net/stable/about/clients/) | BSD-3, self-hosted, official Tailscale apps connect | A server with a public IP and a domain. No `ts.net` certificates, so HTTPS needs your own domain and certificates. Whether Serve works under it is unverified. | later, if asked for |
+| [NetBird](https://netbird.io/pricing) | Free cloud: 5 users, 100 machines, "for individuals or small teams", no non-commercial clause found. Open source and self-hostable. | No Serve equivalent verified, so the phone door would listen on NetBird's address, with your own certificate | later, through the private-address mode |
 | [ZeroTier](https://zerotier.com/pricing) | Free plan non-commercial, 10 devices | No better than Tailscale's terms | no |
 | Cloudflare Zero Trust | free-plan terms unverified | Traffic passes through Cloudflare | no |
 | Plain WireGuard | none | A phone and a computer both behind NAT need a public endpoint or a relay | no |
 
-A later mode could serve any private network: the phone door listens on the network's own address instead of loopback, over HTTP. That covers Headscale, NetBird, ZeroTier and WireGuard without Serve.
+A later mode could serve any private network: the phone door listens on the network's own address instead of loopback. It would still be HTTPS only, so it needs a certificate for that address, which means the person's own domain. That covers Headscale, NetBird, ZeroTier and WireGuard without Serve.
 
 ## Security
 
@@ -99,12 +91,12 @@ A later mode could serve any private network: the phone door listens on the netw
 
 1. ~~Does Serve accept any HTTPS and HTTP port?~~ Answered on Windows: it accepted HTTP on 5556, 18197 to 18199 and 65000, and HTTPS on 18198. Serve routes by hostname: the full name and the short name `mayfly` work, and the bare tailnet IP gets a 404. Phone addresses must use the full name, which is also the only one the certificate covers.
 2. Can Serve listen on the tailnet address's port 18100 while Podman holds `127.0.0.1:18100`? Answered on Windows: yes, whichever binds first. Serve on port 5556 worked while the Podman machine held `127.0.0.1:5556`. A Windows process could bind `127.0.0.1:18197` after Serve held that port, and Serve still reached its target. One catch: with WSL's mirrored networking, a process inside WSL shares port numbers with Windows across addresses. So a WSL process on `127.0.0.1:18199` and Serve on 18199 block each other. That affects testing from WSL, not the Podman machine. Linux and macOS are still to check.
-3. Does one Dex sign in through both doors end to end, including its static files and session cookie on the tailnet name? The computer can open its own tailnet name, so its own browser can answer this once a phone door exists, without a phone.
-4. Does the HTTP mode need only MagicDNS, and does the phone resolve the name?
+3. ~~Does one Dex sign in through both doors end to end?~~ Answered: yes. A throwaway rig ran the core's phone door and Mayfly's Dex on WSL's Podman, behind Windows' Serve. An iPhone on the tailnet opened `https://<machine>.<tailnet>.ts.net:18199/`, signed in on Dex's page on the tailnet name, and reached the app. Dex's pages and static files worked there, and the proxy logged the iPhone's sign-in and requests. A browser on the computer did the same through the tailnet name.
+4. ~~Does the HTTP mode need only MagicDNS?~~ Dropped with the HTTP mode.
 5. ~~Which fields of `tailscale status --json` give the tailnet name and say whether HTTPS is enabled?~~ Answered on Windows: `Self.DNSName` is the machine's tailnet name with a trailing dot, and `CertDomains` lists it once HTTPS certificates are enabled. `Self.HostName` is the OS hostname, not the tailnet name. Tailscale warns the format may change.
 6. ~~How long does the first HTTPS request wait while the certificate is issued?~~ Answered on Windows: 0.92 s for the first request and 0.10 s for the next, with a certificate Windows trusts. Nobody needs to wait for anything.
 7. Where is the CLI on each platform, and what does Linux need? On Windows it's `C:\Program Files\Tailscale\tailscale.exe`, and serving ports works without elevation. On Linux, `tailscale set --operator=$USER` lets a non-root user manage Serve. On macOS, the App Store build's CLI is `/Applications/Tailscale.app/Contents/MacOS/Tailscale`. Linux and macOS are still to check.
-8. Does `tailscale serve --http` work against a Headscale server?
+8. Does Serve work against a Headscale server, and with which certificates? Later, with Headscale.
 
 ## Setting up Tailscale for the spike
 
@@ -117,18 +109,18 @@ On Windows, install Tailscale on Windows itself, where Podman Desktop runs, not 
 5. At https://login.tailscale.com/admin/dns:
    1. Keep the `tail….ts.net` tailnet name or pick a random two-word one. It can't change after HTTPS is enabled.
    2. Make sure MagicDNS is on.
-   3. Under **HTTPS Certificates**, choose **Enable HTTPS**. This publishes `mayfly.<tailnet>.ts.net` in public certificate logs. Skip it to try only the HTTP mode.
+   3. Under **HTTPS Certificates**, choose **Enable HTTPS**. This publishes `mayfly.<tailnet>.ts.net` in public certificate logs.
 6. The phone app should list `mayfly` as connected.
 
 ## Plan
 
 Each step is its own commit on this branch, behind the setting, so `main` stays releasable.
 
-1. **Core, tests first.** The phone door container (its port, redirect URL and cookie) from the app and the phone address. Dex clients list both callbacks.
+1. ~~**Core, tests first.**~~ Done: the phone door container (its port, redirect URL, sign-in page and Secure cookie) from the app and the tailnet name.
 2. **Adapter.** A thin Tailscale CLI wrapper: find it, read its status, serve a port, stop serving it. Its integration tests skip when Tailscale isn't there.
-3. **Engine.** The setting (off, HTTPS or HTTP) and the tailnet name in the state. Phone doors and Serve mappings kept in line with the apps.
+3. **Engine.** The setting and the tailnet name in the state. Phone doors and Serve mappings kept in line with the apps. Dex clients list both doors' callbacks.
 4. **Shell.** The setting and its checks in Settings → General, with the certificate log warning and the rename suggestion. A Tailscale check in the doctor. A QR code for each app's phone address.
 5. **Runtime.** Drop `Tailscale-*` headers before the app sees them.
-6. **README.** How to set it up, and what it exposes in each mode.
+6. **README.** How to set it up, and what it publishes.
 
 Later: the private-address mode for networks other than Tailscale.
