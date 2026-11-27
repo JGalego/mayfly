@@ -41,7 +41,7 @@ The same reach rules out signing in with Dex. Dex keeps its single sign-on cooki
 | Opening an app at its phone address | Developer mode: code, versions, logs, usage |
 | | `/remove`, `/rename`, `/model` |
 
-A lost phone that's still paired can spend model money and change apps until it's forgotten. It can't read a secret or take anything away. The extension checks each message from the phone against this list, and the phone gets a smaller state: no people, owner, models or mail account.
+A lost phone that's still paired can spend model money and change apps until it's forgotten. It can't read a secret or take anything away. The extension checks each message from the phone against this list, and the phone gets a smaller state: no people, owner, models or mail account. It hears the stages of the work but not the model's code or thinking, and notices and errors only of what a phone asked.
 
 ## One controller, two pages
 

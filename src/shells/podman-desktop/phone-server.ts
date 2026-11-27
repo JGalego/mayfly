@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { extname, join } from "node:path";
@@ -15,6 +16,9 @@ const SECURITY_HEADERS = {
   "cross-origin-opener-policy": "same-origin",
   "cross-origin-resource-policy": "same-origin",
 };
+
+// Whether what's said comes of a phone's request. Notices and errors of the computer's can name people and the mail account.
+const fromPhone = new AsyncLocalStorage<true>();
 
 export interface PageFile {
   readonly type: string;
@@ -112,6 +116,7 @@ async function pair(request: IncomingMessage, response: ServerResponse, ports: P
 async function stream(token: string, request: IncomingMessage, response: ServerResponse, ports: PhoneServerPorts): Promise<void> {
   response.writeHead(200, { "content-type": "application/x-ndjson; charset=utf-8", "cache-control": "no-store" });
   const close = ports.pages.open(async (message) => {
+    if ((message.type === "notice" || message.type === "error") && fromPhone.getStore() !== true) return;
     // The controller shows the state after every change, forgetting a phone included, so this is where a forgotten phone stops.
     if (message.type === "state" && !(await ports.phones.paired(token))) return void response.end();
     write(response, message);
@@ -133,7 +138,7 @@ async function take(request: IncomingMessage, response: ServerResponse, ports: P
   if (!phoneMayAsk(message)) return end(response, 403);
   end(response, 202);
   // The work can take minutes: the phone follows it on its event stream.
-  void ports.handle(message);
+  void fromPhone.run(true, () => ports.handle(message));
 }
 
 async function serveFile(path: string, response: ServerResponse, ports: PhoneServerPorts): Promise<void> {

@@ -78,6 +78,12 @@ describe("what the phone may ask", () => {
   });
 });
 
+describe("what the phone may not ask", () => {
+  it("to choose a model, which stays with the computer, as /model does", () => {
+    assert.equal(phoneMayAsk({ type: "send", app: null, request: "split lunch bills", model: "openai" }), false);
+  });
+});
+
 describe("what the phone hears", () => {
   it("the apps at their phone addresses, without who they're shared with, their versions or what they spent", () => {
     assert.deepEqual(forPhone(state), {
@@ -95,6 +101,16 @@ describe("what the phone hears", () => {
 
   it("nothing while phone access is off", () => {
     assert.equal(forPhone({ ...state, phoneHost: null }), null);
+  });
+
+  it("the stages of the work, but not the model's code or thinking, which are for developers", () => {
+    const steps = [{ kind: "writing", attempt: 1 }, { kind: "thinking", text: "Hmm" }, { kind: "draft", text: "export default" }, { kind: "building" }] as const;
+    const change: ToUi = { type: "progress", working: { app: "lunch", request: "add tips", kind: "change", since: 1, steps } };
+    const ask: ToUi = { type: "progress", working: { app: "lunch", request: "who owes most?", kind: "ask", since: 1, steps } };
+
+    assert.deepEqual(stepsOf(forPhone(change)), ["writing", "building"]);
+    assert.deepEqual(stepsOf(forPhone(ask)), ["writing", "draft", "building"]);
+    assert.deepEqual(stepsOf(forPhone({ ...state, working: change.working })), ["writing", "building"]);
   });
 
   it("how the work goes, as the computer hears it", () => {
@@ -118,3 +134,8 @@ describe("what the phone hears", () => {
     assert.deepEqual(withheld.map(forPhone), withheld.map(() => null));
   });
 });
+
+function stepsOf(heard: ReturnType<typeof forPhone>): string[] {
+  const working = heard?.type === "progress" || heard?.type === "state" ? heard.working : null;
+  return working?.steps.map((step) => step.kind) ?? [];
+}

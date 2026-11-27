@@ -69,6 +69,22 @@ describe("the phone page's server", () => {
     assert.deepEqual(lines, [{ type: "state", apps: [], working: null }, { type: "created", name: "lunch" }]);
   });
 
+  it("tells a phone the notices and errors of what a phone asked, and none of the computer's, which can name people", async () => {
+    const { url, pages } = await serve({
+      handle: async (message) => {
+        const { type } = message as { type: string };
+        if (type === "ready") return pages.post(state);
+        if (type === "health") return pages.post({ type: "notice", text: "From the phone's request" });
+      },
+    });
+    const lines = await linesFrom(`${url}/events`, 2, async () => {
+      await pages.post({ type: "notice", text: "Removed `ana@example.com`." });
+      await fetch(`${url}/messages`, { method: "POST", headers: { authorization: `Bearer ${TOKEN}` }, body: JSON.stringify({ type: "health" }) });
+    });
+
+    assert.deepEqual(lines[1], { type: "notice", text: "From the phone's request" });
+  });
+
   it("stops telling a phone that's been forgotten", async () => {
     const forgotten = { paired: true };
     const { url, pages } = await serve({ phones: { pair: async () => TOKEN, paired: async () => forgotten.paired } });
