@@ -63,7 +63,8 @@ export type FromUi =
   | { readonly type: "star"; readonly app: string; readonly starred: boolean }
   | { readonly type: "owner-email"; readonly email: string }
   /** A new password for the owner, or for the person named. */
-  | { readonly type: "new-password"; readonly email?: string }
+  /** A new password for the owner, or for someone by email: random, or the one typed. */
+  | { readonly type: "new-password"; readonly email?: string; readonly password?: string }
   | { readonly type: "add-person"; readonly email: string }
   | { readonly type: "remove-person"; readonly email: string }
   /** Sends an email from the owner's mail account, or without one, drafts it in their mail app for them to send. */

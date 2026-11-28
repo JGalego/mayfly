@@ -105,7 +105,8 @@ async function handle(request: FromUi, session: Session): Promise<unknown> {
       await session.post({ type: "notice", text: "Sign-in email updated" });
       return showState(session);
     case "new-password":
-      if (request.email !== undefined) return newPersonPassword(request.email, session);
+      if (request.email !== undefined) return newPersonPassword(request.email, request.password, session);
+      if (request.password !== undefined) return settle(session.engine.newPassword(request.password).then(() => undefined), session, "Password changed");
       // Straight to the clipboard: the page gets a password only when the person asks to see it.
       await session.copy((await session.engine.newPassword()).password);
       return session.post({ type: "notice", text: "The new password is on your clipboard" });
@@ -464,9 +465,9 @@ async function removePerson(email: string, session: Session): Promise<void> {
   await showState(session);
 }
 
-async function newPersonPassword(email: string, session: Session): Promise<void> {
+async function newPersonPassword(email: string, chosen: string | undefined, session: Session): Promise<void> {
   if (session.working !== null) return void (await session.post({ type: "error", text: BUSY }));
-  const person = await session.engine.newPersonPassword(email);
+  const person = await session.engine.newPersonPassword(email, chosen);
   note(session, "info", `New password for ${person.email}`);
   await showState(session);
   await session.post({ type: "offer-email", about: "new-password", email: person.email });
@@ -541,7 +542,10 @@ function readRequest(message: unknown): FromUi | undefined {
   if (typeof message !== "object" || message === null) return undefined;
   const { type, app, request, question, name, apiKey, on, version, what, from, routes, message: words, model, id, pod, container, starred, email, url, files, shared, about, account, password } = message as Record<string, unknown>;
   switch (type) {
-    case "new-password":
+    case "new-password": {
+      if ((email !== undefined && typeof email !== "string") || (password !== undefined && typeof password !== "string")) return undefined;
+      return { type, ...(email === undefined ? {} : { email }), ...(password === undefined ? {} : { password }) };
+    }
     case "show-password":
       if (email === undefined) return { type };
       return typeof email === "string" ? { type, email } : undefined;

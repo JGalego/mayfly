@@ -120,7 +120,7 @@ function select<T extends string | number>(options: readonly [T, string][], chos
 }
 
 function button(label: string): HTMLButtonElement {
-  const control = h("button", "quiet-button", label);
+  const control = h("button", "secondary", label);
   control.type = "button";
   return control;
 }

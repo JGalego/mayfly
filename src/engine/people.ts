@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { newPassword } from "./secrets.ts";
+import { chosenPassword, newPassword } from "./secrets.ts";
 import { OWNER_ROLE, type App, type Person, type State } from "./state.ts";
 
 export const EMAIL = /^[^\s@]+@[^\s@]+$/;
@@ -14,9 +14,9 @@ export function withPerson(state: State, email: string): { readonly state: State
   return { state: { ...state, people: [...state.people, person] }, person };
 }
 
-/** A new password, and a new group with it, so every session the old one opened ends. */
-export function withNewPassword(state: State, email: string): { readonly state: State; readonly person: Person } {
-  const person = { ...existingPerson(state, email), password: newPassword(), group: newGroup() };
+/** A new password, random unless they chose one, and a new group with it, so every session the old one opened ends. */
+export function withNewPassword(state: State, email: string, chosen?: string): { readonly state: State; readonly person: Person } {
+  const person = { ...existingPerson(state, email), password: chosen === undefined ? newPassword() : chosenPassword(chosen), group: newGroup() };
   return { state: { ...state, people: state.people.map((other) => (other.email === person.email ? person : other)) }, person };
 }
 

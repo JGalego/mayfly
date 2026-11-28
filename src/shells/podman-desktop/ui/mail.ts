@@ -65,7 +65,7 @@ function accountCard(account: MailAccountView, post: Post, redraw: () => void): 
       openForm(account);
       redraw();
     }),
-    button("Remove", () => post({ type: "remove-mail" })),
+    button("Remove", () => post({ type: "remove-mail" }), true),
   ];
   return h("li", "model-card", h("div", "model-facts", h("p", "model-label", account.from), facts), h("div", "model-actions", ...actions));
 }
@@ -82,8 +82,8 @@ function openForm(account: MailAccountView | undefined): void {
   element("mail-form-title").textContent = account === undefined ? "Add a mail account" : "Change the mail account";
 }
 
-function button(label: string, act: () => void): HTMLButtonElement {
-  const control = h("button", "quiet-button", label);
+function button(label: string, act: () => void, destructive = false): HTMLButtonElement {
+  const control = h("button", destructive ? "secondary destructive" : "secondary", label);
   control.type = "button";
   control.addEventListener("click", act);
   return control;

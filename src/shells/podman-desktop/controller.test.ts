@@ -262,6 +262,17 @@ describe("the Mayfly panel's controller", () => {
     assert.ok(!JSON.stringify(posted).includes("brand-new-pass"));
   });
 
+  it("sets the password the person typed, for the owner and for someone else, and says so", async () => {
+    const { handle, calls, copied, posted } = setUp({ apps: [] });
+
+    await handle({ type: "new-password", password: "my own passphrase" });
+    await handle({ type: "new-password", email: "ana@example.com", password: "ana's own passphrase" });
+
+    assert.deepEqual(calls, ["password my own passphrase", "password ana@example.com ana's own passphrase"]);
+    assert.deepEqual(copied, []);
+    assert.deepEqual(posted.filter((message) => message.type === "notice"), [{ type: "notice", text: "Password changed" }]);
+  });
+
   it("marks an app as a favourite", async () => {
     const { handle, calls, posted } = setUp({ apps: [lunch] });
 
@@ -922,7 +933,10 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
     remove: async (name) => void calls.push(`remove ${name}`),
     owner: async () => owner,
     changeEmail: async (email) => (calls.push(`email ${email}`), { ...owner, email }),
-    newPassword: async () => ({ ...owner, password: "brand-new-pass" }),
+    newPassword: async (chosen) => {
+      if (chosen !== undefined) calls.push(`password ${chosen}`);
+      return { ...owner, password: chosen ?? "brand-new-pass" };
+    },
     spent: async () => ({ input: 500, output: 80, thinking: 0 }),
     ledger: async () => [call],
     logs: async (pod, container) => [`2026-11-26T15:04:05Z ${pod} ${container}`],
@@ -953,7 +967,10 @@ function setUp({ apps, created: made = lunch, steps = [], developer: developing 
       people.set(email, `${email.split("@")[0]}-six-word-pass`);
       return { email, password: people.get(email) ?? "", group: "person-1" };
     },
-    newPersonPassword: async (email) => ({ email, password: "brand-new-six-words", group: "person-2" }),
+    newPersonPassword: async (email, chosen) => {
+      if (chosen !== undefined) calls.push(`password ${email} ${chosen}`);
+      return { email, password: chosen ?? "brand-new-six-words", group: "person-2" };
+    },
     removePerson: async (email) => void people.delete(email),
     share: async (name, email, shared) => {
       calls.push(`share ${name} ${email} ${shared}`);

@@ -68,19 +68,34 @@ export function renderModels(state: State, checks: readonly ModelCheck[] | undef
 }
 
 function modelCard(model: ModelView, isDefault: boolean, check: HTMLElement[], post: (message: FromUi) => void, redraw: () => void): HTMLLIElement {
-  const where = model.provider === "openai" ? "api.openai.com" : model.baseUrl;
-  const name = h("p", "model-label", model.label, ...(isDefault ? [" ", h("span", "badge", "Default")] : []));
+  const where = model.provider === "openai" ? "api.openai.com" : hostOf(model.baseUrl);
+  const name = h("p", "model-label", h("span", "model-title", model.name ?? model.model), ...(isDefault ? [h("span", "badge", "Default")] : []));
+  name.title = model.label;
   // A name hides which model it is, so the facts say.
-  const facts = h("p", "quiet", [...(model.name === undefined ? [] : [model.model]), where, model.hasApiKey ? "key saved" : "no API key"].join(" · "));
+  const facts = h("p", "quiet model-where", [...(model.name === undefined ? [] : [model.model]), where].join(" · "));
+  facts.title = model.provider === "openai" ? where : model.baseUrl;
   const actions = [
     ...(isDefault ? [] : [button("Make default", () => post({ type: "default-model", id: model.id }))]),
     button("Change", () => {
       openForm(model);
       redraw();
     }),
-    ...(isDefault ? [] : [button("Remove", () => post({ type: "remove-model", id: model.id }))]),
+    ...(isDefault ? [] : [button("Remove", () => post({ type: "remove-model", id: model.id }), true)]),
   ];
-  return h("li", "model-card", h("div", "model-facts", name, facts, ...check), h("div", "model-actions", ...actions));
+  return h("li", "model-card", monogram(where), h("div", "model-facts", name, facts, ...check), h("div", "model-actions", ...actions));
+}
+
+/** The provider's first letter on a tint of its own, so each provider looks the same wherever it shows. */
+function monogram(host: string): HTMLElement {
+  const word = host.replace(/^(api|www)\./, "").split(/[.:]/)[0] ?? host;
+  const badge = h("span", "monogram", (word[0] ?? "?").toUpperCase());
+  badge.setAttribute("aria-hidden", "true");
+  badge.style.setProperty("--hue", String([...word].reduce((sum, letter) => (sum * 31 + letter.charCodeAt(0)) % 360, 7)));
+  return badge;
+}
+
+function hostOf(url: string): string {
+  return URL.canParse(url) ? new URL(url).host : url;
 }
 
 function keyCheck(model: ModelView, checks: readonly ModelCheck[] | undefined): HTMLElement[] {
@@ -89,8 +104,8 @@ function keyCheck(model: ModelView, checks: readonly ModelCheck[] | undefined): 
   return [h("p", `model-check ${check.status}`, findingMark(check.status), check.detail)];
 }
 
-function button(label: string, act: () => void): HTMLButtonElement {
-  const control = h("button", "quiet-button", label);
+function button(label: string, act: () => void, destructive = false): HTMLButtonElement {
+  const control = h("button", destructive ? "secondary destructive" : "secondary", label);
   control.type = "button";
   control.addEventListener("click", act);
   return control;

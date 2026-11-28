@@ -9,7 +9,7 @@ import { errorsIn } from "./log-errors.ts";
 import { backupVolumeName, dataVolumeName, mayflyName, SIGN_IN } from "../core/names.ts";
 import { parseAppName } from "../core/manifest.ts";
 import { PortTaken, type ContainerHealth, type ModelProvider, type PhoneNetworkStatus, type Ports } from "./ports.ts";
-import { newPassword, newSecret } from "./secrets.ts";
+import { chosenPassword, newPassword, newSecret } from "./secrets.ts";
 import { allowedGroups, EMAIL, findPerson, peopleOf, sharing, withNewPassword, withoutPerson, withPerson } from "./people.ts";
 import { offerPairing, phoneWith, withoutPhone, withPhone, type PairingOffer } from "./phones.ts";
 import { findApp, findVersion, runningVersion, withApp, withoutApp, type App, type Author, type Backup, type ModelCall, type Owner, type PairedPhone, type Person, type State, type Turn, type Version } from "./state.ts";
@@ -149,15 +149,15 @@ export interface Engine {
   /** Signs the owner in with another email from now on. */
   changeEmail(email: string): Promise<Owner>;
   /** Gives the owner a new random password, and returns them with it. */
-  newPassword(): Promise<Owner>;
+  newPassword(chosen?: string): Promise<Owner>;
   /** Everyone the owner can share apps with, by email. */
   people(): Promise<readonly string[]>;
   /** Someone the owner can share apps with, and their password, for showing it or sending it to them. */
   person(email: string): Promise<Person>;
   /** Adds someone to share apps with, and returns them with their new password. */
   addPerson(email: string): Promise<Person>;
-  /** Gives someone a new password, which ends every session the old one opened. */
-  newPersonPassword(email: string): Promise<Person>;
+  /** Gives someone a new password, random unless the owner chose one, which ends every session the old one opened. */
+  newPersonPassword(email: string, chosen?: string): Promise<Person>;
   /** Removes someone. No app lets them in from then on. */
   removePerson(email: string): Promise<void>;
   /** Lets someone open an app, or no longer, from the moment it runs again. */
@@ -851,11 +851,11 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       });
     },
 
-    newPassword() {
+    newPassword(chosen) {
       return changing(async () => {
         const state = withOwner(await store.load());
         // Each app keeps its own session, which a new password ends too: a new cookie secret, and the apps run again with it.
-        const owner = { ...state.owner, password: newPassword() };
+        const owner = { ...state.owner, password: chosen === undefined ? newPassword() : chosenPassword(chosen) };
         const next: State = { ...state, owner, apps: state.apps.map((app) => ({ ...app, cookieSecret: newSecret() })) };
         await store.save(next);
         const ready = anyRunning(next) ? await runAll(next) : next;
@@ -882,9 +882,9 @@ export function createEngine({ store, deployer, observer, identity, models, buil
       });
     },
 
-    newPersonPassword(email) {
+    newPersonPassword(email, chosen) {
       return changing(async () => {
-        const { state, person } = withNewPassword(await store.load(), email);
+        const { state, person } = withNewPassword(await store.load(), email, chosen);
         await applyAccess(state, sharedWith(state, person.email), true);
         return person;
       });

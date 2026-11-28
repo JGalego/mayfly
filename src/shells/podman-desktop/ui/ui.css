@@ -93,6 +93,23 @@ button:disabled {
   border-color: var(--accent);
 }
 
+/* What removes or locks out shows it on hover, and waits for a second click in red. */
+.secondary.destructive:hover:not(:disabled),
+.secondary.armed {
+  border-color: var(--error);
+  color: var(--error);
+}
+
+/* In a card, beside others, a step smaller. */
+.model-actions .secondary,
+.person-actions .secondary,
+.backup-card .secondary,
+.phone-card .secondary {
+  padding: calc(0.25rem - 1px) calc(0.7rem - 1px);
+  font-size: 0.9em;
+  white-space: nowrap;
+}
+
 .link {
   padding: 0;
   color: var(--link);
@@ -412,19 +429,19 @@ main {
   gap: 0.75rem;
 }
 
+/* What belongs to a setting starts where its label does. */
+.phone-pairing {
+  margin: 0.5rem 0 0 1.5rem;
+}
+
 .paired-phones {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  align-self: stretch;
+  gap: 0.5rem;
   margin: 0;
   padding: 0;
   list-style: none;
-}
-
-.paired-phone {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
 }
 
 .phone-url {
@@ -1389,10 +1406,11 @@ pre.problem {
   gap: 1.5rem;
 }
 
+/* The text on top, as wide as the box, and the tools in a row under it. */
 #composer {
   display: flex;
-  align-items: flex-end;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 0.35rem;
   width: min(var(--column), calc(100% - 3rem));
   margin: 0 auto 1rem;
   padding: 0.5rem;
@@ -1409,7 +1427,6 @@ pre.problem {
 /* Commands, and then what they take, as the person types a slash. */
 #composer {
   position: relative;
-  flex-wrap: wrap;
 }
 
 /* Attached files: chips in the composer while they wait, and in a person's turn once sent. */
@@ -1424,7 +1441,7 @@ pre.problem {
 }
 
 .pending-files {
-  flex-basis: 100%;
+  padding: 0.25rem 0.25rem 0;
 }
 
 .turn-files {
@@ -1520,6 +1537,7 @@ pre.problem {
 
 #composer-model {
   max-width: 14rem;
+  margin-left: auto;
   padding: 0.3rem 0.4rem;
   border-color: transparent;
   font-size: 0.85em;
@@ -1543,9 +1561,12 @@ pre.problem {
   line-height: 1.4;
 }
 
+/* One line to start, growing with the text up to about ten, then it scrolls. */
 #composer textarea {
   position: relative;
   flex: 1;
+  box-sizing: border-box;
+  max-height: calc(10 * 1.4em + 0.7rem);
   border: 0;
   outline: none;
   resize: none;
@@ -1652,7 +1673,6 @@ pre.problem {
 
 .model-card {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 0.75rem;
   padding: 0.7rem 0.9rem;
@@ -1662,13 +1682,41 @@ pre.problem {
 }
 
 .model-facts {
-  flex: 1 1 14rem;
+  flex: 1;
   min-width: 0;
-  overflow-wrap: anywhere;
 }
 
+/* A long name ends in an ellipsis rather than breaking in the middle; hovering shows all of it. */
 .model-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
   font-weight: 600;
+}
+
+.model-title,
+.model-where {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-where {
+  margin: 0.1rem 0 0;
+}
+
+/* The provider's first letter, on a tint of its own. */
+.monogram {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 8px;
+  font-weight: 700;
+  color: #fff;
+  background: hsl(var(--hue) 45% 42%);
 }
 
 /* How the model's key fared with its provider, under what the card says about it. */
@@ -1694,15 +1742,16 @@ pre.problem {
 .model-actions {
   display: flex;
   flex: none;
+  gap: 0.4rem;
   margin-left: auto;
 }
 
 .add-model {
   align-self: flex-start;
+  margin-top: 0.5rem;
 }
 
 .badge {
-  margin-left: 0.3rem;
   padding: 0.05rem 0.5rem;
   border-radius: 999px;
   font-size: 0.75rem;
@@ -1730,7 +1779,6 @@ pre.problem {
   margin-top: 0.5rem;
 }
 
-#owner-email,
 #person-email {
   flex: 1;
   min-width: 0;
@@ -1738,7 +1786,8 @@ pre.problem {
 
 /* Someone the owner shares apps with: who they are, what they can open, and what to do about them. And a backup of an app's records. */
 .person-card,
-.backup-card {
+.backup-card,
+.phone-card {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1772,15 +1821,32 @@ pre.problem {
   white-space: nowrap;
 }
 
-.person-card .password-shown {
+.person-card .password-shown,
+.card-form {
   flex-basis: 100%;
+}
+
+.card-form {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.card-form input {
+  flex: 1;
+  min-width: 0;
+}
+
+.person-email .badge {
+  margin-left: 0.3rem;
 }
 
 .sign-in-row .chip {
   padding: 0.25rem 0.8rem;
 }
 
-.sign-in-row .quiet-button {
+.sign-in-row .quiet-button,
+.sign-in-row .secondary {
   white-space: nowrap;
 }
 
@@ -1795,8 +1861,11 @@ pre.problem {
   flex-direction: column;
   gap: 0.6rem;
   margin: 0.5rem 0 0;
-  padding: 0;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 10px;
   list-style: none;
+  background: var(--panel);
 }
 
 .finding {

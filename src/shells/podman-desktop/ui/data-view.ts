@@ -19,7 +19,7 @@ let armed: { readonly id: string; readonly timer: number } | undefined;
 
 /** The Data tab: saving the app's records to a file, and the backups that put them back, newest first. Restoring waits for other work. */
 export function dataView(app: AppView, idle: boolean, actions: DataActions): Node[] {
-  const save = h("button", "quiet-button with-icon", icon("file"), "Export");
+  const save = h("button", "secondary with-icon", icon("file"), "Export");
   save.type = "button";
   save.setAttribute("aria-label", `Save the data of ${app.name} as JSON`);
   save.addEventListener("click", actions.exportData);
@@ -30,7 +30,7 @@ export function dataView(app: AppView, idle: boolean, actions: DataActions): Nod
 
 function backupCard(backup: Backup, idle: boolean, actions: DataActions): HTMLElement {
   const waiting = armed?.id === backup.id;
-  const restore = h("button", waiting ? "quiet-button armed" : "quiet-button", waiting ? "Confirm restore" : "Restore");
+  const restore = h("button", waiting ? "secondary destructive armed" : "secondary destructive", waiting ? "Confirm restore" : "Restore");
   restore.type = "button";
   restore.disabled = !idle;
   restore.addEventListener("click", () => (waiting ? (disarm(), actions.restore(backup.id)) : arm(backup.id, actions.redraw)));
@@ -44,7 +44,7 @@ function backupCard(backup: Backup, idle: boolean, actions: DataActions): HTMLEl
  */
 export function undoOffer(backup: string, head: string, undo: () => void, redraw: () => void): HTMLElement {
   const waiting = armed?.id === backup;
-  const go = h("button", waiting ? "quiet-button armed" : "quiet-button", ...(waiting ? ["Confirm undo"] : ["Undo with backup ", nameChip(backup)]));
+  const go = h("button", waiting ? "secondary destructive armed" : "secondary destructive", ...(waiting ? ["Confirm undo"] : ["Undo with backup ", nameChip(backup)]));
   go.type = "button";
   go.addEventListener("click", () => (waiting ? (disarm(), undo()) : arm(backup, redraw)));
   return h("div", "undo-offer", h("p", "quiet", "It puts back the data from before version ", nameChip(head), " and loses the changes since"), go);

@@ -28,7 +28,7 @@
       <header id="app-header" class="page-header" hidden>
         <h1 id="app-name"></h1>
         <div class="app-actions">
-          <button id="remove-app" class="quiet-button" type="button">Remove</button>
+          <button id="remove-app" class="secondary destructive" type="button">Remove</button>
           <div class="popover-anchor">
             <button id="show-sign-in" class="secondary" type="button" aria-expanded="false" aria-controls="sign-in-popover" data-icon="key">Sign-in details</button>
             <div id="sign-in-popover" class="popover sign-in" hidden>
@@ -79,7 +79,7 @@
           </div>
           <section id="welcome">
             <img src="logo.svg" alt="" class="hero">
-            <h1>New app</h1>
+            <h1>What will you build today?</h1>
             <p id="key-hint" class="quiet" hidden><span id="key-hint-text"></span> <button id="add-key" class="link" type="button">Add it</button></p>
             <ul id="examples" aria-label="Examples"></ul>
           </section>
@@ -142,7 +142,7 @@
         <ul id="pending-files" class="pending-files" aria-label="Attached files" hidden></ul>
         <div class="request-field">
           <div id="request-backdrop" class="request-backdrop" aria-hidden="true"></div>
-          <textarea id="request" rows="2" maxlength="2000" aria-label="Your request" aria-autocomplete="list" aria-controls="command-menu" aria-expanded="false"></textarea>
+          <textarea id="request" rows="1" maxlength="2000" aria-label="Your request" aria-autocomplete="list" aria-controls="command-menu" aria-expanded="false"></textarea>
         </div>
         <div class="composer-actions">
           <input id="file-input" type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif,.txt,.md,.csv,.tsv,.json" hidden>
@@ -191,35 +191,20 @@
           <section>
             <div class="section-head">
               <h2>Setup checks</h2>
-              <button id="run-doctor" class="quiet-button" type="button">Check again</button>
+              <button id="run-doctor" class="secondary" type="button">Check again</button>
             </div>
             <ul id="doctor" class="checks"></ul>
           </section>
         </div>
         <div id="settings-people-tab" class="settings-page" role="tabpanel" aria-labelledby="settings-tab-people">
           <section>
-            <h2>App credentials</h2>
-            <p class="hint">You sign in to every app with this email and password</p>
-            <form id="owner-form" class="sign-in-row">
-              <input id="owner-email" type="email" required autocomplete="off" aria-label="Email">
-              <button class="quiet-button" type="submit">Save</button>
-            </form>
-            <div class="sign-in-row">
-              <span class="chip" data-password-hidden><span class="dots" aria-label="password">••••••••</span></span>
-              <button id="settings-show-password" class="quiet-button" type="button" aria-pressed="false" aria-label="Show password" data-icon="eye">Show</button>
-              <button id="settings-copy-password" class="quiet-button" type="button">Copy password</button>
-              <button id="new-password" class="quiet-button" type="button">Reset password</button>
-            </div>
-            <div class="password-shown" data-password-shown hidden></div>
-          </section>
-          <section>
-            <h2>Other people</h2>
-            <p class="hint">Each person signs in with their own email and password</p>
-            <p id="people-phone-note" class="hint" hidden>Turn on phone access in General so they can reach your apps</p>
-            <ul id="people" class="model-list" hidden></ul>
+            <h2>People</h2>
+            <p class="hint">Everyone signs in with their own email and password and you open every app</p>
+            <p id="people-phone-note" class="hint" hidden>Turn on phone access in General so others can reach your apps</p>
+            <ul id="people" class="model-list"></ul>
             <form id="person-form" class="sign-in-row">
               <input id="person-email" type="email" required autocomplete="off" placeholder="name@example.com" aria-label="Their email">
-              <button class="quiet-button" type="submit" data-icon="plus">Add user</button>
+              <button class="secondary" type="submit" data-icon="plus">Add user</button>
             </form>
             <p class="hint">Mayfly makes them a password and offers to email it</p>
           </section>
@@ -227,7 +212,7 @@
             <h2>Email</h2>
             <p class="hint">Mayfly sends sign-ins and links from your mail account or drafts them in your mail app</p>
             <ul id="mail-account" class="model-list" hidden></ul>
-            <button id="add-mail" class="quiet-button add-model" type="button">+ Add a mail account</button>
+            <button id="add-mail" class="secondary add-model" type="button" data-icon="plus">Add a mail account</button>
             <form id="mail-form" class="settings-form" hidden>
               <h3 id="mail-form-title">Add a mail account</h3>
               <label for="mail-host">SMTP server</label>
@@ -252,15 +237,14 @@
           <section>
             <h2>Tailscale</h2>
             <p class="hint">Each person needs this computer shared with them in Tailscale</p>
-            <button id="share-tailscale" class="quiet-button" type="button" data-icon-after="external">Share this computer in Tailscale</button>
+            <button id="share-tailscale" class="secondary add-model" type="button" data-icon-after="external">Share this computer in Tailscale</button>
           </section>
         </div>
         <div id="settings-models-tab" class="settings-page" role="tabpanel" aria-labelledby="settings-tab-models">
           <section>
-            <p class="hint">New apps use the default model unless you choose another</p>
-            <p class="hint">Requests go to the chosen provider with their files and the app's code and /fix sends its errors too</p>
+            <p class="hint">Requests and app code go to the chosen model's provider</p>
             <ul id="model-list" class="model-list"></ul>
-            <button id="add-model" class="quiet-button add-model" type="button">+ Add a model</button>
+            <button id="add-model" class="secondary add-model" type="button" data-icon="plus">Add a model</button>
             <form id="model-form" class="settings-form" hidden>
               <h3 id="model-form-title">Add a model</h3>
               <label for="provider">Provider</label>
@@ -289,7 +273,7 @@
           <section>
             <div class="section-head">
               <h2>Health</h2>
-              <button id="refresh-health" class="quiet-button" type="button">Refresh</button>
+              <button id="refresh-health" class="secondary" type="button">Refresh</button>
             </div>
             <p class="hint">Container status for apps and the sign-in service</p>
             <ul id="health" class="health-list"></ul>

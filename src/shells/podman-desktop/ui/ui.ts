@@ -11,6 +11,7 @@ import { threadFind } from "./thread-find.ts";
 import { imageUrl, uploads } from "./uploads.ts";
 import { chooseTab, keyboardTabs } from "./tabs.ts";
 import { armedBackup, dataView, undoOffer, type DataActions } from "./data-view.ts";
+import { growWithText } from "./grow.ts";
 import { commandMenu } from "./command-menu.ts";
 import { markCommands } from "./command-mark.ts";
 import { parse, suggestions, type Command } from "./commands.ts";
@@ -55,7 +56,6 @@ const DEVELOPER_TABS: readonly SettingsTab[] = ["logs", "usage"];
 const SPEAKING: Speaking = { open: openLink, thumbnail: thumbnailOf, logo: () => element<HTMLImageElement>("logo").src };
 
 const NOTICE_MS = 4000;
-const CONFIRM_MS = 4000;
 const COPIED_MS = 1500;
 // Long enough to read what removing does before the button lets you.
 const REMOVE_WAIT_S = 2;
@@ -76,6 +76,7 @@ addIcons(document);
 const podmanDesktop = acquirePodmanDesktopApi();
 const request = element<HTMLTextAreaElement>("request");
 const markCommand = markCommands(request, element("request-backdrop"));
+const fitRequest = growWithText(request);
 const composerModel = element<HTMLSelectElement>("composer-model");
 const developer = element<HTMLInputElement>("developer");
 
@@ -251,19 +252,7 @@ request.addEventListener("keydown", (event) => {
 composerModel.addEventListener("change", pickModel);
 element("refresh-health").addEventListener("click", askHealth);
 element("run-doctor").addEventListener("click", askDoctor);
-element("owner-form").addEventListener("submit", (event) => {
-  event.preventDefault();
-  post({ type: "owner-email", email: element<HTMLInputElement>("owner-email").value });
-});
-element("settings-copy-password").addEventListener("click", (event) => {
-  post({ type: "copy", what: "password" });
-  flash(event.currentTarget as HTMLElement, "Copied ✓");
-});
-element("new-password").addEventListener("click", () => {
-  hidePassword();
-  makeNewPassword();
-});
-for (const id of ["show-password", "settings-show-password"]) element(id).addEventListener("click", () => (passwordShown === undefined ? post({ type: "show-password" }) : hidePassword()));
+element("show-password").addEventListener("click", () => (passwordShown === undefined ? post({ type: "show-password" }) : hidePassword()));
 developer.addEventListener("change", () => post({ type: "developer", on: developer.checked }));
 element<HTMLInputElement>("autostart").addEventListener("change", (event) => post({ type: "autostart", on: (event.target as HTMLInputElement).checked }));
 element<HTMLInputElement>("phone-creation").addEventListener("change", (event) => {
@@ -330,7 +319,9 @@ function receive(message: ToUi): void {
     case "offer-email":
       return offerEmail(message, state?.mail?.from ?? null);
     case "password":
-      return message.email === undefined ? showPassword(message.password) : showPersonPassword(message.email, message.password);
+      // The owner's shows in the Sign-in details and in People alike.
+      if (message.email === undefined) showPassword(message.password);
+      return showPersonPassword(message.email ?? state?.owner ?? "", message.password);
     case "error":
       savedModel(false);
       savedMail(false);
@@ -424,14 +415,10 @@ function showingPassword(password: string | undefined): void {
     card.hidden = password === undefined;
     card.replaceChildren(...(password === undefined ? [] : passwordCard(password)));
   }
-  // An open eye to show it, a closed one to hide it. In Settings the row says it's the password, so its button says only what it does.
-  const eye = icon(password === undefined ? "eye" : "eye-off");
-  element("show-password").replaceChildren(eye, password === undefined ? "Show password" : "Hide password");
-  element("settings-show-password").replaceChildren(eye.cloneNode(true), password === undefined ? "Show" : "Hide");
-  for (const id of ["show-password", "settings-show-password"]) {
-    element(id).setAttribute("aria-label", password === undefined ? "Show password" : "Hide password");
-    element(id).setAttribute("aria-pressed", String(password !== undefined));
-  }
+  // An open eye to show it, a closed one to hide it.
+  const control = element("show-password");
+  control.replaceChildren(icon(password === undefined ? "eye" : "eye-off"), password === undefined ? "Show password" : "Hide password");
+  control.setAttribute("aria-pressed", String(password !== undefined));
 }
 
 // The chip says it copied, briefly, so the person knows without looking anywhere else.
@@ -703,34 +690,8 @@ function removeApp(): void {
   dialog.showModal();
 }
 
-// A new password stops the old one working, so it takes a second click.
-let newPasswordArmed = false;
-
-function makeNewPassword(): void {
-  const control = element("new-password");
-  if (newPasswordArmed) {
-    newPasswordArmed = false;
-    control.textContent = "Reset password";
-    return post({ type: "new-password" });
-  }
-  newPasswordArmed = true;
-  control.textContent = "Confirm reset (signs out every device)";
-  window.setTimeout(() => {
-    newPasswordArmed = false;
-    control.textContent = "Reset password";
-  }, CONFIRM_MS);
-}
-
-/** Says something on a button for a moment, then puts its words back. */
-function flash(control: HTMLElement, words: string): void {
-  const before = control.textContent;
-  control.textContent = words;
-  window.setTimeout(() => (control.textContent = before), COPIED_MS);
-}
-
 // Settings asks for everything it shows as it opens, whichever tab it opens on, so switching tabs never waits.
 function askSettings(): void {
-  element<HTMLInputElement>("owner-email").value = state?.owner ?? "";
   askDoctor();
   askHealth();
   post({ type: "ledger" });
@@ -807,10 +768,11 @@ function renderPhoneCreation({ phoneHost, phoneCreation, phones }: State): void 
 }
 
 function pairedPhone({ id, name, pairedAt }: PhoneView): HTMLLIElement {
-  const forget = h("button", "quiet-button", "Forget");
+  const forget = h("button", "secondary destructive", "Forget");
   forget.type = "button";
   forget.addEventListener("click", () => post({ type: "forget-phone", id }));
-  return h("li", "paired-phone", h("span", "", name), h("span", "quiet", `Paired ${new Date(pairedAt).toLocaleDateString()}`), forget);
+  const facts = h("div", "person-facts", h("span", "person-email", name), h("span", "quiet", `Paired ${new Date(pairedAt).toLocaleDateString()}`));
+  return h("li", "phone-card", icon("phone"), facts, forget);
 }
 
 /** The pairing code, as a QR code for the phone's camera, until it expires. Never as text: it works once, for whoever has it. */
@@ -846,7 +808,7 @@ function renderSettings(current: State, wanted: SettingsTab): void {
     element(`settings-${name}-tab`).hidden = tab !== name;
   }
   renderModels(current, examination?.models, post, () => render());
-  renderPeople(current.people, current.phoneHost !== null, current.mail?.from ?? null);
+  renderPeople(current.owner, current.people, current.phoneHost !== null, current.mail?.from ?? null);
   renderMail(current.mail, post, () => render());
   element("doctor").replaceChildren(...doctorView(examination?.ready));
   element("health").replaceChildren(...healthView(health));
@@ -1056,6 +1018,7 @@ function openLink(url: string): void {
 function setRequest(text: string): void {
   request.value = text;
   markCommand();
+  fitRequest();
 }
 
 function versionChip(id: string): HTMLElement {

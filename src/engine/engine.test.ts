@@ -913,6 +913,29 @@ describe("sharing apps with people", () => {
 
     assert.equal(allowedGroupsIn(deployed.at(-1)), `owner,${renewed.group}`);
   });
+
+  it("sets a password the owner chose for someone, in a new group, and refuses one too short", async () => {
+    const { engine } = setUp([]);
+    const ana = await engine.addPerson("ana@example.com");
+
+    const chosen = await engine.newPersonPassword(ana.email, "ana's own passphrase");
+
+    assert.deepEqual([chosen.password, chosen.group === ana.group], ["ana's own passphrase", false]);
+    await assert.rejects(engine.newPersonPassword(ana.email, "too short"), /Use at least 12 characters/);
+    assert.equal((await engine.person(ana.email)).password, "ana's own passphrase");
+  });
+
+  it("sets a password the owner chose for themselves, ending their sessions as a new one does", async () => {
+    const { engine, deployed } = setUp([reply("lunch")]);
+    await engine.create("split lunch bills");
+    const before = cookieSecretIn(deployed.at(-1));
+
+    const owner = await engine.newPassword("my own passphrase");
+
+    assert.equal(owner.password, "my own passphrase");
+    assert.notEqual(cookieSecretIn(deployed.at(-1)), before);
+    await assert.rejects(engine.newPassword("tiny"), /Use at least 12 characters/);
+  });
 });
 
 function allowedGroupsIn(objects: readonly KubeObject[] | undefined): string | undefined {
